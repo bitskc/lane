@@ -20,8 +20,8 @@ jobs:
             base-devel cmake extra-cmake-modules ninja \
             qt6-base qt6-declarative qt6-svg \
             kirigami kirigami-addons ki18n kcoreaddons kconfig \
-            kdbusaddons knotifications kwindowsystem kiconthemes \
-            kstatusnotifieritem layer-shell-qt qqc2-desktop-style
+            kdbusaddons knotifications kwindowsystem kiconthemes kcolorscheme \
+            kstatusnotifieritem kcrash layer-shell-qt qqc2-desktop-style
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
       - name: Build
