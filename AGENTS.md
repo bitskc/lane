@@ -40,8 +40,8 @@ Top-level keys:
   "autostart": false,
   "defaultTargetId": "",
   "hiddenTargetIds": [],
-  "recentTargetIds": [],
-  "remembered": {},
+  "targetOrder": [],
+  "targetAliases": {},
   "rules": [],
   "customTargets": [],
   "substitutions": []
@@ -125,6 +125,20 @@ site). Comma narrows the remembered path, dot widens it.
 Array of custom target objects for apps or handlers that Tern does not
 auto-discover. Each has `id`, `name`, `exec`, `args`, `icon`, and `kind`
 (`"app"`, `"action"`, `"browser"`, or `"pwa"`).
+
+
+### targetOrder
+
+Array of target IDs in display order. The settings page and the picker
+follow this order after matching web apps and remembered targets. Empty
+or missing means discovery order. IDs not in the list keep their discovery
+order after the listed ones.
+
+### targetAliases
+
+Object mapping target IDs to custom display names. Empty value or missing
+key means use the discovered name. Rename a target in settings to set or
+clear an alias.
 
 ### substitutions
 

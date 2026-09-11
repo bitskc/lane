@@ -2,6 +2,8 @@
 
 #include "urlutil.h"
 
+#include <algorithm>
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -9,8 +11,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
+#include <QHash>
 #include <QStandardPaths>
 #include <QSet>
+
 
 namespace Tern
 {
@@ -555,6 +559,32 @@ QList<Target> applyConfigToTargets(QList<Target> targets, const Config &config)
             targets.append(custom);
         }
     }
+
+    for (auto &t : targets) {
+        t.customName = config.targetAliases.value(t.id);
+    }
+
+    if (!config.targetOrder.isEmpty()) {
+        QHash<QString, int> orderIndex;
+        for (int i = 0; i < config.targetOrder.size(); ++i) {
+            orderIndex.insert(config.targetOrder.at(i), i);
+        }
+        std::stable_sort(targets.begin(), targets.end(), [&orderIndex](const Target &a, const Target &b) {
+            const int ia = orderIndex.value(a.id, -1);
+            const int ib = orderIndex.value(b.id, -1);
+            if (ia == -1 && ib == -1) {
+                return false;
+            }
+            if (ia == -1) {
+                return false;
+            }
+            if (ib == -1) {
+                return true;
+            }
+            return ia < ib;
+        });
+    }
+
     return targets;
 }
 

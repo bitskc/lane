@@ -71,6 +71,92 @@ private Q_SLOTS:
         });
         QVERIFY(qboDesktopName);
     }
+
+    void applyConfigAliasesAndOrder()
+    {
+        QList<Target> targets;
+        Target a;
+        a.id = QStringLiteral("browser:zen:def");
+        a.kind = Kind::BrowserProfile;
+        a.name = QStringLiteral("Default");
+        a.browserName = QStringLiteral("Zen");
+        Target b;
+        b.id = QStringLiteral("browser:brave:personal");
+        b.kind = Kind::BrowserProfile;
+        b.name = QStringLiteral("Personal");
+        b.browserName = QStringLiteral("Brave");
+        Target c;
+        c.id = QStringLiteral("pwa:gh");
+        c.kind = Kind::Pwa;
+        c.name = QStringLiteral("GitHub");
+        targets = {a, b, c};
+
+        Config cfg;
+        cfg.targetOrder = {QStringLiteral("pwa:gh"), QStringLiteral("browser:brave:personal")};
+        cfg.targetAliases.insert(QStringLiteral("browser:zen:def"), QStringLiteral("My Browser"));
+
+        const auto result = applyConfigToTargets(targets, cfg);
+
+        // Alias applied
+        const bool hasAlias = std::any_of(result.begin(), result.end(), [](const Target &t) {
+            return t.id == QLatin1String("browser:zen:def") && t.customName == QLatin1String("My Browser");
+        });
+        QVERIFY(hasAlias);
+
+        // Order: listed ids first in listed order, then remaining in original order
+        QCOMPARE(result.at(0).id, QStringLiteral("pwa:gh"));
+        QCOMPARE(result.at(1).id, QStringLiteral("browser:brave:personal"));
+        QCOMPARE(result.at(2).id, QStringLiteral("browser:zen:def"));
+
+        // displayName uses alias
+        const bool displayNameUsesAlias = std::any_of(result.begin(), result.end(), [](const Target &t) {
+            return t.id == QLatin1String("browser:zen:def") && t.displayName() == QLatin1String("My Browser");
+        });
+        QVERIFY(displayNameUsesAlias);
+    }
+
+    void applyConfigEmptyOrderKeepsDiscoveryOrder()
+    {
+        QList<Target> targets;
+        Target a;
+        a.id = QStringLiteral("browser:zen:def");
+        a.kind = Kind::BrowserProfile;
+        a.name = QStringLiteral("Default");
+        a.browserName = QStringLiteral("Zen");
+        Target b;
+        b.id = QStringLiteral("browser:brave:personal");
+        b.kind = Kind::BrowserProfile;
+        b.name = QStringLiteral("Personal");
+        b.browserName = QStringLiteral("Brave");
+        targets = {a, b};
+
+        Config cfg;
+        const auto result = applyConfigToTargets(targets, cfg);
+        QCOMPARE(result.at(0).id, QStringLiteral("browser:zen:def"));
+        QCOMPARE(result.at(1).id, QStringLiteral("browser:brave:personal"));
+    }
+
+    void applyConfigOrderSkipsMissingIds()
+    {
+        QList<Target> targets;
+        Target a;
+        a.id = QStringLiteral("browser:zen:def");
+        a.kind = Kind::BrowserProfile;
+        a.name = QStringLiteral("Default");
+        a.browserName = QStringLiteral("Zen");
+        Target b;
+        b.id = QStringLiteral("browser:brave:personal");
+        b.kind = Kind::BrowserProfile;
+        b.name = QStringLiteral("Personal");
+        b.browserName = QStringLiteral("Brave");
+        targets = {a, b};
+
+        Config cfg;
+        cfg.targetOrder = {QStringLiteral("browser:brave:personal"), QStringLiteral("nonexistent:id")};
+        const auto result = applyConfigToTargets(targets, cfg);
+        QCOMPARE(result.at(0).id, QStringLiteral("browser:brave:personal"));
+        QCOMPARE(result.at(1).id, QStringLiteral("browser:zen:def"));
+    }
 };
 
 QTEST_MAIN(DiscoveryTest)

@@ -19,15 +19,16 @@ public:
         KindRole,
         HiddenRole,
         DefaultRole,
-        IncognitoRole,
+        DiscoveredNameRole,
     };
     explicit TargetModel(QObject *parent = nullptr);
     int rowCount(const QModelIndex &parent = {}) const override;
     QVariant data(const QModelIndex &index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
     void setTargets(QList<Target> targets);
-    QList<Target> targets() const { return m_targets; }
     Q_INVOKABLE QString idAt(int row) const;
+    Q_INVOKABLE QVariantList targetsByKind(const QString &kind) const;
+    Q_INVOKABLE QVariantList incognitoTargets() const;
 
 private:
     QList<Target> m_targets;

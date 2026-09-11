@@ -164,6 +164,44 @@ private Q_SLOTS:
         QCOMPARE(ranked.first().id, QStringLiteral("browser:zen:def"));
     }
 
+    void pickerHonorsTargetOrder()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal")),
+                              makeBrowser(QStringLiteral("browser:firefox:work"), QStringLiteral("Work"))};
+        Config cfg;
+        cfg.targetOrder = {QStringLiteral("browser:firefox:work"),
+                           QStringLiteral("browser:brave:personal"),
+                           QStringLiteral("browser:zen:def")};
+        Click c;
+        c.matchUrl = QStringLiteral("https://example.com");
+        const auto ranked = rankForPicker(c, targets, cfg);
+        QCOMPARE(ranked.size(), 3);
+        QCOMPARE(ranked.at(0).id, QStringLiteral("browser:firefox:work"));
+        QCOMPARE(ranked.at(1).id, QStringLiteral("browser:brave:personal"));
+        QCOMPARE(ranked.at(2).id, QStringLiteral("browser:zen:def"));
+    }
+
+    void pickerTargetOrderAfterPwaAndRemembered()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal")),
+                              makePwa(QStringLiteral("pwa:gh"), QStringLiteral("GitHub"), QStringLiteral("https://github.com/"))};
+        Config cfg;
+        cfg.targetOrder = {QStringLiteral("browser:brave:personal"),
+                           QStringLiteral("browser:zen:def")};
+        cfg.remembered.insert(QStringLiteral("news.ycombinator.com"), QStringLiteral("browser:brave:personal"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/x");
+        const auto ranked = rankForPicker(c, targets, cfg);
+        // PWA first
+        QCOMPARE(ranked.at(0).id, QStringLiteral("pwa:gh"));
+        // Remembered next
+        QCOMPARE(ranked.at(1).id, QStringLiteral("browser:brave:personal"));
+        // Then targetOrder
+        QCOMPARE(ranked.at(2).id, QStringLiteral("browser:zen:def"));
+    }
+
     void unsafeUrlNeverAutoLaunches()
     {
         QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};

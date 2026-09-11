@@ -161,6 +161,13 @@ Config loadConfig(const QString &path)
     for (const auto &v : o[QStringLiteral("recentTargetIds")].toArray()) {
         c.recentTargetIds << v.toString();
     }
+    for (const auto &v : o[QStringLiteral("targetOrder")].toArray()) {
+        c.targetOrder << v.toString();
+    }
+    const auto aliases = o[QStringLiteral("targetAliases")].toObject();
+    for (auto it = aliases.begin(); it != aliases.end(); ++it) {
+        c.targetAliases.insert(it.key(), it.value().toString());
+    }
 
     const auto remembered = o[QStringLiteral("remembered")].toObject();
     for (auto it = remembered.begin(); it != remembered.end(); ++it) {
@@ -218,6 +225,12 @@ bool saveConfig(const QString &path, const Config &config)
     o[QStringLiteral("defaultTargetId")] = config.defaultTargetId;
     o[QStringLiteral("hiddenTargetIds")] = QJsonArray::fromStringList(config.hiddenTargetIds);
     o[QStringLiteral("recentTargetIds")] = QJsonArray::fromStringList(config.recentTargetIds);
+    o[QStringLiteral("targetOrder")] = QJsonArray::fromStringList(config.targetOrder);
+    QJsonObject aliases;
+    for (auto it = config.targetAliases.begin(); it != config.targetAliases.end(); ++it) {
+        aliases.insert(it.key(), it.value());
+    }
+    o[QStringLiteral("targetAliases")] = aliases;
 
     QJsonObject remembered;
     for (auto it = config.remembered.begin(); it != config.remembered.end(); ++it) {

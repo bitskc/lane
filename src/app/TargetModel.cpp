@@ -34,8 +34,8 @@ QVariant TargetModel::data(const QModelIndex &index, int role) const
         return t.hidden;
     case DefaultRole:
         return t.isBrowserDefault;
-    case IncognitoRole:
-        return t.incognito;
+    case DiscoveredNameRole:
+        return t.discoveredName();
     default:
         return {};
     }
@@ -51,7 +51,7 @@ QHash<int, QByteArray> TargetModel::roleNames() const
         {KindRole, "kind"},
         {HiddenRole, "hidden"},
         {DefaultRole, "isDefault"},
-        {IncognitoRole, "incognito"},
+        {DiscoveredNameRole, "discoveredName"},
     };
 }
 
@@ -68,6 +68,44 @@ QString TargetModel::idAt(int row) const
         return {};
     }
     return m_targets.at(row).id;
+}
+
+QVariantList TargetModel::targetsByKind(const QString &kind) const
+{
+    QVariantList out;
+    for (const auto &t : m_targets) {
+        if (kindName(t.kind) != kind) {
+            continue;
+        }
+        QVariantMap m;
+        m[QStringLiteral("targetId")] = t.id;
+        m[QStringLiteral("name")] = t.displayName();
+        m[QStringLiteral("discoveredName")] = t.discoveredName();
+        m[QStringLiteral("iconName")] = t.icon;
+        m[QStringLiteral("hidden")] = t.hidden;
+        m[QStringLiteral("isDefault")] = t.isBrowserDefault;
+        m[QStringLiteral("incognito")] = t.incognito;
+        out.append(m);
+    }
+    return out;
+}
+
+QVariantList TargetModel::incognitoTargets() const
+{
+    QVariantList out;
+    for (const auto &t : m_targets) {
+        if (!t.incognito) {
+            continue;
+        }
+        QVariantMap m;
+        m[QStringLiteral("targetId")] = t.id;
+        m[QStringLiteral("name")] = t.displayName();
+        m[QStringLiteral("discoveredName")] = t.discoveredName();
+        m[QStringLiteral("iconName")] = t.icon;
+        m[QStringLiteral("hidden")] = t.hidden;
+        out.append(m);
+    }
+    return out;
 }
 
 } // namespace Tern

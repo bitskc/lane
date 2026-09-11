@@ -8,6 +8,272 @@ FormCard.FormCardPage {
     id: page
     title: "Browsers & apps"
 
+    property int rowHeight: 48
+
+    Timer {
+        id: renameTimer
+        property string targetId
+        property string newName
+        interval: 1
+        onTriggered: controller.renameTarget(targetId, newName)
+    }
+
+    ListModel { id: browserModel }
+    ListModel { id: pwaModel }
+    ListModel { id: customModel }
+    ListModel { id: privateModel }
+
+    Component {
+        id: browserDelegate
+        QQC.ItemDelegate {
+            id: listItem
+            width: browserList.width
+            height: page.rowHeight
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Kirigami.ListItemDragHandle {
+                    listItem: listItem
+                    listView: browserList
+                    onMoveRequested: (oldIndex, newIndex) => {
+                        if (browserList.dragId === "")
+                            browserList.dragId = browserModel.get(oldIndex).targetId
+                        browserModel.move(oldIndex, newIndex, 1)
+                    }
+                    onDropped: (oldIndex, newIndex) => {
+                        if (newIndex >= 0 && browserList.dragId !== "") {
+                            controller.moveTarget(browserList.dragId, newIndex)
+                            browserList.dragId = ""
+                        }
+                    }
+                }
+                Kirigami.Icon {
+                    source: model.iconName
+                    implicitWidth: 22
+                    implicitHeight: 22
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.TextField {
+                    text: model.name
+                    placeholderText: model.discoveredName
+                    Layout.fillWidth: true
+                    background: Item {}
+                    verticalAlignment: TextInput.AlignVCenter
+                    onEditingFinished: {
+                        var id = model.targetId
+                        var nm = text.trim()
+                        if (nm !== model.name) {
+                            renameTimer.targetId = id
+                            renameTimer.newName = nm
+                            renameTimer.start()
+                        }
+                    }
+                    Keys.onEscapePressed: {
+                        text = model.name
+                        focus = false
+                    }
+                }
+                QQC.Switch {
+                    checked: !model.hidden
+                    onToggled: controller.hideTarget(model.targetId, !checked)
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.Button {
+                    text: "Default"
+                    flat: true
+                    onClicked: controller.defaultTargetId = model.targetId
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+        }
+    }
+
+    Component {
+        id: pwaDelegate
+        QQC.ItemDelegate {
+            id: listItem
+            width: pwaList.width
+            height: page.rowHeight
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Kirigami.ListItemDragHandle {
+                    listItem: listItem
+                    listView: pwaList
+                    onMoveRequested: (oldIndex, newIndex) => {
+                        if (pwaList.dragId === "")
+                            pwaList.dragId = pwaModel.get(oldIndex).targetId
+                        pwaModel.move(oldIndex, newIndex, 1)
+                    }
+                    onDropped: (oldIndex, newIndex) => {
+                        if (newIndex >= 0 && pwaList.dragId !== "") {
+                            controller.moveTarget(pwaList.dragId, newIndex)
+                            pwaList.dragId = ""
+                        }
+                    }
+                }
+                Kirigami.Icon {
+                    source: model.iconName
+                    implicitWidth: 22
+                    implicitHeight: 22
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.TextField {
+                    text: model.name
+                    placeholderText: model.discoveredName
+                    Layout.fillWidth: true
+                    background: Item {}
+                    verticalAlignment: TextInput.AlignVCenter
+                    onEditingFinished: {
+                        var id = model.targetId
+                        var nm = text.trim()
+                        if (nm !== model.name) {
+                            renameTimer.targetId = id
+                            renameTimer.newName = nm
+                            renameTimer.start()
+                        }
+                    }
+                    Keys.onEscapePressed: {
+                        text = model.name
+                        focus = false
+                    }
+                }
+                QQC.Switch {
+                    checked: !model.hidden
+                    onToggled: controller.hideTarget(model.targetId, !checked)
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+        }
+    }
+
+    Component {
+        id: customDelegate
+        QQC.ItemDelegate {
+            id: listItem
+            width: customList.width
+            height: page.rowHeight
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Kirigami.ListItemDragHandle {
+                    listItem: listItem
+                    listView: customList
+                    onMoveRequested: (oldIndex, newIndex) => {
+                        if (customList.dragId === "")
+                            customList.dragId = customModel.get(oldIndex).targetId
+                        customModel.move(oldIndex, newIndex, 1)
+                    }
+                    onDropped: (oldIndex, newIndex) => {
+                        if (newIndex >= 0 && customList.dragId !== "") {
+                            controller.moveTarget(customList.dragId, newIndex)
+                            customList.dragId = ""
+                        }
+                    }
+                }
+                Kirigami.Icon {
+                    source: model.iconName
+                    implicitWidth: 22
+                    implicitHeight: 22
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.TextField {
+                    text: model.name
+                    placeholderText: model.discoveredName
+                    Layout.fillWidth: true
+                    background: Item {}
+                    verticalAlignment: TextInput.AlignVCenter
+                    onEditingFinished: {
+                        var id = model.targetId
+                        var nm = text.trim()
+                        if (nm !== model.name) {
+                            renameTimer.targetId = id
+                            renameTimer.newName = nm
+                            renameTimer.start()
+                        }
+                    }
+                    Keys.onEscapePressed: {
+                        text = model.name
+                        focus = false
+                    }
+                }
+                QQC.Button {
+                    text: "Remove"
+                    flat: true
+                    onClicked: controller.removeCustomTarget(model.targetId)
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+        }
+    }
+
+    Component {
+        id: privateDelegate
+        QQC.ItemDelegate {
+            width: privateList.width
+            height: page.rowHeight
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Item { width: Kirigami.Units.iconSizes.smallMedium }
+                Kirigami.Icon {
+                    source: model.iconName
+                    implicitWidth: 22
+                    implicitHeight: 22
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.TextField {
+                    text: model.name
+                    placeholderText: model.discoveredName
+                    Layout.fillWidth: true
+                    background: Item {}
+                    verticalAlignment: TextInput.AlignVCenter
+                    onEditingFinished: {
+                        var id = model.targetId
+                        var nm = text.trim()
+                        if (nm !== model.name) {
+                            renameTimer.targetId = id
+                            renameTimer.newName = nm
+                            renameTimer.start()
+                        }
+                    }
+                    Keys.onEscapePressed: {
+                        text = model.name
+                        focus = false
+                    }
+                }
+                QQC.Switch {
+                    checked: !model.hidden
+                    onToggled: controller.hideTarget(model.targetId, !checked)
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+        }
+    }
+
+    function syncModels() {
+        browserModel.clear()
+        var browsers = controller.targetModel.targetsByKind("browser")
+        for (var i = 0; i < browsers.length; i++) {
+            if (!browsers[i].incognito)
+                browserModel.append(browsers[i])
+        }
+        pwaModel.clear()
+        var pwas = controller.targetModel.targetsByKind("pwa")
+        for (var i = 0; i < pwas.length; i++)
+            pwaModel.append(pwas[i])
+        customModel.clear()
+        var customs = controller.targetModel.targetsByKind("app")
+        for (var i = 0; i < customs.length; i++)
+            customModel.append(customs[i])
+        privateModel.clear()
+        var privates = controller.targetModel.incognitoTargets()
+        for (var i = 0; i < privates.length; i++)
+            privateModel.append(privates[i])
+    }
+
+    Component.onCompleted: syncModels()
+    Connections {
+        target: controller
+        function onSettingsChanged() { syncModels() }
+    }
+
     FormCard.FormHeader {
         title: "Default"
     }
@@ -24,30 +290,29 @@ FormCard.FormCardPage {
     FormCard.FormHeader {
         title: "Browsers"
     }
+    QQC.Label {
+        text: "Drag to reorder. Click a name to rename."
+        font: Kirigami.Theme.smallFont
+        color: Kirigami.Theme.disabledTextColor
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        Layout.bottomMargin: Kirigami.Units.smallSpacing
+    }
     FormCard.FormCard {
-        Repeater {
-            model: controller.targetModel
-            delegate: FormCard.FormSwitchDelegate {
-                required property string name
-                required property string targetId
-                required property string iconName
-                required property string kind
-                required property bool hidden
-                required property bool incognito
-
-                visible: kind === "browser" && !incognito
-                height: visible ? implicitHeight : 0
-                text: name
-                description: hidden ? "Hidden from picker" : "Shown in picker"
-                icon.name: iconName
-                checked: !hidden
-                onToggled: controller.hideTarget(targetId, !checked)
-
-                trailing: QQC.Button {
-                    text: "Default"
-                    flat: true
-                    onClicked: controller.defaultTargetId = targetId
-                }
+        ListView {
+            id: browserList
+            model: browserModel
+            interactive: false
+            spacing: 0
+            Layout.fillWidth: true
+            implicitHeight: count * page.rowHeight
+            moveDisplaced: Transition {
+                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
+            }
+            property string dragId: ""
+            delegate: Loader {
+                width: browserList.width
+                sourceComponent: browserDelegate
             }
         }
     }
@@ -56,23 +321,20 @@ FormCard.FormCardPage {
         title: "Installed web apps"
     }
     FormCard.FormCard {
-        Repeater {
-            model: controller.targetModel
-            delegate: FormCard.FormSwitchDelegate {
-                required property string name
-                required property string targetId
-                required property string iconName
-                required property string kind
-                required property bool hidden
-                required property bool incognito
-
-                visible: kind === "pwa"
-                height: visible ? implicitHeight : 0
-                text: name
-                description: "Firefox PWA"
-                icon.name: iconName
-                checked: !hidden
-                onToggled: controller.hideTarget(targetId, !checked)
+        ListView {
+            id: pwaList
+            model: pwaModel
+            interactive: false
+            spacing: 0
+            Layout.fillWidth: true
+            implicitHeight: count * page.rowHeight
+            moveDisplaced: Transition {
+                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
+            }
+            property string dragId: ""
+            delegate: Loader {
+                width: pwaList.width
+                sourceComponent: pwaDelegate
             }
         }
     }
@@ -81,23 +343,16 @@ FormCard.FormCardPage {
         title: "Private windows"
     }
     FormCard.FormCard {
-        Repeater {
-            model: controller.targetModel
-            delegate: FormCard.FormSwitchDelegate {
-                required property string name
-                required property string targetId
-                required property string iconName
-                required property string kind
-                required property bool hidden
-                required property bool incognito
-
-                visible: incognito
-                height: visible ? implicitHeight : 0
-                text: name
-                description: "Available to rules, hidden from the picker"
-                icon.name: iconName
-                checked: !hidden
-                onToggled: controller.hideTarget(targetId, !checked)
+        ListView {
+            id: privateList
+            model: privateModel
+            interactive: false
+            spacing: 0
+            Layout.fillWidth: true
+            implicitHeight: count * page.rowHeight
+            delegate: Loader {
+                width: privateList.width
+                sourceComponent: privateDelegate
             }
         }
     }
@@ -106,24 +361,20 @@ FormCard.FormCardPage {
         title: "Custom apps"
     }
     FormCard.FormCard {
-        Repeater {
-            model: controller.targetModel
-            delegate: FormCard.FormTextDelegate {
-                required property string name
-                required property string targetId
-                required property string kind
-                required property bool hidden
-
-                visible: kind === "app"
-                height: visible ? implicitHeight : 0
-                text: name
-                description: targetId
-
-                trailing: QQC.Button {
-                    text: "Remove"
-                    flat: true
-                    onClicked: controller.removeCustomTarget(targetId)
-                }
+        ListView {
+            id: customList
+            model: customModel
+            interactive: false
+            spacing: 0
+            Layout.fillWidth: true
+            implicitHeight: count * page.rowHeight
+            moveDisplaced: Transition {
+                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
+            }
+            property string dragId: ""
+            delegate: Loader {
+                width: customList.width
+                sourceComponent: customDelegate
             }
         }
         FormCard.FormTextFieldDelegate {

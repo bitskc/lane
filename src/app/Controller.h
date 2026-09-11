@@ -115,6 +115,8 @@ public:
     Q_INVOKABLE void forgetHost(const QString &host);
     Q_INVOKABLE void addCustomTarget(const QString &name, const QString &command);
     Q_INVOKABLE void removeCustomTarget(const QString &id);
+    Q_INVOKABLE void renameTarget(const QString &id, const QString &name);
+    Q_INVOKABLE void moveTarget(const QString &id, int newIndexInKind);
 Q_SIGNALS:
     void currentChanged();
     void settingsChanged();

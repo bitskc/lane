@@ -59,12 +59,27 @@ struct Target {
     QString pwaUlid;
     QString pwaScope;
     QColor color;
+    QString customName;
     bool hidden = false;
     bool isBrowserDefault = false;
     bool incognito = false;
     bool frameless = false;
 
     QString displayName() const
+    {
+        if (!customName.isEmpty()) {
+            return customName;
+        }
+        if (kind == Kind::Pwa || kind == Kind::Action || kind == Kind::Custom) {
+            return name;
+        }
+        if (name.isEmpty() || name.compare(browserName, Qt::CaseInsensitive) == 0) {
+            return browserName;
+        }
+        return browserName + QStringLiteral(" · ") + name;
+    }
+
+    QString discoveredName() const
     {
         if (kind == Kind::Pwa || kind == Kind::Action || kind == Kind::Custom) {
             return name;
@@ -134,6 +149,8 @@ struct Config {
     QString defaultTargetId;
     QStringList hiddenTargetIds;
     QList<Rule> rules;
+    QStringList targetOrder;
+    QMap<QString, QString> targetAliases;
     QMap<QString, QString> remembered;
     QStringList recentTargetIds;
     QList<Target> customTargets;

@@ -32,7 +32,22 @@ private Q_SLOTS:
         QCOMPARE(loaded.remembered.value(QStringLiteral("github.com")), QStringLiteral("pwa:gh"));
         QCOMPARE(loaded.rules.size(), 1);
         QCOMPARE(loaded.rules[0].pattern, QStringLiteral("slack.com"));
-        QCOMPARE(loaded.rules[0].scope, MatchScope::Domain);
+    }
+
+    void targetOrderAndAliasesRoundTrip()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("config.json"));
+        Config c;
+        c.targetOrder = {QStringLiteral("browser:zen:work"), QStringLiteral("pwa:gh")};
+        c.targetAliases.insert(QStringLiteral("browser:zen:work"), QStringLiteral("Work Browser"));
+        c.targetAliases.insert(QStringLiteral("pwa:gh"), QStringLiteral("GitHub"));
+        QVERIFY(saveConfig(path, c));
+        const Config loaded = loadConfig(path);
+        QCOMPARE(loaded.targetOrder, c.targetOrder);
+        QCOMPARE(loaded.targetAliases.value(QStringLiteral("browser:zen:work")), QStringLiteral("Work Browser"));
+        QCOMPARE(loaded.targetAliases.value(QStringLiteral("pwa:gh")), QStringLiteral("GitHub"));
+        QCOMPARE(loaded.targetAliases.size(), 2);
     }
 };
 

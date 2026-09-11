@@ -90,10 +90,7 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
     if (const Target *t = findTarget(targets, lookupRemembered(click.matchUrl, config.remembered))) {
         push(*t);
     }
-    if (const Target *t = defaultTarget(targets, config)) {
-        push(*t);
-    }
-    for (const auto &id : config.recentTargetIds) {
+    for (const auto &id : config.targetOrder) {
         if (const Target *t = findTarget(targets, id)) {
             push(*t);
         }
