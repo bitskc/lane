@@ -67,7 +67,7 @@ int main(int argc, char **argv)
                      QStringLiteral("Tern"),
                      QStringLiteral(TERN_VERSION_STRING),
                      QStringLiteral("Open links in the right browser, profile, or app"),
-                     KAboutLicense::GPL_V3,
+                     KAboutLicense::Custom,
                      QStringLiteral("© 2026 Andy Hayes"));
     about.setDesktopFileName(QStringLiteral("app.tern.Tern"));
     KAboutData::setApplicationData(about);
