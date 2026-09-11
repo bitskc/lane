@@ -582,7 +582,21 @@ void Controller::reload()
 void Controller::persist()
 {
     m_config.rules = m_ruleModel->rules();
-    saveConfig(m_configPath, m_config);
+    if (!saveConfig(m_configPath, m_config)) {
+        // saveConfig() writes via QSaveFile, which only fails on a real
+        // problem (disk full, permissions, ~/.config/lane unwritable,
+        // ...), not a race with itself. Every settings/rule/target change
+        // funnels through persist(), so this is the single place that can
+        // tell the user their change was not actually saved instead of
+        // silently discarding the failure and letting them believe it
+        // was, only to find it gone on the next restart.
+        auto *n = new KNotification(QStringLiteral("save-failed"), KNotification::CloseOnTimeout, this);
+        n->setComponentName(QStringLiteral("app.lane.Lane"));
+        n->setTitle(QStringLiteral("Could not save settings"));
+        n->setText(QStringLiteral("Lane could not write its config file. This change may be lost on restart."));
+        n->setIconName(QStringLiteral("dialog-error"));
+        n->sendEvent();
+    }
 }
 
 void Controller::applyDecision(const Decision &d)

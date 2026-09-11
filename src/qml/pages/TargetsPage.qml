@@ -62,6 +62,15 @@ FormCard.FormCardPage {
                 Kirigami.ListItemDragHandle {
                     listItem: listItem
                     listView: browserList
+                    // Filtered-out rows stay in browserModel at their
+                    // original index (only their visual height collapses
+                    // to 0, see the ListView below), so a drag computed
+                    // against the full model while a search filter is
+                    // active can persist an order different from what was
+                    // visually dragged. Disabling the handle while
+                    // filtered avoids that ambiguity outright; clearing
+                    // the search box restores dragging.
+                    enabled: page.searchText.trim().length === 0
                     onMoveRequested: (oldIndex, newIndex) => {
                         if (browserList.dragId === "")
                             browserList.dragId = browserModel.get(oldIndex).targetId
@@ -126,6 +135,7 @@ FormCard.FormCardPage {
                 Kirigami.ListItemDragHandle {
                     listItem: listItem
                     listView: containerList
+                    enabled: page.searchText.trim().length === 0
                     onMoveRequested: (oldIndex, newIndex) => {
                         if (containerList.dragId === "")
                             containerList.dragId = containerModel.get(oldIndex).targetId
@@ -190,6 +200,7 @@ FormCard.FormCardPage {
                 Kirigami.ListItemDragHandle {
                     listItem: listItem
                     listView: pwaList
+                    enabled: page.searchText.trim().length === 0
                     onMoveRequested: (oldIndex, newIndex) => {
                         if (pwaList.dragId === "")
                             pwaList.dragId = pwaModel.get(oldIndex).targetId
@@ -248,6 +259,7 @@ FormCard.FormCardPage {
                 Kirigami.ListItemDragHandle {
                     listItem: listItem
                     listView: customList
+                    enabled: page.searchText.trim().length === 0
                     onMoveRequested: (oldIndex, newIndex) => {
                         if (customList.dragId === "")
                             customList.dragId = customModel.get(oldIndex).targetId

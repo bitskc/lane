@@ -141,6 +141,38 @@ private Q_SLOTS:
         QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
     }
 
+    void launchTargetRejectsSymlinkToBlockedInterpreter()
+    {
+        // Proven bypass: exec's own basename is innocuous, but it is a
+        // symlink to a blocked interpreter. isBlockedInterpreter() alone
+        // (a plain basename check on t.exec) sails straight through this;
+        // only walking the symlink's actual target catches it.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString linkPath = dir.filePath(QStringLiteral("totally-a-browser"));
+        QVERIFY(QFile::link(QStringLiteral("/bin/sh"), linkPath));
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = linkPath;
+        t.args = {QStringLiteral("-c"), QStringLiteral("echo pwned"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+    }
+
+    void launchTargetRejectsEnvReExecWrapper()
+    {
+        // Second proven bypass: exec itself is never a blocked
+        // interpreter, only a wrapper (env) that re-execs one named in
+        // its own args. Closed by blocking the wrapper binary itself
+        // rather than trying to parse argv; see blockedInterpreters() in
+        // launcher.cpp for the accepted residual risk.
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = QStringLiteral("/usr/bin/env");
+        t.args = {QStringLiteral("bash"), QStringLiteral("-c"), QStringLiteral("echo pwned"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+    }
+
     // launchTarget() spawns via the static, argument-only
     // QProcess::startDetached(program, arguments) overload, which has no
     // QProcessEnvironment parameter and always forks Lane's own live

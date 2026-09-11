@@ -124,8 +124,31 @@ static bool targetFromJson(const QJsonObject &o, Target *out)
     if (t.id.isEmpty()) {
         t.id = QStringLiteral("custom:") + QUuid::createUuid().toString(QUuid::WithoutBraces);
     }
-    if (isBlockedInterpreter(t.exec)) {
-        qWarning() << "Lane: dropping customTargets entry" << t.id << "because its exec is a blocked shell/interpreter:" << t.exec;
+    // isBlockedInterpreter() alone catches a literal blocked name, which
+    // also covers a relative exec that is not resolvable on this machine
+    // right now but plainly would be one if it were (keeps existing
+    // behavior for a hand-typed "python3" etc. regardless of PATH). When
+    // exec does resolve to a real file, additionally walk any symlink
+    // chain: a customTargets entry can otherwise name an innocuous
+    // absolute path that is itself a symlink to a blocked interpreter,
+    // which launchTarget() would only catch at the moment of exec (see
+    // launcher.cpp). Rejecting it here means it never even reaches the
+    // picker. An exec that simply does not resolve to anything right now
+    // (not installed yet, temporarily unmounted path, ...) is left in
+    // place rather than dropped: launchTarget() will refuse to launch it
+    // for the same reason, so there is no window where it can run
+    // anything unverified, and dropping it here would permanently lose
+    // the entry from config.json on the next save.
+    bool blocked = isBlockedInterpreter(t.exec);
+    if (!blocked) {
+        const QString resolved = resolveExecutable(t.exec);
+        if (!resolved.isEmpty()) {
+            blocked = isBlockedInterpreterChain(resolved);
+        }
+    }
+    if (blocked) {
+        qWarning() << "Lane: dropping customTargets entry" << t.id
+                   << "because its exec is a blocked shell/interpreter, directly or via a symlink:" << t.exec;
         return false;
     }
     t.subtitle = t.browserName.isEmpty() ? QStringLiteral("App") : t.browserName;
@@ -143,16 +166,14 @@ static QString legacyConfigPath()
     return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/tern/config.json");
 }
 
-void migrateLegacyConfig()
+void migrateLegacyConfig(const QString &oldPath, const QString &newPath)
 {
-    const QString newPath = defaultConfigPath();
     if (QFile::exists(newPath)) {
         // The current location already has a file, whether from a previous
         // migration or a fresh save. Never overwrite it: this is what makes
         // the migration safe to run on every startup.
         return;
     }
-    const QString oldPath = legacyConfigPath();
     if (!QFile::exists(oldPath)) {
         return;
     }
@@ -171,6 +192,11 @@ void migrateLegacyConfig()
         qWarning() << "Lane: failed to migrate config from" << oldPath << "to" << newPath
                    << "- starting fresh at the new location instead";
     }
+}
+
+void migrateLegacyConfig()
+{
+    migrateLegacyConfig(legacyConfigPath(), defaultConfigPath());
 }
 
 Config loadConfig(const QString &path)

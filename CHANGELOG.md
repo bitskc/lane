@@ -138,6 +138,19 @@ version is 0, minor releases may still contain breaking changes.
   response is called out as a bug rather than a network problem. A
   last-checked time is now shown next to the result, so pressing the
   button twice is visibly different from doing nothing.
+- The picker window's height budgeted space for exactly two section
+  headers regardless of how many were actually shown. With three or
+  more kinds of destination present (containers, web apps, and custom
+  apps, say), rows that should have been visible within the first few
+  slots, including ones with a number-key shortcut, could be pushed
+  below the scrollable fold. The picker now sizes itself from the
+  real number of sections being shown.
+- Dragging a row to reorder browsers or apps while a search filter was
+  active could save an order different from what was visually
+  dragged, because a filtered-out row keeps its slot in the underlying
+  list even though it is drawn at zero height. Drag-reorder is now
+  disabled while a filter is active; clearing the search box restores
+  it.
 
 ### Security
 
@@ -148,6 +161,26 @@ version is 0, minor releases may still contain breaking changes.
   the rest of the config. Before this, a hand-edited or agent-edited
   `customTargets` entry pointing at `bash` or `python3` would run on
   the next matching click with no check.
+- The blocklist above checked only the exec path's own basename, which
+  two bypasses got past: an absolute exec that was itself a symlink to
+  a blocked interpreter under an unrelated name, and a wrapper like
+  `env` re-execing a blocked interpreter through its own args rather
+  than being one itself. `isBlockedInterpreterChain()` now walks the
+  full symlink chain from exec to whatever it actually resolves to,
+  checking every hop's basename, and the blocklist itself now also
+  covers re-exec wrappers (`env`, `xargs`, `sudo`, `pkexec`, `ssh`,
+  `find`, and others that can run a different program than the one
+  named in exec). This remains a blocklist, not a privilege boundary:
+  editing `config.json` already requires write access to the user's
+  home directory, so it is defense in depth against a hand-edited or
+  agent-edited config, not protection against a locally compromised
+  account.
+- `Controller::persist()` (every settings, rule, target-order, and
+  remembered-destination change) used to discard `saveConfig()`'s
+  result. A failed atomic write (disk full, permissions, read-only
+  `~/.config/lane`) was a silent no-op: the change looked saved and
+  was gone on the next restart. Lane now shows a notification when a
+  save fails.
 - Config writes are atomic (`QSaveFile`, temp file plus rename). A
   crash or power loss mid-write can no longer truncate `config.json`.
 - A config file that does not parse is moved aside to

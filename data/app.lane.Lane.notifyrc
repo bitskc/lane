@@ -12,3 +12,8 @@ Action=Popup
 Name=Launch failed
 Comment=Shown when Lane cannot launch the selected destination
 Action=Popup
+
+[Event/save-failed]
+Name=Settings not saved
+Comment=Shown when Lane cannot write config.json to disk
+Action=Popup

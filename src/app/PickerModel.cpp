@@ -144,6 +144,7 @@ void PickerModel::applyFilter()
     for (const auto &key : sectionOrder) {
         m_shown += buckets.value(key);
     }
+    m_sectionCount = sectionOrder.size();
 
     endResetModel();
     Q_EMIT countChanged();

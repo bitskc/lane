@@ -14,7 +14,23 @@ namespace
 
 const QSet<QString> &blockedInterpreters()
 {
+    // Two families, both rejected purely by exec's basename (or, via
+    // isBlockedInterpreterChain(), the basename of anything it symlinks
+    // to):
+    //
+    // Shells and language runtimes: a target whose exec IS one of these
+    // can be handed an arbitrary command through target.args.
+    //
+    // Re-exec wrappers: a target whose exec is one of these can be handed
+    // a *different* program to run as its own args (env python -c ...,
+    // xargs bash -c ..., sudo/pkexec anything, ssh host anything, and so
+    // on), which reaches an interpreter without exec itself ever being
+    // one. Blocking the wrapper outright closes that whole class without
+    // having to parse its argv, which is not a fight this blocklist can
+    // win in general (see isBlockedInterpreterChain() callers for the
+    // residual risk this does not close).
     static const QSet<QString> k = {
+        // shells and language runtimes
         QStringLiteral("sh"),
         QStringLiteral("bash"),
         QStringLiteral("zsh"),
@@ -36,6 +52,27 @@ const QSet<QString> &blockedInterpreters()
         QStringLiteral("cmd.exe"),
         QStringLiteral("powershell"),
         QStringLiteral("pwsh"),
+        // re-exec / process-wrapper binaries: each one's whole job is to
+        // run something else, named in its own argv rather than in exec
+        QStringLiteral("env"),
+        QStringLiteral("xargs"),
+        QStringLiteral("nohup"),
+        QStringLiteral("setsid"),
+        QStringLiteral("timeout"),
+        QStringLiteral("stdbuf"),
+        QStringLiteral("nice"),
+        QStringLiteral("ionice"),
+        QStringLiteral("watch"),
+        QStringLiteral("sudo"),
+        QStringLiteral("doas"),
+        QStringLiteral("pkexec"),
+        QStringLiteral("systemd-run"),
+        QStringLiteral("flatpak-spawn"),
+        QStringLiteral("ssh"),
+        QStringLiteral("awk"),
+        QStringLiteral("gawk"),
+        QStringLiteral("find"),
+        QStringLiteral("sed"),
     };
     return k;
 }
@@ -72,6 +109,38 @@ bool isBlockedInterpreter(const QString &exec)
     return blockedInterpreters().contains(QFileInfo(exec).fileName().toLower());
 }
 
+bool isBlockedInterpreterChain(const QString &execPath)
+{
+    if (execPath.isEmpty()) {
+        return true;
+    }
+    QString current = execPath;
+    // Real executables are never nested this many symlinks deep; the cap
+    // exists only to guarantee termination against a pathological or
+    // looping chain, not because any legitimate install needs it.
+    static constexpr int kMaxHops = 40;
+    for (int hop = 0; hop < kMaxHops; ++hop) {
+        if (isBlockedInterpreter(current)) {
+            return true;
+        }
+        const QFileInfo info(current);
+        if (!info.exists()) {
+            // Fail closed: a hop that vanished mid-check (broken link,
+            // deleted-out-from-under-us race) cannot be vouched for.
+            return true;
+        }
+        if (!info.isSymLink()) {
+            return false;
+        }
+        const QString target = info.symLinkTarget();
+        if (target.isEmpty() || target == current) {
+            return true;
+        }
+        current = target;
+    }
+    return true;
+}
+
 QString resolveExecutable(const QString &exec)
 {
     const QString trimmed = exec.trimmed();
@@ -83,7 +152,14 @@ QString resolveExecutable(const QString &exec)
     }
     const QFileInfo info(trimmed);
     if (info.isAbsolute()) {
-        return info.isExecutable() ? info.canonicalFilePath() : QString();
+        // Deliberately not canonicalFilePath() here: collapsing straight
+        // to the final symlink target before the blocklist check would
+        // launder a literally blocked name (python3 -> python3.14 on this
+        // machine, for instance) past isBlockedInterpreter() instead of
+        // being caught by it. isBlockedInterpreterChain() below walks the
+        // symlink chain itself, checking every hop's basename starting
+        // from this one, which is what actually needs to happen.
+        return info.isExecutable() ? trimmed : QString();
     }
     return QStandardPaths::findExecutable(trimmed);
 }
@@ -104,7 +180,7 @@ bool parseCustomCommand(const QString &command, Target *out, QString *error)
         }
         return false;
     }
-    if (isBlockedInterpreter(resolved)) {
+    if (isBlockedInterpreterChain(resolved)) {
         if (error) {
             *error = QStringLiteral("Shells and language runtimes are not allowed as handlers");
         }
@@ -143,11 +219,20 @@ bool launchTarget(const Target &target, const QString &url, const QString &activ
     if (open.isEmpty()) {
         return false;
     }
-    const QString exe = QFileInfo(target.exec).isAbsolute() ? target.exec : resolveExecutable(target.exec);
+    // Always resolve, even for an absolute exec: this is what confirms
+    // the file actually exists and is executable rather than trusting an
+    // unresolved string straight from a Target that may have been built
+    // from a hand-edited config.json, and it is a precondition for the
+    // symlink-chain check right below.
+    const QString exe = resolveExecutable(target.exec);
     if (exe.isEmpty()) {
         return false;
     }
-    if (isBlockedInterpreter(exe)) {
+    // isBlockedInterpreterChain(), not the plain basename check: exe can
+    // itself be a symlink (resolveExecutable() deliberately does not
+    // canonicalize) pointing at a blocked interpreter under an unrelated
+    // name, and the chain walk is what catches that.
+    if (isBlockedInterpreterChain(exe)) {
         return false;
     }
     // QProcess::startDetached(program, arguments) (the static, argument-only

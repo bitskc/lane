@@ -184,7 +184,7 @@ Window {
                 id: list
                 width: parent.width
                 height: Math.min(root.maxRows, Math.max(1, count)) * root.rowHeight
-                        + (count > 0 ? 2 : 0) * root.sectionHeaderHeight
+                        + (count > 0 ? controller.pickerModel.sectionCount : 0) * root.sectionHeaderHeight
                 model: controller.pickerModel
                 clip: true
                 spacing: 0

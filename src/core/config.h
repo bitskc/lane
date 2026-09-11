@@ -19,6 +19,13 @@ QString defaultConfigPath();
 // legacy path has none.
 void migrateLegacyConfig();
 
+// Same logic as migrateLegacyConfig(), against explicit paths rather than
+// the real ~/.config locations. Exists so tests can exercise the actual
+// migration behavior (idempotency, never-overwrite-an-existing-file,
+// source left intact on every outcome including failure) without ever
+// touching a real user's config directory.
+void migrateLegacyConfig(const QString &oldPath, const QString &newPath);
+
 QString pickerPolicyToString(PickerPolicy p);
 PickerPolicy pickerPolicyFromString(const QString &s);
 QString scopeToString(MatchScope s);
