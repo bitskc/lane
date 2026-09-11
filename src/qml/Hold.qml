@@ -45,8 +45,8 @@ Window {
         anchors.centerIn: parent
         radius: 16
         color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.97)
-        borderWidth: 1
-        borderColor: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
+        border.width: 1
+        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
         shadow.size: 32
         shadow.yOffset: 10
         shadow.color: Qt.rgba(0, 0, 0, 0.42)

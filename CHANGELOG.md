@@ -7,7 +7,13 @@ version is 0, minor releases may still contain breaking changes.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- Picker and hold overlays failed to load on current Kirigami (6.28),
+  because they set `borderColor`/`borderWidth` directly instead of the
+  grouped `border.color`/`border.width` properties. This made link
+  clicks bounce in the taskbar and then do nothing. Fixed in
+  `Picker.qml` and `Hold.qml`.
 
 ## [0.1.0] - 2026-09-11
 
