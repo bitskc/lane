@@ -36,7 +36,7 @@ First public release.
 - Outlook safe-link unwrapping and optional link unshortening.
 - Agent-friendly `~/.config/tern/config.json` with a published JSON
   schema (`docs/config.schema.json`), plus `tern --list`,
-  `tern --explain <url>`, and `tern --config-path` for inspecting
+  `tern --explain URL`, and `tern --config-path` for inspecting
   config without the GUI. See `AGENTS.md`.
 - `KStatusNotifierItem` tray icon with Settings and Rediscover actions.
 - systemd user unit for autostart, installed to the systemd user unit
