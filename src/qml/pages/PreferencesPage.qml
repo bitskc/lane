@@ -58,7 +58,7 @@ FormCard.FormCardPage {
         FormCard.FormDelegateSeparator {}
         FormCard.FormSwitchDelegate {
             text: "Expand short URLs"
-            description: "Follows bit.ly and friends so rules can match the destination"
+            description: "HEAD-request known shorteners only. Private and local addresses are never followed."
             checked: controller.unshorten
             onToggled: controller.unshorten = checked
         }

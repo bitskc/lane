@@ -163,6 +163,20 @@ private Q_SLOTS:
         QCOMPARE(ranked.size(), 1);
         QCOMPARE(ranked.first().id, QStringLiteral("browser:zen:def"));
     }
+
+    void unsafeUrlNeverAutoLaunches()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::Never;
+        cfg.defaultTargetId = QStringLiteral("browser:zen:def");
+        Click c;
+        c.matchUrl = QStringLiteral("file:///etc/passwd");
+        c.openUrl = QStringLiteral("file:///etc/passwd");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.action, Decision::Action::Pick);
+        QCOMPARE(d.reason, QStringLiteral("blocked"));
+    }
 };
 
 QTEST_MAIN(RouterTest)

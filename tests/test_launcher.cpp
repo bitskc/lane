@@ -33,6 +33,23 @@ private Q_SLOTS:
         const auto args = expandArgs(t, QStringLiteral("https://claude.ai/new"));
         QCOMPARE(args.last(), QStringLiteral("https://claude.ai/new"));
     }
+
+    void rejectsShellCustomCommand()
+    {
+        Target t;
+        QString error;
+        QVERIFY(!parseCustomCommand(QStringLiteral("bash -c 'rm -rf /'"), &t, &error));
+        QVERIFY(!parseCustomCommand(QStringLiteral("python3 -c 'print(1)'"), &t, &error));
+    }
+
+    void refusesFileUrlLaunch()
+    {
+        Target t;
+        t.exec = QStringLiteral("/usr/bin/true");
+        t.args = {QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("file:///etc/passwd")));
+        QVERIFY(!launchTarget(t, QStringLiteral("javascript:alert(1)")));
+    }
 };
 
 QTEST_MAIN(LauncherTest)

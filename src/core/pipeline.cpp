@@ -17,15 +17,15 @@ Click runPipeline(const QString &rawUrl, const Config &config, const UnshortenFn
         working = unwrapO365(working);
     }
 
-    if (config.unshorten && unshorten && isShortener(working)) {
+    if (config.unshorten && unshorten && isShortener(working) && isSafeOpenUrl(working)) {
         const QString expanded = unshorten(working);
-        if (!expanded.isEmpty()) {
+        if (isSafeOpenUrl(expanded) && !isPrivateOrLocalHost(hostOf(expanded))) {
             working = expanded;
         }
     }
 
     for (const auto &sub : config.substitutions) {
-        if (sub.find.isEmpty()) {
+        if (sub.find.isEmpty() || sub.find.size() > 128) {
             continue;
         }
         if (sub.regex) {

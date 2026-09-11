@@ -113,7 +113,9 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
         }
     }
     for (const auto &t : targets) {
-        push(t);
+        if (t.id == QLatin1String("action:copy")) {
+            push(t);
+        }
     }
     Q_UNUSED(visible);
     return ranked;
@@ -124,9 +126,15 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
     Decision d;
     d.pickerTargets = rankForPicker(click, targets, config);
 
+    const QString open = click.openUrl.isEmpty() ? click.matchUrl : click.openUrl;
     if (click.forcePicker) {
         d.action = Decision::Action::Pick;
         d.reason = QStringLiteral("forced");
+        return d;
+    }
+    if (!open.isEmpty() && !isSafeOpenUrl(open)) {
+        d.action = Decision::Action::Pick;
+        d.reason = QStringLiteral("blocked");
         return d;
     }
 

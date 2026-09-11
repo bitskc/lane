@@ -25,6 +25,7 @@ class Controller : public QObject
     Q_PROPERTY(QString currentUrl READ currentUrl NOTIFY currentChanged)
     Q_PROPERTY(QString currentHost READ currentHost NOTIFY currentChanged)
     Q_PROPERTY(QString currentPrettyUrl READ currentPrettyUrl NOTIFY currentChanged)
+    Q_PROPERTY(bool currentSecure READ currentSecure NOTIFY currentChanged)
     Q_PROPERTY(bool alwaysForHost READ alwaysForHost WRITE setAlwaysForHost NOTIFY currentChanged)
     Q_PROPERTY(bool isDefaultBrowser READ isDefaultBrowser NOTIFY defaultBrowserChanged)
     Q_PROPERTY(QString pickerPolicy READ pickerPolicy WRITE setPickerPolicy NOTIFY settingsChanged)
@@ -50,6 +51,7 @@ public:
     QString currentUrl() const { return m_click.openUrl; }
     QString currentHost() const { return m_click.host; }
     QString currentPrettyUrl() const;
+    bool currentSecure() const;
     bool alwaysForHost() const { return m_alwaysForHost; }
     void setAlwaysForHost(bool on);
 

@@ -1,5 +1,7 @@
 #include "urlutil.h"
 
+#include <QHostAddress>
+#include <QAbstractSocket>
 #include <QSet>
 #include <QUrlQuery>
 
@@ -87,15 +89,14 @@ QString unwrapO365(const QString &raw)
     }
     const QUrl url = QUrl::fromUserInput(raw);
     const QUrlQuery query(url);
-    const QString nested = query.queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
-    if (!nested.isEmpty()) {
-        return nested;
+    QString nested = query.queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
+    if (nested.isEmpty()) {
+        nested = query.queryItemValue(QStringLiteral("data"), QUrl::FullyDecoded);
     }
-    const QString data = query.queryItemValue(QStringLiteral("data"), QUrl::FullyDecoded);
-    if (!data.isEmpty()) {
-        return data;
+    if (nested.isEmpty() || !isSafeOpenUrl(nested)) {
+        return raw;
     }
-    return raw;
+    return nested;
 }
 
 bool isShortener(const QString &raw)
@@ -130,6 +131,107 @@ bool urlInScope(const QString &url, const QString &scope)
         return true;
     }
     return up.startsWith(sp, Qt::CaseInsensitive);
+}
+
+bool isPrivateOrLocalHost(const QString &host)
+{
+    const QString h = host.trimmed().toLower();
+    if (h.isEmpty() || h == QLatin1String("localhost") || h == QLatin1String("localhost.localdomain")
+        || h.endsWith(QLatin1String(".localhost")) || h.endsWith(QLatin1String(".local"))
+        || h.endsWith(QLatin1String(".internal")) || h.endsWith(QLatin1String(".lan"))
+        || h == QLatin1String("metadata.google.internal")) {
+        return true;
+    }
+
+    const QHostAddress addr(h);
+    if (addr.isNull()) {
+        return false;
+    }
+    if (addr.isLoopback() || addr.isLinkLocal() || addr.isMulticast() || addr.isBroadcast()) {
+        return true;
+    }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
+    if (addr.isSiteLocal() || addr.isUniqueLocalUnicast()) {
+        return true;
+    }
+#endif
+    if (addr.protocol() == QAbstractSocket::IPv4Protocol) {
+        const quint32 ip = addr.toIPv4Address();
+        const quint8 a = quint8(ip >> 24);
+        const quint8 b = quint8(ip >> 16);
+        if (a == 10 || a == 127 || a == 0) {
+            return true;
+        }
+        if (a == 100 && b >= 64 && b <= 127) {
+            return true;
+        }
+        if (a == 169 && b == 254) {
+            return true;
+        }
+        if (a == 172 && b >= 16 && b <= 31) {
+            return true;
+        }
+        if (a == 192 && b == 168) {
+            return true;
+        }
+        if (a == 198 && (b == 18 || b == 51)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isSafeOpenUrl(const QString &raw)
+{
+    const QString trimmed = raw.trimmed();
+    if (trimmed.isEmpty() || trimmed.size() > 8192) {
+        return false;
+    }
+    if (trimmed.contains(QLatin1Char('\n')) || trimmed.contains(QLatin1Char('\r'))
+        || trimmed.contains(QChar(0))) {
+        return false;
+    }
+    QUrl url = QUrl::fromUserInput(trimmed);
+    if (!url.isValid() || url.isRelative() || url.host().isEmpty()) {
+        return false;
+    }
+    const QString scheme = url.scheme().toLower();
+    if (scheme != QLatin1String("http") && scheme != QLatin1String("https")) {
+        return false;
+    }
+    if (!url.userName().isEmpty() || !url.password().isEmpty()) {
+        return false;
+    }
+    return true;
+}
+
+QString sanitizedOpenUrl(const QString &raw)
+{
+    if (!isSafeOpenUrl(raw)) {
+        return {};
+    }
+    QUrl url = QUrl::fromUserInput(raw.trimmed());
+    url.setUserName({});
+    url.setPassword({});
+    return url.toString();
+}
+
+QString displayUrl(const QString &raw)
+{
+    QUrl url = QUrl::fromUserInput(raw.trimmed());
+    if (!url.isValid()) {
+        return raw.left(180);
+    }
+    url.setUserName({});
+    url.setPassword({});
+    QString s = url.toString(QUrl::PrettyDecoded | QUrl::RemoveScheme | QUrl::RemoveUserInfo);
+    if (s.startsWith(QLatin1String("//"))) {
+        s = s.mid(2);
+    }
+    if (s.size() > 180) {
+        s = s.left(90) + QStringLiteral("…") + s.right(70);
+    }
+    return s;
 }
 
 } // namespace Tern

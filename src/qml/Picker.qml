@@ -19,6 +19,9 @@ Window {
     LayerShell.Window.scope: "tern-picker"
     LayerShell.Window.exclusionZone: -1
 
+    readonly property int maxRows: 6
+    readonly property int rowHeight: 48
+
     onVisibleChanged: {
         if (visible) {
             width = Screen.width
@@ -29,34 +32,13 @@ Window {
         }
     }
 
-    Shortcut {
-        sequence: "Escape"
-        onActivated: controller.cancelPicker()
-    }
-    Shortcut {
-        sequence: "Ctrl+C"
-        onActivated: controller.copyCurrent()
-    }
-    Shortcut {
-        sequence: "Return"
-        onActivated: controller.pick(list.currentIndex)
-    }
-    Shortcut {
-        sequence: "Enter"
-        onActivated: controller.pick(list.currentIndex)
-    }
-    Shortcut {
-        sequence: "Down"
-        onActivated: list.incrementCurrentIndex()
-    }
-    Shortcut {
-        sequence: "Up"
-        onActivated: list.decrementCurrentIndex()
-    }
-    Shortcut {
-        sequence: "Alt+A"
-        onActivated: controller.alwaysForHost = !controller.alwaysForHost
-    }
+    Shortcut { sequence: "Escape"; onActivated: controller.cancelPicker() }
+    Shortcut { sequence: "Ctrl+C"; onActivated: controller.copyCurrent() }
+    Shortcut { sequence: "Return"; onActivated: controller.pick(list.currentIndex) }
+    Shortcut { sequence: "Enter"; onActivated: controller.pick(list.currentIndex) }
+    Shortcut { sequence: "Down"; onActivated: list.incrementCurrentIndex() }
+    Shortcut { sequence: "Up"; onActivated: list.decrementCurrentIndex() }
+    Shortcut { sequence: "Alt+A"; onActivated: controller.alwaysForHost = !controller.alwaysForHost }
     Repeater {
         model: 9
         Shortcut {
@@ -67,169 +49,200 @@ Window {
     }
 
     Rectangle {
+        id: dim
         anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.45)
+        color: Qt.rgba(0, 0, 0, 0.38)
+        opacity: root.visible ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         MouseArea {
             anchors.fill: parent
-            onClicked: {
-                if (controller.closeOnFocusLoss)
-                    controller.cancelPicker()
-            }
+            onClicked: if (controller.closeOnFocusLoss) controller.cancelPicker()
         }
     }
 
-    Rectangle {
+    Kirigami.ShadowedRectangle {
         id: card
-        readonly property int chrome: 36 + 52 + 12 + 40 + 12 + 12 + 40
-        readonly property int rows: Math.max(1, controller.pickerModel.count)
-        readonly property int listWanted: Math.min(rows * 56, 360)
-        width: Math.min(520, root.width - 48)
-        height: Math.min(chrome + listWanted, root.height - 80)
+        width: 440
+        height: content.implicitHeight + 32
         anchors.centerIn: parent
-        radius: 18
-        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.94)
-        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
-        border.width: 1
+        radius: 16
+        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.97)
+        borderWidth: 1
+        borderColor: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
+        shadow.size: 32
+        shadow.yOffset: 10
+        shadow.color: Qt.rgba(0, 0, 0, 0.42)
+        scale: root.visible ? 1 : 0.98
+        opacity: root.visible ? 1 : 0
+        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
-        ColumnLayout {
-            id: cardColumn
-            anchors.fill: parent
-            anchors.margins: 18
-            spacing: 12
+        Column {
+            id: content
+            width: parent.width - 32
+            x: 16
+            y: 16
+            spacing: 10
+
             RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
+                width: parent.width
+                spacing: 10
                 Kirigami.Icon {
-                    source: "app.tern.Tern"
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 28
+                    source: controller.currentSecure ? "lock" : "internet-services"
+                    Layout.preferredWidth: 18
+                    Layout.preferredHeight: 18
+                    color: controller.currentSecure ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.disabledTextColor
                 }
-                ColumnLayout {
-                    spacing: 2
+                Column {
                     Layout.fillWidth: true
+                    spacing: 1
                     QQC.Label {
+                        width: parent.width
                         text: controller.currentHost.length ? controller.currentHost : "Open link"
-                        font.pixelSize: 16
+                        font.pixelSize: 15
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
-                        Layout.fillWidth: true
                     }
                     QQC.Label {
-                        visible: controller.showUrl
+                        width: parent.width
+                        visible: controller.showUrl && controller.currentPrettyUrl.length > 0
                         text: controller.currentPrettyUrl
-                        opacity: 0.65
-                        font.pixelSize: 12
+                        opacity: 0.55
+                        font.pixelSize: 11
                         elide: Text.ElideMiddle
-                        Layout.fillWidth: true
                     }
                 }
             }
 
-            Kirigami.SearchField {
-                id: filterField
-                Layout.fillWidth: true
-                placeholderText: "Filter browsers, profiles, apps"
-                onTextChanged: controller.pickerModel.setFilter(text)
-                KeyNavigation.down: list
+            Rectangle {
+                width: parent.width
+                height: 36
+                radius: 10
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.06)
+                QQC.Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    text: "Filter"
+                    opacity: 0.4
+                    font.pixelSize: 13
+                    visible: filterField.text.length === 0
+                }
+                QQC.TextField {
+                    id: filterField
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    background: Item {}
+                    onTextChanged: {
+                        controller.pickerModel.setFilter(text)
+                        list.currentIndex = 0
+                    }
+                    Keys.onDownPressed: list.incrementCurrentIndex()
+                    Keys.onUpPressed: list.decrementCurrentIndex()
+                }
             }
 
-            QQC.ScrollView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 52
+            ListView {
+                id: list
+                width: parent.width
+                height: Math.min(root.maxRows, Math.max(1, count)) * root.rowHeight
+                model: controller.pickerModel
                 clip: true
-                ListView {
-                    id: list
-                    model: controller.pickerModel
-                    spacing: 4
-                    currentIndex: 0
-                    boundsBehavior: Flickable.StopAtBounds
-                    delegate: Rectangle {
-                        required property int index
-                        required property string name
-                        required property string subtitle
-                        required property string iconName
-                        required property string shortcut
-                        required property bool suggested
-                        required property string kind
+                spacing: 0
+                currentIndex: 0
+                boundsBehavior: Flickable.StopAtBounds
+                highlightMoveDuration: 80
+                delegate: Rectangle {
+                    required property int index
+                    required property string name
+                    required property string subtitle
+                    required property string iconName
+                    required property string shortcut
+                    required property bool suggested
+                    required property string kind
 
-                        width: ListView.view.width
-                        height: 52
-                        radius: 12
-                        color: {
-                            if (ListView.isCurrentItem)
-                                return Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.28)
-                            if (suggested)
-                                return Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.10)
-                            return "transparent"
+                    width: ListView.view.width
+                    height: root.rowHeight
+                    radius: 10
+                    color: ListView.isCurrentItem
+                           ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.36)
+                           : "transparent"
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: list.currentIndex = index
+                        onClicked: controller.pick(index)
+                    }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 10
+                        Kirigami.Icon {
+                            source: iconName
+                            Layout.preferredWidth: 28
+                            Layout.preferredHeight: 28
                         }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onEntered: list.currentIndex = index
-                            onClicked: controller.pick(index)
+                        Column {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            QQC.Label {
+                                width: parent.width
+                                text: name
+                                font.pixelSize: 13
+                                font.weight: Font.Medium
+                                elide: Text.ElideRight
+                            }
+                            QQC.Label {
+                                width: parent.width
+                                text: kind === "pwa" ? "App" : (kind === "action" ? "Action" : subtitle)
+                                font.pixelSize: 11
+                                opacity: 0.5
+                                elide: Text.ElideRight
+                            }
                         }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 12
-                            spacing: 12
-                            Kirigami.Icon {
-                                source: iconName
-                                Layout.preferredWidth: 28
-                                Layout.preferredHeight: 28
-                            }
-                            ColumnLayout {
-                                spacing: 0
-                                Layout.fillWidth: true
-                                QQC.Label {
-                                    text: name
-                                    font.pixelSize: 14
-                                    font.weight: Font.Medium
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                QQC.Label {
-                                    text: kind === "pwa" ? "Installed app" : subtitle
-                                    font.pixelSize: 11
-                                    opacity: 0.6
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                            }
-                            Rectangle {
-                                visible: shortcut.length > 0
-                                width: 22
-                                height: 22
-                                radius: 6
-                                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
-                                QQC.Label {
-                                    anchors.centerIn: parent
-                                    text: shortcut
-                                    font.pixelSize: 11
-                                    opacity: 0.8
-                                }
+                        Rectangle {
+                            visible: shortcut.length > 0 && filterField.text.length === 0
+                            width: 20
+                            height: 20
+                            radius: 5
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
+                            QQC.Label {
+                                anchors.centerIn: parent
+                                text: shortcut
+                                font.pixelSize: 10
+                                font.weight: Font.DemiBold
+                                opacity: 0.75
                             }
                         }
                     }
                 }
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 1
+                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
             }
 
             RowLayout {
-                Layout.fillWidth: true
-                QQC.Switch {
-                    id: alwaysSwitch
+                width: parent.width
+                QQC.CheckBox {
+                    id: alwaysBox
                     checked: controller.alwaysForHost
                     onToggled: controller.alwaysForHost = checked
                     text: controller.currentHost.length ? "Always for " + controller.currentHost : "Always for this site"
+                    font.pixelSize: 12
                 }
                 Item { Layout.fillWidth: true }
                 QQC.Label {
-                    text: "Esc cancel  ·  1–9 select"
-                    opacity: 0.45
-                    font.pixelSize: 11
+                    text: "esc"
+                    font.pixelSize: 10
+                    font.family: "monospace"
+                    opacity: 0.4
                 }
             }
         }

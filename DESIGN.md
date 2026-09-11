@@ -2,25 +2,30 @@
 
 ## Product
 
-Tern is a default-browser proxy. The product is **not** a settings window. The product is what happens in the 200ms after a click: either nothing visible (correct app already opened) or a quiet overlay that can be dismissed from the keyboard.
+Tern is a default-browser proxy. The product is what happens in the 200ms after a click: either nothing visible (correct app already opened) or a quiet overlay that can be dismissed from the keyboard.
 
-## Feel
+## Feel (Mac bar)
 
-Mac quality on Plasma means:
+Choosy / Velja / Opener, not a settings dialog:
 
 - Resident process. Cold-start Qt is too slow for a picker.
 - Layer-shell overlay, exclusive keyboard, blur, Plasma accent.
+- Compact card (~440px). Six visible rows, then scroll. Footer never clips.
+- Checkbox for “Always for this site”, not a switch.
 - One decision per unknown site, then memory.
 - PWAs rank above browser windows. GitHub BITS is an app, not a tab.
+- Settings is a persistent two-pane window. No hamburger.
 
-## Visual
+## Security
 
-- Overlay dim 45% black
-- Card ~520px, 18px radius, 94% opaque `Kirigami.Theme.backgroundColor`
-- Rows 52px, 12px radius, highlight at 28% accent
-- Typeface: system / Noto Sans via Kirigami
-- Motion: compositor handles the layer map; no bouncy animation theatre
-- Icon: Plasma blue rounded square, white tern silhouette
+- Open only `http` and `https`. `file:`, `javascript:`, `data:`, credentials-in-URL are refused.
+- Display and clipboard never show userinfo.
+- Unshorten: known hosts only, HEAD, no cookies, no private/link-local/metadata destinations.
+- Outlook unwrap refuses nested non-http(s) URLs.
+- Custom handlers are argv (`QProcess::splitCommand`), never a shell. Interpreters (`bash -c`, `python -c`, …) are rejected.
+- Regex rules are length-capped and anchored.
+- Default browser is opt-in, http/https only. mailto and PDF are not stolen.
+- “Always for this site” is not stored for private/local hosts.
 
 ## Decision order
 
@@ -34,12 +39,6 @@ Rules beat convenience. A work GitHub rule will beat the GitHub PWA.
 
 ## Non-goals (v1)
 
-- Lua. Browser Tamer’s scripts are power-user surface area we can add with QJSEngine later.
-- Firefox containers unless the open-external-links addon is present (not detected yet).
-- Stealing PDF / mailto handlers.
-
-## Strategic debt from Browser Tamer
-
-Keep: discovery fingerprinting, O365 unwrap-but-open-original, shortener list, picker vs toast split, process/title matching.
-
-Leave: ImGui radial picker, Windows registry, frameless Chromium windows (can add).
+- Lua
+- Firefox containers
+- PDF / mailto handlers

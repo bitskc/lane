@@ -67,6 +67,16 @@ private Q_SLOTS:
         c.matchUrl = QStringLiteral("https://github.com");
         QVERIFY(!ruleMatches(r, c));
     }
+
+    void regexTooLong()
+    {
+        Rule r;
+        r.regex = true;
+        r.pattern = QString(200, QLatin1Char('a'));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com");
+        QVERIFY(!ruleMatches(r, c));
+    }
 };
 
 QTEST_MAIN(MatcherTest)

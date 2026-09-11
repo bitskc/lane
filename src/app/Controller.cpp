@@ -7,6 +7,7 @@
 #include "core/launcher.h"
 #include "core/router.h"
 #include "core/unshorten.h"
+#include "core/urlutil.h"
 
 #include <LayerShellQt/Window>
 #include <KCrash>
@@ -18,14 +19,15 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QMenu>
 #include <QProcess>
 #include <QQmlContext>
 #include <QQmlError>
 #include <QQuickStyle>
-#include <QMenu>
 #include <QScreen>
 #include <QTimer>
 #include <QUuid>
+
 namespace Tern
 {
 
@@ -62,10 +64,13 @@ Controller::Controller(QObject *parent)
 
 QString Controller::currentPrettyUrl() const
 {
-    QString u = m_click.openUrl;
-    u.replace(QStringLiteral("https://"), QString());
-    u.replace(QStringLiteral("http://"), QString());
-    return u;
+    return displayUrl(m_click.openUrl);
+}
+
+bool Controller::currentSecure() const
+{
+    return parseUrl(m_click.openUrl).scheme.compare(QLatin1String("https"), Qt::CaseInsensitive) == 0
+        && isSafeOpenUrl(m_click.openUrl);
 }
 
 void Controller::setAlwaysForHost(bool on)
@@ -236,7 +241,8 @@ void Controller::pickId(const QString &id)
     if (!t) {
         return;
     }
-    if (m_alwaysForHost && !m_click.host.isEmpty() && t->kind != Kind::Action) {
+    if (m_alwaysForHost && !m_click.host.isEmpty() && t->kind != Kind::Action
+        && isSafeOpenUrl(m_click.openUrl) && !isPrivateOrLocalHost(m_click.host)) {
         m_config.remembered.insert(m_click.host, t->id);
         persist();
     }
@@ -256,7 +262,8 @@ void Controller::cancelPicker()
 void Controller::copyCurrent()
 {
     if (auto *clip = QGuiApplication::clipboard()) {
-        clip->setText(m_click.openUrl);
+        const QString safe = sanitizedOpenUrl(m_click.openUrl);
+        clip->setText(safe.isEmpty() ? displayUrl(m_click.openUrl) : safe);
     }
     hidePicker();
 }
@@ -326,28 +333,15 @@ void Controller::forgetHost(const QString &host)
 
 void Controller::addCustomTarget(const QString &name, const QString &command)
 {
-    const QStringList parts = QProcess::splitCommand(command.trimmed());
-    if (parts.isEmpty()) {
+    Target t;
+    QString error;
+    if (!parseCustomCommand(command, &t, &error)) {
+        qWarning() << "Tern: rejected custom handler:" << error;
         return;
     }
-    Target t;
-    t.kind = Kind::Custom;
-    t.engine = Engine::Generic;
-    t.name = name.trimmed().isEmpty() ? QFileInfo(parts.first()).fileName() : name.trimmed();
+    t.name = name.trimmed().isEmpty() ? QFileInfo(t.exec).fileName() : name.trimmed();
     t.browserName = QStringLiteral("Custom");
     t.subtitle = QStringLiteral("Custom");
-    t.exec = parts.first();
-    t.args = parts.mid(1);
-    bool placed = false;
-    for (const auto &a : t.args) {
-        if (a.contains(QLatin1String("$url")) || a.contains(QLatin1String("%url%")) || a.contains(QLatin1String("%u"))) {
-            placed = true;
-            break;
-        }
-    }
-    if (!placed) {
-        t.args << QStringLiteral("$url");
-    }
     t.id = QStringLiteral("custom:") + QUuid::createUuid().toString(QUuid::WithoutBraces);
     t.icon = QStringLiteral("application-x-executable");
     m_config.customTargets.append(t);
@@ -432,7 +426,17 @@ void Controller::launch(const Target &target, const QString &reason)
         showPicker();
         return;
     }
-    launchTarget(target, m_click.openUrl);
+    if (!isSafeOpenUrl(m_click.openUrl)) {
+        auto *n = new KNotification(QStringLiteral("opened"), KNotification::CloseOnTimeout, this);
+        n->setTitle(QStringLiteral("Tern blocked this link"));
+        n->setText(QStringLiteral("Only http and https links can be opened."));
+        n->setIconName(QStringLiteral("security-high"));
+        n->sendEvent();
+        return;
+    }
+    if (!launchTarget(target, m_click.openUrl)) {
+        return;
+    }
     m_config.recentTargetIds.removeAll(target.id);
     m_config.recentTargetIds.prepend(target.id);
     while (m_config.recentTargetIds.size() > 12) {
@@ -448,7 +452,7 @@ void Controller::toast(const Target &target, const QString &reason)
 {
     auto *n = new KNotification(QStringLiteral("opened"), KNotification::CloseOnTimeout, this);
     n->setTitle(QStringLiteral("Opened in %1").arg(target.displayName()));
-    n->setText(m_click.host.isEmpty() ? m_click.openUrl : m_click.host);
+    n->setText(m_click.host.isEmpty() ? QStringLiteral("Link opened") : m_click.host);
     n->setIconName(target.icon.isEmpty() ? QStringLiteral("app.tern.Tern") : target.icon);
     Q_UNUSED(reason);
     n->sendEvent();

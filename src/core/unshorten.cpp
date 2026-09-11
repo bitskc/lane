@@ -1,5 +1,7 @@
 #include "unshorten.h"
 
+#include "urlutil.h"
+
 #include <QEventLoop>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -12,11 +14,18 @@ namespace Tern
 
 QString unshortenSync(const QString &url, int timeoutMs)
 {
+    if (!isShortener(url) || !isSafeOpenUrl(url)) {
+        return url;
+    }
+
     QNetworkAccessManager nam;
+    nam.setRedirectPolicy(QNetworkRequest::ManualRedirectPolicy);
     QNetworkRequest req{QUrl(url)};
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
-    req.setMaximumRedirectsAllowed(0);
+    req.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
     req.setTransferTimeout(timeoutMs);
+    req.setRawHeader("User-Agent", "Tern/0.1");
+    req.setMaximumRedirectsAllowed(0);
 
     QNetworkReply *reply = nam.head(req);
     QEventLoop loop;
@@ -29,18 +38,28 @@ QString unshortenSync(const QString &url, int timeoutMs)
 
     QString result = url;
     if (reply->isFinished()) {
-        const QUrl loc = reply->header(QNetworkRequest::LocationHeader).toUrl();
-        if (loc.isValid()) {
-            result = loc.toString();
-        } else {
+        QUrl loc = reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
+        if (!loc.isValid()) {
+            loc = reply->header(QNetworkRequest::LocationHeader).toUrl();
+        }
+        if (!loc.isValid()) {
             const QByteArray raw = reply->rawHeader("Location");
-            if (!raw.isEmpty()) {
-                result = QString::fromUtf8(raw);
+            if (!raw.isEmpty() && !raw.contains('\0') && raw.size() < 4096) {
+                loc = QUrl::fromEncoded(raw);
+            }
+        }
+        if (loc.isValid()) {
+            if (loc.isRelative()) {
+                loc = QUrl(url).resolved(loc);
+            }
+            const QString candidate = loc.toString();
+            if (isSafeOpenUrl(candidate) && !isPrivateOrLocalHost(hostOf(candidate))) {
+                result = sanitizedOpenUrl(candidate);
             }
         }
     }
     reply->deleteLater();
-    return result;
+    return result.isEmpty() ? url : result;
 }
 
 } // namespace Tern

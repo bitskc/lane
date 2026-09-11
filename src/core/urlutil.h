@@ -24,5 +24,9 @@ bool isO365Wrapper(const QString &raw);
 bool isShortener(const QString &raw);
 QStringList shortenerHosts();
 bool urlInScope(const QString &url, const QString &scope);
+bool isSafeOpenUrl(const QString &raw);
+bool isPrivateOrLocalHost(const QString &host);
+QString displayUrl(const QString &raw);
+QString sanitizedOpenUrl(const QString &raw);
 
 } // namespace Tern
