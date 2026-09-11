@@ -7,6 +7,9 @@ configure or inspect Tern without a GUI.
 
 Path: `~/.config/tern/config.json`
 
+A JSON schema is at `docs/config.schema.json`. The inline shape below
+covers the same fields for quick reference.
+
 The settings window writes this same file. You can edit it by hand or
 with a script. Tern loads config at startup. There is no live reload
 yet. After editing config.json, restart the daemon:
@@ -56,11 +59,12 @@ Controls when the picker overlay appears.
 
 ### holdAutoOpen / holdMs
 
-When a silent open has no rule and no remembered choice, Tern waits
-`holdMs` milliseconds (default 1600) before auto-opening the default
-target. During that hold, Enter opens immediately and Esc or Space shows
-the picker. Set `holdAutoOpen` to false to disable the auto-open and
-always show the picker for silent opens.
+Hold is a Gmail-undo style bar for convenience opens. When the routing
+decision is `remembered`, `pwa`, or `default` and `holdAutoOpen` is
+true, Tern waits `holdMs` milliseconds (default 1600) before launching.
+Enter opens immediately. Esc or Space cancels the hold and shows the
+picker. Rules skip the hold and open immediately. Set `holdAutoOpen` to
+false to launch right away with no hold bar.
 
 ### rules
 
@@ -137,12 +141,14 @@ Array of find/replace pairs applied to the URL before matching.
 ## CLI inspection
 
 ```bash
+tern --config-path             # print the config file path and exit
 tern --list                    # print all discovered targets with IDs
 tern --explain https://example.com   # print the routing decision for a URL
 ```
 
 `--explain` shows the matched URL, host, action (launch/pick/copy),
-reason, and target. Use it to verify rules before committing them.
+reason, target, and `memoryKey` when the decision came from a
+remembered destination. Use it to verify rules before committing them.
 
 ## Restart note
 

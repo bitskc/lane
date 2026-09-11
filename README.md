@@ -22,11 +22,17 @@ or Velja, but native to Plasma.
   PWA if you prefer PWAs, then picker policy, then default.
 - Remembered destinations are path-scoped, not just host.
   `github.com/bitskc` can go somewhere different from `github.com`.
-- PWA scopes are origin-wide, so Tern checks that a PWA scope actually
-  covers the path before auto-opening. A tenant path like
-  `github.com/bitskc` will not get stolen by a broader PWA scope.
-- Silent opens (no rule, no remembered choice) get a short hold of
-  about 1.6 seconds. Enter opens now. Esc or Space brings up the picker.
+- PWA auto-open respects scope. An origin-wide PWA scope like
+  `https://github.com/` does not grab tenant paths like
+  `github.com/bitskc`. Chrome paths like `/login` still auto-open, and
+  `claude.ai/chat/...` does too because `chat` is app chrome, not a
+  tenant.
+- When Tern opens from a remembered choice, a unique PWA, or the
+  default target, it shows a short hold bar (about 1.6 seconds by
+  default). Think Gmail undo. Enter opens now. Esc or Space cancels
+  the hold and shows the picker. Explicit rules skip the hold and open
+  immediately. Turn off `holdAutoOpen` to launch right away with no
+  hold bar.
 - Picker overlay: press 1 through 9 to pick, type to filter, Enter to
   confirm, Esc to cancel. Alt+A toggles always-for-this-site. Comma and
   dot narrow or widen the remembered path.
@@ -53,6 +59,7 @@ tern --daemon                     # run in background, no window
 tern https://example.com          # route a URL
 tern --pick https://example.com   # force the picker
 tern --explain https://claude.ai  # print the routing decision
+tern --config-path                # print the config file path
 tern --list                       # print discovered targets
 ```
 
@@ -75,5 +82,6 @@ Turn on "Start Tern when I log in" so the first click is instant.
 ## License
 
 Source is available under the PolyForm Noncommercial License 1.0.0.
-Personal, hobby, and internal use is free. Commercial use needs a paid
-license. See [COMMERCIAL.md](COMMERCIAL.md) for details.
+Personal and hobby use is free. Using Tern in a product you sell needs a
+commercial license. See [COMMERCIAL.md](COMMERCIAL.md) for details.
+

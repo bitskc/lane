@@ -4,16 +4,17 @@ Tern's source is public under the [PolyForm Noncommercial License 1.0.0](./LICEN
 
 ## What is free
 
-Personal use, hobby projects, internal tooling at a company, and use by
-nonprofits, schools, research labs, and government institutions. All of
-that is free under PolyForm NC. You can build it, modify it, run it,
-share patches with friends. No paperwork.
+Personal use and hobby projects are free under PolyForm NC. You can
+build it, modify it, run it, share patches with friends. No paperwork.
 
 ## What is not free
 
-Selling Tern, wrapping it inside a paid product or hosted service, or
-any other commercial use needs a separate commercial license from Andy
-Hayes. PolyForm NC does not permit that.
+Using Tern as part of a product you sell, wrapping it in a paid
+service, or any other commercial use needs a separate commercial
+license from Andy Hayes. PolyForm NC does not permit that.
+
+If you are not sure whether your use counts as commercial, email
+andy@boundlessitsystems.com and ask.
 
 ## Dual license
 
