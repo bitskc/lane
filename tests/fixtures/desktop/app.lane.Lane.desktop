@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=Tern
-Exec=tern %u
-Icon=app.tern.Tern
+Name=Lane
+Exec=lane %u
+Icon=app.lane.Lane
 Type=Application
 Categories=Network;WebBrowser;
 MimeType=x-scheme-handler/http;x-scheme-handler/https;

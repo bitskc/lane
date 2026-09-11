@@ -2,12 +2,13 @@
 
 #include "types.h"
 
-namespace Tern
+namespace Lane
 {
 
 Decision route(Click click, const QList<Target> &targets, const Config &config);
 QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, const Config &config);
 const Target *findTarget(const QList<Target> &targets, const QString &id);
 const Target *defaultTarget(const QList<Target> &targets, const Config &config);
+QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &config);
 
-} // namespace Tern
+} // namespace Lane

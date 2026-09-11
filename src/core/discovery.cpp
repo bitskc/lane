@@ -14,9 +14,10 @@
 #include <QHash>
 #include <QStandardPaths>
 #include <QSet>
+#include <QRegularExpression>
 
 
-namespace Tern
+namespace Lane
 {
 namespace
 {
@@ -48,7 +49,7 @@ QString firstToken(const QString &execLine)
 bool skipDesktopId(const QString &id)
 {
     const QString lower = id.toLower();
-    return lower.startsWith(QLatin1String("app.tern"))
+    return lower.startsWith(QLatin1String("app.lane"))
         || lower.startsWith(QLatin1String("ffpwa-"))
         || lower.startsWith(QLatin1String("userapp-"))
         || lower.contains(QLatin1String("firefoxpwa"))
@@ -126,6 +127,39 @@ QList<DesktopApp> scanDesktopFiles(const QStringList &dirs)
     return apps;
 }
 
+// Rank how well a desktop entry's exec basename matches a resolved browser
+// brand, lowest is best. Used to pick a single canonical .desktop file when
+// several point at the same browser install (e.g. "zen.desktop" and a
+// second "zen-browser.desktop" both launching /opt/zen-browser-bin/zen-bin).
+int desktopAppRank(const DesktopApp &app, const QString &brand)
+{
+    const QString execBase = QFileInfo(firstToken(app.execLine)).fileName().toLower();
+    const QString brandLower = brand.toLower();
+    if (execBase == brandLower) {
+        return 0;
+    }
+    if (execBase.startsWith(brandLower)) {
+        return 1;
+    }
+    if (execBase.contains(brandLower)) {
+        return 2;
+    }
+    return 3;
+}
+
+bool isBetterDesktopApp(const DesktopApp &candidate, const DesktopApp &current, const QString &brand)
+{
+    const int candidateRank = desktopAppRank(candidate, brand);
+    const int currentRank = desktopAppRank(current, brand);
+    if (candidateRank != currentRank) {
+        return candidateRank < currentRank;
+    }
+    if (candidate.id.size() != current.id.size()) {
+        return candidate.id.size() < current.id.size();
+    }
+    return candidate.id.compare(current.id, Qt::CaseInsensitive) < 0;
+}
+
 struct Fingerprint {
     Engine engine = Engine::Generic;
     QString dataDir;
@@ -140,18 +174,51 @@ Fingerprint fingerprint(const DesktopApp &app, const DiscoveryPaths &paths)
     const QString id = app.id.toLower();
     const QString blob = exec + QLatin1Char(' ') + name + QLatin1Char(' ') + id + QLatin1Char(' ') + app.wmClass.toLower();
 
+    auto bestGeckoDataDir = [](const QStringList &candidates) -> QString {
+        // Prefer the candidate whose profiles.ini exists and whose Profile*
+        // entries point at directories that are actually present on disk;
+        // that is the data dir the browser is really using. Fall back to
+        // the first candidate only when none of them qualify.
+        QString best;
+        int bestScore = -1;
+        for (const auto &c : candidates) {
+            const QString ini = c + QStringLiteral("/profiles.ini");
+            if (!QFile::exists(ini)) {
+                continue;
+            }
+            QSettings s(ini, QSettings::IniFormat);
+            int score = 0;
+            const auto iniGroups = s.childGroups();
+            for (const auto &g : iniGroups) {
+                if (!g.startsWith(QLatin1String("Profile"))) {
+                    continue;
+                }
+                s.beginGroup(g);
+                const QString path = s.value(QStringLiteral("Path")).toString();
+                const bool relative = s.value(QStringLiteral("IsRelative"), 1).toInt() == 1;
+                s.endGroup();
+                if (path.isEmpty()) {
+                    continue;
+                }
+                const QString abs = relative ? c + QLatin1Char('/') + path : path;
+                if (QDir(abs).exists()) {
+                    ++score;
+                }
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = c;
+            }
+        }
+        if (!best.isEmpty()) {
+            return best;
+        }
+        return candidates.isEmpty() ? QString() : candidates.first();
+    };
     auto gecko = [&](const QString &brand, const QStringList &candidates) {
         fp.engine = Engine::Gecko;
         fp.brand = brand;
-        for (const auto &c : candidates) {
-            if (QFile::exists(c + QStringLiteral("/profiles.ini"))) {
-                fp.dataDir = c;
-                return;
-            }
-        }
-        if (!candidates.isEmpty()) {
-            fp.dataDir = candidates.first();
-        }
+        fp.dataDir = bestGeckoDataDir(candidates);
     };
     auto chromium = [&](const QString &brand, const QString &dir) {
         fp.engine = Engine::Chromium;
@@ -223,6 +290,190 @@ bool junkProfilePath(const QString &path)
         || p.contains(QLatin1String("ovfs"));
 }
 
+bool junkProfileName(const QString &name)
+{
+    return name.trimmed().compare(QLatin1String("crash"), Qt::CaseInsensitive) == 0;
+}
+
+// True when a Gecko profile label is an internal placeholder (the kind the
+// profile manager invents, e.g. "default-release-1", "Default Profile", or
+// Zen's "Default (release)") rather than something a person chose.
+bool isGenericProfileLabel(const QString &label)
+{
+    static const QRegularExpression generic(
+        QStringLiteral("^default(\\s*\\(release\\)|\\s*profile|-release(-\\d+)?)?$"),
+        QRegularExpression::CaseInsensitiveOption);
+    return generic.match(label.trimmed()).hasMatch();
+}
+
+// Pick the best human label for a Gecko profile row. `key` is the profile
+// directory's basename (e.g. "qq35x6ld.Work"). Never invents a name from
+// browsing data; only re-labels using information already in profiles.ini.
+QString geckoProfileLabel(const QString &name, const QString &key, bool isInstallDefault)
+{
+    const QString base = name.isEmpty() ? key : name;
+    if (!isGenericProfileLabel(base)) {
+        return base;
+    }
+    if (isInstallDefault) {
+        return QStringLiteral("Default");
+    }
+    const int dot = key.indexOf(QLatin1Char('.'));
+    if (dot >= 0) {
+        const QString suffix = key.mid(dot + 1);
+        if (!suffix.isEmpty() && !isGenericProfileLabel(suffix)) {
+            return suffix;
+        }
+    }
+    return base;
+}
+
+// Maps a Firefox/Zen contextual-identity color name to the color it renders
+// as in the browser's container UI. Colors introduced after this list was
+// written (e.g. "cyan") are left as the default QColor deliberately, per
+// product decision: an unmapped color is not worth guessing at.
+QColor containerColor(const QString &name)
+{
+    static const QHash<QString, QColor> colors = {
+        {QStringLiteral("blue"), QColor(0x37, 0xAD, 0xFF)},
+        {QStringLiteral("turquoise"), QColor(0x00, 0xC7, 0x9A)},
+        {QStringLiteral("green"), QColor(0x51, 0xCD, 0x00)},
+        {QStringLiteral("yellow"), QColor(0xFF, 0xCB, 0x00)},
+        {QStringLiteral("orange"), QColor(0xFF, 0x9F, 0x00)},
+        {QStringLiteral("red"), QColor(0xFF, 0x61, 0x3D)},
+        {QStringLiteral("pink"), QColor(0xFF, 0x4B, 0xDA)},
+        {QStringLiteral("purple"), QColor(0xAF, 0x51, 0xF5)},
+        {QStringLiteral("toolbar"), QColor(0x73, 0x73, 0x73)},
+    };
+    return colors.value(name.toLower());
+}
+
+// Only a handful of stock contextual identities ship without an explicit
+// "name"; they're addressed by l10nId instead. Any l10nId outside this set
+// is an identity Lane doesn't recognize (a future Firefox default, or a
+// corrupted entry) and is skipped rather than shown as a raw key.
+QString containerL10nName(const QString &l10nId)
+{
+    static const QHash<QString, QString> names = {
+        {QStringLiteral("user-context-personal"), QStringLiteral("Personal")},
+        {QStringLiteral("user-context-work"), QStringLiteral("Work")},
+        {QStringLiteral("user-context-banking"), QStringLiteral("Banking")},
+        {QStringLiteral("user-context-shopping"), QStringLiteral("Shopping")},
+    };
+    return names.value(l10nId);
+}
+
+enum class ContainerHandlerStatus { Present, Absent, Unknown };
+
+// A profile's containers.json lists every contextual identity Firefox/Zen
+// ever created, whether or not anything will act on ext+container links.
+// Without a protocol-handler extension (Open URL in Container, Default
+// Container Handler, ...) launching "ext+container:..." just opens a blank
+// tab, so containers are only offered as targets where the browser can
+// actually honor them. extensions.json (the startup cache Firefox/Zen
+// write for every installed add-on) is enough to tell: it embeds each
+// add-on's id, and known handlers are matched by id there. A literal
+// "ext+container" match covers any handler whose cached metadata mentions
+// the protocol directly.
+ContainerHandlerStatus containerHandlerStatus(const QString &profileDir)
+{
+    // Open URL in Container (addons.mozilla.org). Other handlers (e.g.
+    // Default Container Handler) are matched via the literal scan below.
+    static const QByteArray kOpenUrlInContainerId = QByteArrayLiteral("{f069aec0-43c5-4bbf-b6b4-df95c4326b98}");
+
+    QFile f(profileDir + QStringLiteral("/extensions.json"));
+    if (!f.open(QIODevice::ReadOnly)) {
+        return ContainerHandlerStatus::Unknown;
+    }
+    const QByteArray data = f.readAll();
+    if (data.contains(kOpenUrlInContainerId) || data.contains(QByteArrayLiteral("ext+container"))) {
+        return ContainerHandlerStatus::Present;
+    }
+    return ContainerHandlerStatus::Absent;
+}
+
+// Builds the container targets for one already-discovered real (non-private)
+// Gecko profile target. `profile` must already have its final id, exec,
+// icon and profileDir set.
+QList<Target> geckoContainers(const Target &profile)
+{
+    QList<Target> out;
+    if (profile.profileDir.isEmpty()) {
+        return out;
+    }
+    QFile f(profile.profileDir + QStringLiteral("/containers.json"));
+    if (!f.open(QIODevice::ReadOnly)) {
+        return out;
+    }
+    const auto doc = QJsonDocument::fromJson(f.readAll());
+    const auto identities = doc.object().value(QStringLiteral("identities")).toArray();
+
+    const auto handlerStatus = containerHandlerStatus(profile.profileDir);
+    if (handlerStatus == ContainerHandlerStatus::Absent) {
+        // extensions.json was readable and named no known handler: the
+        // browser can't act on ext+container links here, so don't offer any.
+        return out;
+    }
+    if (handlerStatus == ContainerHandlerStatus::Unknown) {
+        // extensions.json couldn't be inspected at all. Fall back to a
+        // weaker signal: a person who never made a custom container almost
+        // certainly never installed a protocol-handler extension either.
+        const bool hasCustomName = std::any_of(identities.begin(), identities.end(), [](const QJsonValue &v) {
+            const auto id = v.toObject();
+            return id.value(QStringLiteral("public")).toBool()
+                && !id.value(QStringLiteral("name")).toString().trimmed().isEmpty();
+        });
+        if (!hasCustomName) {
+            return out;
+        }
+    }
+
+    const QString browserName = profile.displayName();
+    QSet<int> seenIds;
+    for (const auto &v : identities) {
+        const auto id = v.toObject();
+        if (!id.value(QStringLiteral("public")).toBool()) {
+            continue;
+        }
+        const int userContextId = id.value(QStringLiteral("userContextId")).toInt();
+        if (seenIds.contains(userContextId)) {
+            continue;
+        }
+        QString name = id.value(QStringLiteral("name")).toString().trimmed();
+        if (name.isEmpty()) {
+            name = containerL10nName(id.value(QStringLiteral("l10nId")).toString());
+        }
+        if (name.isEmpty() || name.startsWith(QLatin1String("userContextIdInternal"))) {
+            continue;
+        }
+        seenIds.insert(userContextId);
+
+        Target t;
+        t.id = profile.id + QStringLiteral(":container:") + QString::number(userContextId);
+        t.kind = Kind::Container;
+        t.engine = profile.engine;
+        t.name = name;
+        t.browserName = browserName;
+        t.subtitle = browserName + QStringLiteral(" · ") + name;
+        t.exec = profile.exec;
+        const QString encodedName = QString::fromUtf8(QUrl::toPercentEncoding(name));
+        t.args = {
+            QStringLiteral("--profile"),
+            profile.profileDir,
+            QStringLiteral("--new-tab"),
+            QStringLiteral("ext+container:name=") + encodedName + QStringLiteral("&url=$urlEncoded"),
+        };
+        t.icon = profile.icon;
+        t.profileKey = profile.profileKey;
+        t.profileDir = profile.profileDir;
+        t.containerId = userContextId;
+        t.containerName = name;
+        t.color = containerColor(id.value(QStringLiteral("color")).toString());
+        out.append(t);
+    }
+    return out;
+}
+
 QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
 {
     QList<Target> out;
@@ -244,18 +495,27 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
     }
 
     QSettings ini(iniPath, QSettings::IniFormat);
-    QString defaultPath;
     const auto groups = ini.childGroups();
+    // Some machines have several Firefox/Zen installs sharing one profile
+    // store (e.g. release + ESR + Nightly), each with its own [InstallXXXX]
+    // section and its own default profile. A single desktop entry can't be
+    // matched back to one of those install ids, so an Install-section
+    // default is only authoritative when every install agrees on it;
+    // otherwise fall back to the legacy single-value Default=1 marker,
+    // which Firefox itself keeps around for exactly this ambiguous case.
+    QSet<QString> installDefaults;
     for (const auto &g : groups) {
         if (g.startsWith(QLatin1String("Install"))) {
             ini.beginGroup(g);
             const QString def = ini.value(QStringLiteral("Default")).toString();
             ini.endGroup();
             if (!def.isEmpty()) {
-                defaultPath = def;
+                installDefaults.insert(def);
             }
         }
     }
+    const QString defaultPath = installDefaults.size() == 1 ? *installDefaults.begin() : QString();
+    const bool hasUnambiguousInstallDefault = !defaultPath.isEmpty();
 
     struct Row {
         QString name;
@@ -274,13 +534,18 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
         r.isDefault = ini.value(QStringLiteral("Default")).toInt() == 1;
         const bool relative = ini.value(QStringLiteral("IsRelative"), 1).toInt() == 1;
         ini.endGroup();
-        if (r.path.isEmpty() || junkProfilePath(r.path)) {
+        if (r.path.isEmpty() || junkProfilePath(r.path) || junkProfileName(r.name)) {
             continue;
         }
         if (relative) {
             r.path = fp.dataDir + QLatin1Char('/') + r.path;
         }
         if (junkProfilePath(r.path)) {
+            continue;
+        }
+        // Skip rows profiles.ini still lists but that are gone from disk, and
+        // rows that were never actually launched (no prefs.js yet).
+        if (!QDir(r.path).exists() || !QFile::exists(r.path + QStringLiteral("/prefs.js"))) {
             continue;
         }
         rows.append(r);
@@ -290,25 +555,33 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
     for (const auto &r : rows) {
         Target t;
         const QString key = QFileInfo(r.path).fileName();
+        // With an Install section present (Firefox/Zen's per-install default
+        // marker), that marker is authoritative; a stale per-profile
+        // Default=1 left over from before multi-install support must not
+        // also claim to be the default.
+        const bool isInstallDefault = hasUnambiguousInstallDefault
+            ? (key == defaultPath || key == QFileInfo(defaultPath).fileName())
+            : r.isDefault;
         t.id = QStringLiteral("browser:") + app.id + QLatin1Char(':') + key;
         t.kind = Kind::BrowserProfile;
         t.engine = Engine::Gecko;
-        t.name = r.name.isEmpty() ? key : r.name;
+        t.name = geckoProfileLabel(r.name, key, isInstallDefault);
         t.browserName = fp.brand.isEmpty() ? app.name : fp.brand;
         t.subtitle = t.browserName + QStringLiteral(" · ") + t.name;
         t.exec = exe;
-        t.args = {QStringLiteral("-P"), r.name.isEmpty() ? key : r.name, QStringLiteral("--new-tab"), QStringLiteral("$url")};
+        t.args = {QStringLiteral("--profile"), r.path, QStringLiteral("--new-tab"), QStringLiteral("$url")};
         t.icon = app.icon;
         t.profileKey = r.name;
         t.profileDir = r.path;
-        t.isBrowserDefault = r.isDefault || r.path.endsWith(defaultPath) || QFileInfo(r.path).fileName() == defaultPath;
+        t.isBrowserDefault = isInstallDefault;
         out.append(t);
+        out.append(geckoContainers(t));
 
         Target priv = t;
         priv.id += QStringLiteral(":private");
         priv.name = t.name + QStringLiteral(" (Private)");
         priv.subtitle = t.browserName + QStringLiteral(" · Private");
-        priv.args = {QStringLiteral("-P"), r.name.isEmpty() ? key : r.name, QStringLiteral("--private-window"), QStringLiteral("$url")};
+        priv.args = {QStringLiteral("--profile"), r.path, QStringLiteral("--private-window"), QStringLiteral("$url")};
         priv.incognito = true;
         out.append(priv);
     }
@@ -478,7 +751,7 @@ QList<Target> actionTargets()
     copy.kind = Kind::Action;
     copy.engine = Engine::Action;
     copy.name = QStringLiteral("Copy link");
-    copy.browserName = QStringLiteral("Tern");
+    copy.browserName = QStringLiteral("Lane");
     copy.subtitle = QStringLiteral("Clipboard");
     copy.icon = QStringLiteral("edit-copy");
 
@@ -487,7 +760,7 @@ QList<Target> actionTargets()
     mail.kind = Kind::Action;
     mail.engine = Engine::Action;
     mail.name = QStringLiteral("Email link");
-    mail.browserName = QStringLiteral("Tern");
+    mail.browserName = QStringLiteral("Lane");
     mail.subtitle = QStringLiteral("Mail");
     mail.icon = QStringLiteral("mail-sent");
     mail.exec = QStringLiteral("xdg-email");
@@ -511,25 +784,42 @@ QList<Target> discoverTargets(const DiscoveryPaths &paths)
 {
     QList<Target> out;
     const auto apps = scanDesktopFiles(paths.applicationDirs);
-    QSet<QString> seenExecBrand;
+
+    // Two desktop files can point at the same browser install and profile
+    // store (e.g. an AUR "zen-bin" package shipping zen.desktop while a
+    // previous install left zen-browser.desktop behind). Group by what the
+    // browser actually is rather than by desktop file, and only ever walk
+    // its profiles once, using whichever desktop entry looks most canonical.
+    struct Group {
+        Fingerprint fp;
+        DesktopApp app;
+    };
+    QHash<QString, Group> groups;
+    QStringList groupOrder;
     for (const auto &app : apps) {
         const auto fp = fingerprint(app, paths);
         const QString sig = firstToken(app.execLine) + QLatin1Char('|') + fp.brand + QLatin1Char('|') + fp.dataDir;
-        if (seenExecBrand.contains(sig)) {
-            continue;
+        auto it = groups.find(sig);
+        if (it == groups.end()) {
+            groups.insert(sig, Group{fp, app});
+            groupOrder.append(sig);
+        } else if (isBetterDesktopApp(app, it.value().app, fp.brand)) {
+            it.value().app = app;
         }
-        seenExecBrand.insert(sig);
+    }
 
+    for (const auto &sig : groupOrder) {
+        const auto &group = groups.value(sig);
         QList<Target> found;
-        switch (fp.engine) {
+        switch (group.fp.engine) {
         case Engine::Gecko:
-            found = geckoProfiles(app, fp);
+            found = geckoProfiles(group.app, group.fp);
             break;
         case Engine::Chromium:
-            found = chromiumProfiles(app, fp);
+            found = chromiumProfiles(group.app, group.fp);
             break;
         default:
-            found = genericBrowser(app, fp);
+            found = genericBrowser(group.app, group.fp);
             break;
         }
         out.append(found);
@@ -633,4 +923,4 @@ QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id,
     return fullOrder;
 }
 
-} // namespace Tern
+} // namespace Lane

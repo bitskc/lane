@@ -3,7 +3,7 @@
 
 #include <QUuid>
 
-namespace Tern
+namespace Lane
 {
 
 RuleModel::RuleModel(QObject *parent)
@@ -148,4 +148,4 @@ void RuleModel::setRegex(int row, bool regex)
 {
     setData(index(row, 0), regex, RegexRole);
 }
-} // namespace Tern
+} // namespace Lane

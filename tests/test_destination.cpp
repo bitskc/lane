@@ -5,7 +5,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 
-using namespace Tern;
+using namespace Lane;
 
 static Target makeBrowser(const QString &id, const QString &name, bool def = false)
 {
@@ -37,11 +37,11 @@ class DestinationTest : public QObject
 private Q_SLOTS:
     void ladderIncludesHostAndPath()
     {
-        const QStringList ladder = destinationLadder(QStringLiteral("https://github.com/bitskc/tern"));
+        const QStringList ladder = destinationLadder(QStringLiteral("https://github.com/bitskc/lane"));
         QCOMPARE(ladder.size(), 3);
         QCOMPARE(ladder[0], QStringLiteral("github.com"));
         QCOMPARE(ladder[1], QStringLiteral("github.com/bitskc"));
-        QCOMPARE(ladder[2], QStringLiteral("github.com/bitskc/tern"));
+        QCOMPARE(ladder[2], QStringLiteral("github.com/bitskc/lane"));
     }
 
     void ladderEmptyForNoHost()
@@ -54,7 +54,7 @@ private Q_SLOTS:
     {
         QMap<QString, QString> remembered;
         remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:brave"));
-        QCOMPARE(lookupRemembered(QStringLiteral("https://github.com/bitskc/tern"), remembered),
+        QCOMPARE(lookupRemembered(QStringLiteral("https://github.com/bitskc/lane"), remembered),
                  QStringLiteral("browser:brave"));
     }
 
@@ -70,7 +70,7 @@ private Q_SLOTS:
         QMap<QString, QString> remembered;
         remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:zen"));
         remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:brave"));
-        QCOMPARE(lookupRemembered(QStringLiteral("https://github.com/bitskc/tern"), remembered),
+        QCOMPARE(lookupRemembered(QStringLiteral("https://github.com/bitskc/lane"), remembered),
                  QStringLiteral("browser:brave"));
     }
 
@@ -93,7 +93,7 @@ private Q_SLOTS:
     void pwaOriginWideDoesNotAutoOpenTenantPath()
     {
         const Target pwa = makePwa(QStringLiteral("pwa:gh"), QStringLiteral("GitHub"), QStringLiteral("https://github.com/"));
-        QVERIFY(!pwaShouldAutoOpen(pwa, QStringLiteral("https://github.com/bitskc/tern")));
+        QVERIFY(!pwaShouldAutoOpen(pwa, QStringLiteral("https://github.com/bitskc/lane")));
         QVERIFY(!pwaShouldAutoOpen(pwa, QStringLiteral("https://github.com/bitskc")));
     }
 
@@ -111,7 +111,7 @@ private Q_SLOTS:
         Config cfg;
         cfg.remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:brave"));
         Click c;
-        c.matchUrl = QStringLiteral("https://github.com/bitskc/tern");
+        c.matchUrl = QStringLiteral("https://github.com/bitskc/lane");
         c.host = QStringLiteral("github.com");
         const Decision d = route(c, targets, cfg);
         QCOMPARE(d.action, Decision::Action::Launch);
@@ -142,7 +142,7 @@ private Q_SLOTS:
         cfg.preferPwa = true;
         cfg.pickerPolicy = PickerPolicy::NoRule;
         Click c;
-        c.matchUrl = QStringLiteral("https://github.com/bitskc/tern");
+        c.matchUrl = QStringLiteral("https://github.com/bitskc/lane");
         c.host = QStringLiteral("github.com");
         const Decision d = route(c, targets, cfg);
         // Origin-wide PWA must not auto-open a tenant path; should pick
@@ -167,9 +167,9 @@ private Q_SLOTS:
 
     void suggestedLadderIndexTenantPathDefaultsToPathScope()
     {
-        const int idx = suggestedLadderIndex(QStringLiteral("https://github.com/bitskc/tern"), nullptr, {});
+        const int idx = suggestedLadderIndex(QStringLiteral("https://github.com/bitskc/lane"), nullptr, {});
         QCOMPARE(idx, 1);
-        const QStringList ladder = destinationLadder(QStringLiteral("https://github.com/bitskc/tern"));
+        const QStringList ladder = destinationLadder(QStringLiteral("https://github.com/bitskc/lane"));
         QCOMPARE(ladder.value(idx), QStringLiteral("github.com/bitskc"));
     }
 

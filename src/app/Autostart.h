@@ -1,9 +1,9 @@
 #pragma once
 
-namespace Tern
+namespace Lane
 {
 
 bool autostartEnabled();
 void setAutostart(bool enabled);
 
-} // namespace Tern
+} // namespace Lane

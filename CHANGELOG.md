@@ -1,13 +1,192 @@
 # Changelog
 
-All notable changes to Tern are documented here. The format follows
-[Keep a Changelog 1.1](https://keepachangelog.com/en/1.1.0/), and Tern
+All notable changes to Lane are documented here. The format follows
+[Keep a Changelog 1.1](https://keepachangelog.com/en/1.1.0/), and Lane
 uses [Semantic Versioning](https://semver.org/): while the major
 version is 0, minor releases may still contain breaking changes.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Firefox and Zen contextual identities (containers) show up as
+  destinations, one row per container per profile, e.g.
+  "Zen · Default · Work". Launch wraps the http(s) URL in an
+  `ext+container:name=...&url=...` argument passed to the browser;
+  Lane itself still only ever opens `http`/`https` links, and does not
+  register `ext+container` as anything it handles. Containers only
+  show up for profiles where Lane can tell a protocol-handler
+  extension is installed (Open URL in Container, Default Container
+  Handler, or similar); without one, the browser has nothing to act
+  on an `ext+container` link with.
+- Picker rows are grouped under section headers (Browsers, Containers,
+  Web apps, Actions). Container rows show their container color.
+  Unmapped colors fall back to a neutral dot instead of black.
+- Browsers & apps settings page has a search field and collapsible
+  sections with counts in each header. Private windows start collapsed.
+- Rules page warns when a rule's destination no longer exists, and
+  offers a button to clear remembered destinations pointing at targets
+  that are gone. Nothing is removed automatically.
+- Hold duration is adjustable in Preferences (0.4 to 5 seconds), not
+  just on or off.
+- Picker and hold overlays expose accessibility roles and names, so a
+  screen reader announces each destination and its number shortcut.
+- Settings has a new Information section at the bottom of Overview,
+  showing the running version, the license (PolyForm Noncommercial
+  1.0.0, with a link to the full text), and a link to the project
+  page on GitHub.
+- "Check for updates" button in that same section asks GitHub for the
+  latest release and tells you whether you're current, whether a
+  newer version is out (with a link to it), or that the check failed.
+  It only runs when you press the button. Lane never checks in the
+  background or on startup, and it never downloads or installs
+  anything itself; at most it offers to open the release page in your
+  browser.
+
+### Changed
+
+- Picker shows eight rows instead of six.
+- Overlay tints the desktop instead of dimming it out. (Picker/hold
+  no longer blur the whole screen.)
+- README and PKGBUILD build dependency lists now include
+  `kcolorscheme` and `kcrash`, which a clean configure actually needs.
+- PKGBUILD fetches the GitHub release tarball with a real checksum,
+  installs the license file, and runs tests with
+  `QT_QPA_PLATFORM=offscreen`.
+- CLI docs in README and AGENTS.md list every option the binary
+  accepts, including `--version`, `--settings`, `-p`, and
+  `--rediscover`.
+- `docs/config.schema.json` documents `kind` and `browserName` on
+  `customTargets` entries (written on save; `kind` is ignored on load).
+- Copy link moved out of the picker's destination list and into a
+  small control in the footer, next to the `esc` hint. It no longer
+  consumes a row or a number shortcut; the underlying action and its
+  Ctrl+C binding are unchanged.
+
+### Fixed
+
+- Picker and hold overlays failed to load on current Kirigami (6.28),
+  because they set `borderColor`/`borderWidth` directly instead of the
+  grouped `border.color`/`border.width` properties. This made link
+  clicks bounce in the taskbar and then do nothing. Fixed in
+  `Picker.qml` and `Hold.qml`.
+- Firefox-family browsers (Firefox, Zen, LibreWolf, Floorp, Waterfox)
+  were launched with `-P <internal name>`, and on Zen that internal
+  name is often `Default Profile` or `Default (release)`, which don't
+  round-trip cleanly as a launch argument. Lane now launches with
+  `--profile <folder>`, using the profile's real directory instead.
+  Discovery also picks whichever config folder actually holds a
+  browser's `profiles.ini` (instead of guessing based on folder
+  order), skips profiles whose folder is gone or was never opened,
+  and no longer lists a browser twice when two `.desktop` files point
+  at the same install. Zen's install-default profile is now labeled
+  "Default" instead of its raw internal name.
+- The picker bound a number shortcut for a ninth row it never drew,
+  so pressing 9 could open a destination that was not visible. Number
+  shortcuts now match the eight visible rows.
+- A failed launch (missing browser, bad custom command) did nothing
+  and looked like Lane was broken. Lane now shows a notification
+  naming the destination.
+- Notifications never appeared. None of the `KNotification` call sites
+  set a component name, so Plasma looked for `Lane.notifyrc` instead of
+  the installed `app.lane.Lane.notifyrc` and dropped every toast. This
+  affected the existing "Opened in" notice as well as the new
+  launch-failure notice.
+- Two conflicting rules combined with "never show the picker" honored
+  neither rule and fell through to the default target. First match now
+  wins, matching the documented decision order.
+- Blocked links (`javascript:`, `file:`, credentials in the URL) used
+  to show a normal picker whose rows could not open anyway. Lane now
+  explains that it refused the link.
+- A rejected custom app command showed nothing and the row never
+  appeared. The error now shows inline in the add form.
+- Link unshortening followed only one redirect, so a chained shortener
+  left rules and the picker looking at an intermediate domain. Lane
+  now follows up to four hops and stops on a loop.
+- Picker number shortcuts (1 through the number of visible rows) and
+  the `,`/`.` destination-ladder keys did nothing: the filter field
+  held keyboard focus and swallowed the plain keypress before the
+  `Shortcut` bound to it ever fired, so pressing a digit just typed
+  into the filter. Ctrl+C had the same problem. These are now handled
+  directly on the filter field instead of via `Shortcut`, so they work
+  while the field has focus (as it always does) and the badges shown
+  in the picker are honest about what pressing a key does. Return,
+  Enter, Escape, Up, Down, and Alt+A were unaffected (the filter field
+  does not claim those keys) and are unchanged.
+- Opening a destination from the picker, the hold bar, or a silent
+  rule/remembered open launched the target but never gave it focus,
+  because Lane launched with no XDG activation token and the picker
+  and hold overlays hold exclusive keyboard input at the moment of
+  launch, which Wayland's focus-stealing prevention correctly refused
+  to hand to an unauthorized process. Lane now requests a fresh
+  activation token from the overlay that was on screen (or reuses
+  whatever token this click's `openUrl()` call itself arrived with, for
+  a silent open with no overlay involved) and hands it to the launched
+  process via `XDG_ACTIVATION_TOKEN`, dismissing the overlay only after
+  the token request is issued. A launch still proceeds immediately if
+  no token can be obtained; it is just not raised.
+- "Check for updates" always showed the same "Could not check for
+  updates. Try again later." for every failure, whether the cause was
+  no network connection, a rate limit, a 404, or an unparseable
+  response, so a real problem (the GitHub repo slug changed ahead of
+  the actual rename, and currently 404s) looked identical to being
+  offline. Each cause now has its own message: DNS/connection/timeout
+  failures say so, a rate limit names roughly when it resets, a 404
+  names the repo slug and says releases were not found there (which
+  covers both a missing repo and one with no releases yet, since
+  GitHub's API answers both the same way), and a malformed 200
+  response is called out as a bug rather than a network problem. A
+  last-checked time is now shown next to the result, so pressing the
+  button twice is visibly different from doing nothing.
+- The picker window's height budgeted space for exactly two section
+  headers regardless of how many were actually shown. With three or
+  more kinds of destination present (containers, web apps, and custom
+  apps, say), rows that should have been visible within the first few
+  slots, including ones with a number-key shortcut, could be pushed
+  below the scrollable fold. The picker now sizes itself from the
+  real number of sections being shown.
+- Dragging a row to reorder browsers or apps while a search filter was
+  active could save an order different from what was visually
+  dragged, because a filtered-out row keeps its slot in the underlying
+  list even though it is drawn at zero height. Drag-reorder is now
+  disabled while a filter is active; clearing the search box restores
+  it.
+
+### Security
+
+- Custom targets loaded from `config.json` now go through the same
+  shell and interpreter blocklist the settings window enforces.
+  `launchTarget()` refuses a blocked interpreter, and `targetFromJson()`
+  drops a bad entry at load time with a warning naming the id, keeping
+  the rest of the config. Before this, a hand-edited or agent-edited
+  `customTargets` entry pointing at `bash` or `python3` would run on
+  the next matching click with no check.
+- The blocklist above checked only the exec path's own basename, which
+  two bypasses got past: an absolute exec that was itself a symlink to
+  a blocked interpreter under an unrelated name, and a wrapper like
+  `env` re-execing a blocked interpreter through its own args rather
+  than being one itself. `isBlockedInterpreterChain()` now walks the
+  full symlink chain from exec to whatever it actually resolves to,
+  checking every hop's basename, and the blocklist itself now also
+  covers re-exec wrappers (`env`, `xargs`, `sudo`, `pkexec`, `ssh`,
+  `find`, and others that can run a different program than the one
+  named in exec). This remains a blocklist, not a privilege boundary:
+  editing `config.json` already requires write access to the user's
+  home directory, so it is defense in depth against a hand-edited or
+  agent-edited config, not protection against a locally compromised
+  account.
+- `Controller::persist()` (every settings, rule, target-order, and
+  remembered-destination change) used to discard `saveConfig()`'s
+  result. A failed atomic write (disk full, permissions, read-only
+  `~/.config/lane`) was a silent no-op: the change looked saved and
+  was gone on the next restart. Lane now shows a notification when a
+  save fails.
+- Config writes are atomic (`QSaveFile`, temp file plus rename). A
+  crash or power loss mid-write can no longer truncate `config.json`.
+- A config file that does not parse is moved aside to
+  `config.json.corrupt-<timestamp>` with a warning instead of being
+  silently replaced by defaults. Rules and remembered destinations are
+  never discarded without a copy.
 
 ## [0.1.0] - 2026-09-11
 
@@ -34,9 +213,9 @@ First public release.
   Waterfox), Chromium-family profiles (Brave, Chrome, Edge, Vivaldi,
   Opera), and `firefoxpwa` sites.
 - Outlook safe-link unwrapping and optional link unshortening.
-- Agent-friendly `~/.config/tern/config.json` with a published JSON
-  schema (`docs/config.schema.json`), plus `tern --list`,
-  `tern --explain URL`, and `tern --config-path` for inspecting
+- Agent-friendly `~/.config/lane/config.json` with a published JSON
+  schema (`docs/config.schema.json`), plus `lane --list`,
+  `lane --explain URL`, and `lane --config-path` for inspecting
   config without the GUI. See `AGENTS.md`.
 - `KStatusNotifierItem` tray icon with Settings and Rediscover actions.
 - systemd user unit for autostart, installed to the systemd user unit
@@ -46,8 +225,8 @@ First public release.
 
 - Desktop entry, D-Bus service, and autostart files now use absolute
   paths to the installed binary, so Plasma's app menu and D-Bus
-  activation find `tern` even when `~/.local/bin` is not on `PATH`.
-- Tern claims a real D-Bus name, `app.tern.Tern`, instead of a
+  activation find `lane` even when `~/.local/bin` is not on `PATH`.
+- Lane claims a real D-Bus name, `app.lane.Lane`, instead of a
   placeholder, so the app menu can start it and duplicate launches
   hand off to the running instance.
 - Project license switched to the PolyForm Noncommercial License 1.0.0.
@@ -56,9 +235,9 @@ First public release.
 
 ### Security
 
-- Tern only ever opens `http` and `https` URLs. It rejects `file`,
+- Lane only ever opens `http` and `https` URLs. It rejects `file`,
   `javascript`, `data`, and URLs with embedded credentials. Custom
   handlers run as argv, never through a shell.
 
-[Unreleased]: https://github.com/bitskc/tern/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/bitskc/tern/releases/tag/v0.1.0
+[Unreleased]: https://github.com/bitskc/lane/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/bitskc/lane/releases/tag/v0.1.0

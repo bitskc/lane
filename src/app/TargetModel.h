@@ -4,7 +4,7 @@
 
 #include <QAbstractListModel>
 
-namespace Tern
+namespace Lane
 {
 
 class TargetModel : public QAbstractListModel
@@ -34,4 +34,4 @@ private:
     QList<Target> m_targets;
 };
 
-} // namespace Tern
+} // namespace Lane

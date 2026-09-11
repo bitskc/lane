@@ -5,7 +5,7 @@ import org.kde.kirigami as Kirigami
 
 QQC.ApplicationWindow {
     id: root
-    title: "Tern"
+    title: "Lane"
     minimumWidth: 880
     minimumHeight: 560
     width: 920
@@ -34,13 +34,13 @@ QQC.ApplicationWindow {
                 RowLayout {
                     spacing: 10
                     Kirigami.Icon {
-                        source: "app.tern.Tern"
+                        source: "app.lane.Lane"
                         Layout.preferredWidth: 28
                         Layout.preferredHeight: 28
                     }
                     Column {
                         QQC.Label {
-                            text: "Tern"
+                            text: "Lane"
                             font.pixelSize: 16
                             font.weight: Font.DemiBold
                         }

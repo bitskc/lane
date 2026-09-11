@@ -1,48 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component type="desktop-application">
-  <id>app.tern.Tern</id>
-  <name>Tern</name>
+  <id>app.lane.Lane</id>
+  <name>Lane</name>
   <summary>Open links in the right browser, profile, or app</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>PolyForm-Noncommercial-1.0.0</project_license>
-  <url type="homepage">https://github.com/bitskc/tern</url>
-  <url type="bugtracker">https://github.com/bitskc/tern/issues</url>
-  <url type="vcs-browser">https://github.com/bitskc/tern</url>
-  <developer id="app.tern">
+  <url type="homepage">https://github.com/bitskc/lane</url>
+  <url type="bugtracker">https://github.com/bitskc/lane/issues</url>
+  <url type="vcs-browser">https://github.com/bitskc/lane</url>
+  <developer id="app.lane">
     <name>Andy Hayes</name>
   </developer>
   <description>
     <p>
-      Tern is a link router for KDE Plasma. It becomes your default browser,
+      Lane is a link router for KDE Plasma. It becomes your default browser,
       then sends each click to the right browser profile, web app, or custom
       handler. It does not touch your default browser until you click the
       button on the Overview page, and it never takes mailto links or PDFs.
     </p>
     <p>
-      Tern discovers Firefox, Zen, LibreWolf, Floorp, Waterfox, and Chromium
+      Lane discovers Firefox, Zen, LibreWolf, Floorp, Waterfox, and Chromium
       family profiles, plus firefoxpwa sites. It remembers destinations by
       path, not just by host, so github.com/you can go somewhere different
       from github.com. A short hold bar gives you a chance to stop a link
       before it opens silently.
     </p>
   </description>
-  <launchable type="desktop-id">app.tern.Tern.desktop</launchable>
+  <launchable type="desktop-id">app.lane.Lane.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <caption>The picker overlay, shown when Tern does not already know where a link should go</caption>
-      <image>https://raw.githubusercontent.com/bitskc/tern/main/docs/screenshots/picker.png</image>
+      <caption>The picker overlay, shown when Lane does not already know where a link should go</caption>
+      <image>https://raw.githubusercontent.com/bitskc/lane/main/docs/screenshots/picker.png</image>
     </screenshot>
     <screenshot>
       <caption>The hold bar, a short pause before a link opens silently so you can stop it</caption>
-      <image>https://raw.githubusercontent.com/bitskc/tern/main/docs/screenshots/hold.png</image>
+      <image>https://raw.githubusercontent.com/bitskc/lane/main/docs/screenshots/hold.png</image>
     </screenshot>
     <screenshot>
       <caption>Settings overview: default browser, autostart, and discovered targets</caption>
-      <image>https://raw.githubusercontent.com/bitskc/tern/main/docs/screenshots/settings.png</image>
+      <image>https://raw.githubusercontent.com/bitskc/lane/main/docs/screenshots/settings.png</image>
     </screenshot>
   </screenshots>
   <provides>
-    <binary>tern</binary>
+    <binary>lane</binary>
   </provides>
   <releases>
     <release version="0.1.0" date="2026-09-11">
@@ -52,7 +52,7 @@
           <li>Picker, hold bar, and two-pane settings window</li>
           <li>Path-scoped memory for remembered destinations</li>
           <li>Rules, drag-reorder, and rename for browsers and apps</li>
-          <li>Agent-friendly config.json plus tern --list and --explain</li>
+          <li>Agent-friendly config.json plus lane --list and --explain</li>
           <li>http and https only, opt-in default browser</li>
         </ul>
       </description>

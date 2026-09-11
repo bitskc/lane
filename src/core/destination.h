@@ -2,7 +2,7 @@
 
 #include "types.h"
 
-namespace Tern
+namespace Lane
 {
 
 // host, or host/path, no scheme or query. github.com/bitskc
@@ -14,4 +14,4 @@ int suggestedLadderIndex(const QString &url, const Target *target, const QMap<QS
 bool pwaShouldAutoOpen(const Target &pwa, const QString &url);
 QString lookupRemembered(const QString &url, const QMap<QString, QString> &remembered);
 
-} // namespace Tern
+} // namespace Lane

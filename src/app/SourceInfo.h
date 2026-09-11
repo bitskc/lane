@@ -2,7 +2,7 @@
 
 #include <QString>
 
-namespace Tern
+namespace Lane
 {
 
 struct SourceInfo {
@@ -12,4 +12,4 @@ struct SourceInfo {
 
 SourceInfo activeSource();
 
-} // namespace Tern
+} // namespace Lane

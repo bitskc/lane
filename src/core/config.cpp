@@ -1,15 +1,20 @@
 #include "config.h"
 
+#include "launcher.h"
+
+#include <QDateTime>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QFileInfo>
 #include <QJsonObject>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QUuid>
 
-namespace Tern
+namespace Lane
 {
 
 QString pickerPolicyToString(PickerPolicy p)
@@ -102,7 +107,7 @@ static QJsonObject targetToJson(const Target &t)
     return o;
 }
 
-static Target targetFromJson(const QJsonObject &o)
+static bool targetFromJson(const QJsonObject &o, Target *out)
 {
     Target t;
     t.id = o[QStringLiteral("id")].toString();
@@ -119,13 +124,79 @@ static Target targetFromJson(const QJsonObject &o)
     if (t.id.isEmpty()) {
         t.id = QStringLiteral("custom:") + QUuid::createUuid().toString(QUuid::WithoutBraces);
     }
+    // isBlockedInterpreter() alone catches a literal blocked name, which
+    // also covers a relative exec that is not resolvable on this machine
+    // right now but plainly would be one if it were (keeps existing
+    // behavior for a hand-typed "python3" etc. regardless of PATH). When
+    // exec does resolve to a real file, additionally walk any symlink
+    // chain: a customTargets entry can otherwise name an innocuous
+    // absolute path that is itself a symlink to a blocked interpreter,
+    // which launchTarget() would only catch at the moment of exec (see
+    // launcher.cpp). Rejecting it here means it never even reaches the
+    // picker. An exec that simply does not resolve to anything right now
+    // (not installed yet, temporarily unmounted path, ...) is left in
+    // place rather than dropped: launchTarget() will refuse to launch it
+    // for the same reason, so there is no window where it can run
+    // anything unverified, and dropping it here would permanently lose
+    // the entry from config.json on the next save.
+    bool blocked = isBlockedInterpreter(t.exec);
+    if (!blocked) {
+        const QString resolved = resolveExecutable(t.exec);
+        if (!resolved.isEmpty()) {
+            blocked = isBlockedInterpreterChain(resolved);
+        }
+    }
+    if (blocked) {
+        qWarning() << "Lane: dropping customTargets entry" << t.id
+                   << "because its exec is a blocked shell/interpreter, directly or via a symlink:" << t.exec;
+        return false;
+    }
     t.subtitle = t.browserName.isEmpty() ? QStringLiteral("App") : t.browserName;
-    return t;
+    *out = t;
+    return true;
 }
 
 QString defaultConfigPath()
 {
+    return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/lane/config.json");
+}
+
+static QString legacyConfigPath()
+{
     return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + QStringLiteral("/tern/config.json");
+}
+
+void migrateLegacyConfig(const QString &oldPath, const QString &newPath)
+{
+    if (QFile::exists(newPath)) {
+        // The current location already has a file, whether from a previous
+        // migration or a fresh save. Never overwrite it: this is what makes
+        // the migration safe to run on every startup.
+        return;
+    }
+    if (!QFile::exists(oldPath)) {
+        return;
+    }
+    const QString newDir = QFileInfo(newPath).absolutePath();
+    if (!QDir().mkpath(newDir)) {
+        qWarning() << "Lane: could not create config directory for migration:" << newDir;
+        return;
+    }
+    // Copy, never move or rename: the legacy file at ~/.config/tern is left
+    // byte-for-byte intact no matter what happens here, so a failed or
+    // partial migration can never lose the user's rules, remembered
+    // destinations, aliases, or target order.
+    if (QFile::copy(oldPath, newPath)) {
+        qInfo() << "Lane: migrated config from" << oldPath << "to" << newPath;
+    } else {
+        qWarning() << "Lane: failed to migrate config from" << oldPath << "to" << newPath
+                   << "- starting fresh at the new location instead";
+    }
+}
+
+void migrateLegacyConfig()
+{
+    migrateLegacyConfig(legacyConfigPath(), defaultConfigPath());
 }
 
 Config loadConfig(const QString &path)
@@ -135,8 +206,17 @@ Config loadConfig(const QString &path)
     if (!f.open(QIODevice::ReadOnly)) {
         return c;
     }
-    const auto doc = QJsonDocument::fromJson(f.readAll());
+    const QByteArray raw = f.readAll();
+    f.close();
+    const auto doc = QJsonDocument::fromJson(raw);
     if (!doc.isObject()) {
+        const QString corruptPath = path + QStringLiteral(".corrupt-")
+            + QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMddTHHmmssZ"));
+        if (QFile::rename(path, corruptPath)) {
+            qWarning() << "Lane: config at" << path << "is not valid JSON; moved it aside to" << corruptPath;
+        } else {
+            qWarning() << "Lane: config at" << path << "is not valid JSON and could not be moved aside; using defaults";
+        }
         return c;
     }
     const QJsonObject o = doc.object();
@@ -191,7 +271,10 @@ Config loadConfig(const QString &path)
     }
 
     for (const auto &v : o[QStringLiteral("customTargets")].toArray()) {
-        c.customTargets.append(targetFromJson(v.toObject()));
+        Target t;
+        if (targetFromJson(v.toObject(), &t)) {
+            c.customTargets.append(t);
+        }
     }
 
     for (const auto &v : o[QStringLiteral("substitutions")].toArray()) {
@@ -268,12 +351,16 @@ bool saveConfig(const QString &path, const Config &config)
     }
     o[QStringLiteral("substitutions")] = subs;
 
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    const QByteArray json = QJsonDocument(o).toJson(QJsonDocument::Indented);
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly)) {
         return false;
     }
-    f.write(QJsonDocument(o).toJson(QJsonDocument::Indented));
-    return true;
+    if (f.write(json) != json.size()) {
+        f.cancelWriting();
+        return false;
+    }
+    return f.commit();
 }
 
-} // namespace Tern
+} // namespace Lane

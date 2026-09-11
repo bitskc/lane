@@ -2,7 +2,7 @@
 
 #include <QTest>
 
-using namespace Tern;
+using namespace Lane;
 
 static Target makeBrowser(const QString &id, const QString &name, bool def = false)
 {
@@ -25,6 +25,17 @@ static Target makePwa(const QString &id, const QString &name, const QString &sco
     t.name = name;
     t.browserName = QStringLiteral("PWA");
     t.pwaScope = scope;
+    return t;
+}
+
+static Target makeAction(const QString &id, const QString &name)
+{
+    Target t;
+    t.id = id;
+    t.kind = Kind::Action;
+    t.engine = Engine::Action;
+    t.name = name;
+    t.browserName = QStringLiteral("Lane");
     return t;
 }
 
@@ -140,6 +151,27 @@ private Q_SLOTS:
         QCOMPARE(d.reason, QStringLiteral("conflict"));
     }
 
+    void conflictHonorsFirstRuleWhenPickerNever()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("a"), QStringLiteral("A")),
+                              makeBrowser(QStringLiteral("b"), QStringLiteral("B"))};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::Never;
+        Rule r1;
+        r1.pattern = QStringLiteral("ex");
+        r1.scope = MatchScope::Any;
+        r1.targetId = QStringLiteral("a");
+        Rule r2 = r1;
+        r2.targetId = QStringLiteral("b");
+        cfg.rules = {r1, r2};
+        Click c;
+        c.matchUrl = QStringLiteral("https://example.com");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.action, Decision::Action::Launch);
+        QCOMPARE(d.target.id, QStringLiteral("a"));
+        QCOMPARE(d.reason, QStringLiteral("rule"));
+    }
+
     void pickerRanksPwaFirst()
     {
         QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
@@ -202,6 +234,38 @@ private Q_SLOTS:
         QCOMPARE(ranked.at(2).id, QStringLiteral("browser:zen:def"));
     }
 
+    // action:copy moved out of the picker list into a footer control
+    // (Controller::copyCurrent(), bound to Ctrl+C); it must never appear
+    // as a row, whether it would have been reached via the general target
+    // list or by explicit targetOrder pinning. Other Kind::Action targets
+    // (e.g. action:email) are unaffected by this and still excluded from
+    // the default ranking the same way they always were.
+    void pickerExcludesCopyAction()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeAction(QStringLiteral("action:copy"), QStringLiteral("Copy link")),
+                              makeAction(QStringLiteral("action:email"), QStringLiteral("Email link"))};
+        Config cfg;
+        Click c;
+        c.matchUrl = QStringLiteral("https://example.com");
+        const auto ranked = rankForPicker(c, targets, cfg);
+        QCOMPARE(ranked.size(), 1);
+        QCOMPARE(ranked.first().id, QStringLiteral("browser:zen:def"));
+    }
+
+    void pickerExcludesCopyActionEvenWhenPinnedInTargetOrder()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeAction(QStringLiteral("action:copy"), QStringLiteral("Copy link"))};
+        Config cfg;
+        cfg.targetOrder = {QStringLiteral("action:copy"), QStringLiteral("browser:zen:def")};
+        Click c;
+        c.matchUrl = QStringLiteral("https://example.com");
+        const auto ranked = rankForPicker(c, targets, cfg);
+        QCOMPARE(ranked.size(), 1);
+        QCOMPARE(ranked.first().id, QStringLiteral("browser:zen:def"));
+    }
+
     void unsafeUrlNeverAutoLaunches()
     {
         QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};
@@ -214,6 +278,17 @@ private Q_SLOTS:
         const Decision d = route(c, targets, cfg);
         QCOMPARE(d.action, Decision::Action::Pick);
         QCOMPARE(d.reason, QStringLiteral("blocked"));
+    }
+
+    void danglingRememberedKeysFindsMissingTargetsOnly()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};
+        Config cfg;
+        cfg.remembered.insert(QStringLiteral("news.ycombinator.com"), QStringLiteral("browser:zen:def"));
+        cfg.remembered.insert(QStringLiteral("old-site.example"), QStringLiteral("browser:firefox:uninstalled"));
+        const QStringList dangling = danglingRememberedKeys(targets, cfg);
+        QCOMPARE(dangling.size(), 1);
+        QCOMPARE(dangling.first(), QStringLiteral("old-site.example"));
     }
 };
 

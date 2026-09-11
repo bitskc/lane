@@ -9,6 +9,33 @@ FormCard.FormCardPage {
     title: "Browsers & apps"
 
     property int rowHeight: 48
+    property string customCommandError: ""
+    property string searchText: ""
+    property bool browsersExpanded: true
+    property bool containersExpanded: true
+    property bool pwasExpanded: true
+    property bool privateExpanded: false
+    property bool customsExpanded: true
+
+    function matchesSearch(name, discoveredName) {
+        if (searchText.trim().length === 0) {
+            return true
+        }
+        const q = searchText.trim().toLowerCase()
+        return (name || "").toLowerCase().indexOf(q) !== -1
+            || (discoveredName || "").toLowerCase().indexOf(q) !== -1
+    }
+
+    function matchCount(listModel) {
+        var n = 0
+        for (var i = 0; i < listModel.count; i++) {
+            var e = listModel.get(i)
+            if (matchesSearch(e.name, e.discoveredName)) {
+                n++
+            }
+        }
+        return n
+    }
 
     Timer {
         id: renameTimer
@@ -19,6 +46,7 @@ FormCard.FormCardPage {
     }
 
     ListModel { id: browserModel }
+    ListModel { id: containerModel }
     ListModel { id: pwaModel }
     ListModel { id: customModel }
     ListModel { id: privateModel }
@@ -34,6 +62,15 @@ FormCard.FormCardPage {
                 Kirigami.ListItemDragHandle {
                     listItem: listItem
                     listView: browserList
+                    // Filtered-out rows stay in browserModel at their
+                    // original index (only their visual height collapses
+                    // to 0, see the ListView below), so a drag computed
+                    // against the full model while a search filter is
+                    // active can persist an order different from what was
+                    // visually dragged. Disabling the handle while
+                    // filtered avoids that ambiguity outright; clearing
+                    // the search box restores dragging.
+                    enabled: page.searchText.trim().length === 0
                     onMoveRequested: (oldIndex, newIndex) => {
                         if (browserList.dragId === "")
                             browserList.dragId = browserModel.get(oldIndex).targetId
@@ -43,6 +80,71 @@ FormCard.FormCardPage {
                         if (newIndex >= 0 && browserList.dragId !== "") {
                             controller.moveTarget(browserList.dragId, newIndex)
                             browserList.dragId = ""
+                        }
+                    }
+                }
+                Kirigami.Icon {
+                    source: model.iconName
+                    implicitWidth: 22
+                    implicitHeight: 22
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.TextField {
+                    text: model.name
+                    placeholderText: model.discoveredName
+                    Layout.fillWidth: true
+                    background: Item {}
+                    verticalAlignment: TextInput.AlignVCenter
+                    onEditingFinished: {
+                        var id = model.targetId
+                        var nm = text.trim()
+                        if (nm !== model.name) {
+                            renameTimer.targetId = id
+                            renameTimer.newName = nm
+                            renameTimer.start()
+                        }
+                    }
+                    Keys.onEscapePressed: {
+                        text = model.name
+                        focus = false
+                    }
+                }
+                QQC.Switch {
+                    checked: !model.hidden
+                    onToggled: controller.hideTarget(model.targetId, !checked)
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.Button {
+                    text: "Default"
+                    flat: true
+                    onClicked: controller.defaultTargetId = model.targetId
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+        }
+    }
+
+    Component {
+        id: containerDelegate
+        QQC.ItemDelegate {
+            id: listItem
+            width: containerList.width
+            height: page.rowHeight
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Kirigami.ListItemDragHandle {
+                    listItem: listItem
+                    listView: containerList
+                    enabled: page.searchText.trim().length === 0
+                    onMoveRequested: (oldIndex, newIndex) => {
+                        if (containerList.dragId === "")
+                            containerList.dragId = containerModel.get(oldIndex).targetId
+                        containerModel.move(oldIndex, newIndex, 1)
+                    }
+                    onDropped: (oldIndex, newIndex) => {
+                        if (newIndex >= 0 && containerList.dragId !== "") {
+                            controller.moveTarget(containerList.dragId, newIndex)
+                            containerList.dragId = ""
                         }
                     }
                 }
@@ -98,6 +200,7 @@ FormCard.FormCardPage {
                 Kirigami.ListItemDragHandle {
                     listItem: listItem
                     listView: pwaList
+                    enabled: page.searchText.trim().length === 0
                     onMoveRequested: (oldIndex, newIndex) => {
                         if (pwaList.dragId === "")
                             pwaList.dragId = pwaModel.get(oldIndex).targetId
@@ -156,6 +259,7 @@ FormCard.FormCardPage {
                 Kirigami.ListItemDragHandle {
                     listItem: listItem
                     listView: customList
+                    enabled: page.searchText.trim().length === 0
                     onMoveRequested: (oldIndex, newIndex) => {
                         if (customList.dragId === "")
                             customList.dragId = customModel.get(oldIndex).targetId
@@ -254,6 +358,10 @@ FormCard.FormCardPage {
             if (!browsers[i].incognito)
                 browserModel.append(browsers[i])
         }
+        containerModel.clear()
+        var containers = controller.targetModel.targetsByKind("container")
+        for (var i = 0; i < containers.length; i++)
+            containerModel.append(containers[i])
         pwaModel.clear()
         var pwas = controller.targetModel.targetsByKind("pwa")
         for (var i = 0; i < pwas.length; i++)
@@ -268,10 +376,36 @@ FormCard.FormCardPage {
             privateModel.append(privates[i])
     }
 
+    function hasGeckoBrowsers() {
+        var browsers = controller.targetModel.targetsByKind("browser")
+        for (var i = 0; i < browsers.length; i++) {
+            if (!browsers[i].incognito && browsers[i].engine === "gecko")
+                return true
+        }
+        return false
+    }
+
     Component.onCompleted: syncModels()
     Connections {
         target: controller
         function onSettingsChanged() { syncModels() }
+    }
+
+    FormCard.FormHeader {
+        title: "Search"
+    }
+    FormCard.FormCard {
+        FormCard.AbstractFormDelegate {
+            background: Item {}
+            contentItem: QQC.TextField {
+                id: searchField
+                placeholderText: "Filter browsers, containers, apps…"
+                text: page.searchText
+                onTextChanged: page.searchText = text
+                Accessible.role: Accessible.EditableText
+                Accessible.name: "Filter browsers and apps"
+            }
+        }
     }
 
     FormCard.FormHeader {
@@ -280,17 +414,32 @@ FormCard.FormCardPage {
     FormCard.FormCard {
         FormCard.FormComboBoxDelegate {
             text: "Fallback target"
-            description: "Used when Tern does not ask and no rule matches"
+            description: "Used when Lane does not ask and no rule matches"
             model: controller.targetNames
             currentIndex: Math.max(0, controller.targetIds.indexOf(controller.defaultTargetId))
             onActivated: controller.defaultTargetId = controller.targetIds[currentIndex]
         }
     }
 
-    FormCard.FormHeader {
-        title: "Browsers"
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.largeSpacing
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.smallSpacing
+        QQC.ToolButton {
+            icon.name: page.browsersExpanded ? "arrow-down" : "arrow-right"
+            flat: true
+            onClicked: page.browsersExpanded = !page.browsersExpanded
+        }
+        Kirigami.Heading {
+            level: 4
+            Layout.fillWidth: true
+            text: "Browsers (" + page.matchCount(browserModel) + ")"
+        }
     }
     QQC.Label {
+        visible: page.browsersExpanded || page.searchText.length > 0
         text: "Drag to reorder. Click a name to rename."
         font: Kirigami.Theme.smallFont
         color: Kirigami.Theme.disabledTextColor
@@ -299,81 +448,197 @@ FormCard.FormCardPage {
         Layout.bottomMargin: Kirigami.Units.smallSpacing
     }
     FormCard.FormCard {
+        visible: (page.browsersExpanded || page.searchText.length > 0) && page.matchCount(browserModel) > 0
         ListView {
             id: browserList
             model: browserModel
             interactive: false
             spacing: 0
             Layout.fillWidth: true
-            implicitHeight: count * page.rowHeight
+            implicitHeight: contentHeight
             moveDisplaced: Transition {
                 YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
             delegate: Loader {
                 width: browserList.width
+                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+                visible: height > 0
                 sourceComponent: browserDelegate
             }
         }
     }
 
-    FormCard.FormHeader {
-        title: "Installed web apps"
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.largeSpacing
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.smallSpacing
+        QQC.ToolButton {
+            icon.name: page.containersExpanded ? "arrow-down" : "arrow-right"
+            flat: true
+            onClicked: page.containersExpanded = !page.containersExpanded
+        }
+        Kirigami.Heading {
+            level: 4
+            Layout.fillWidth: true
+            text: "Containers (" + page.matchCount(containerModel) + ")"
+        }
+    }
+    QQC.Label {
+        visible: page.containersExpanded || page.searchText.length > 0
+        text: "Opens the link in that Firefox or Zen container. Needs a container protocol extension in the browser (Open URL in Container, or Default Container Handler)."
+        font: Kirigami.Theme.smallFont
+        color: Kirigami.Theme.disabledTextColor
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        Layout.bottomMargin: Kirigami.Units.smallSpacing
     }
     FormCard.FormCard {
+        visible: (page.containersExpanded || page.searchText.length > 0) && page.matchCount(containerModel) > 0
+        ListView {
+            id: containerList
+            model: containerModel
+            interactive: false
+            spacing: 0
+            Layout.fillWidth: true
+            implicitHeight: contentHeight
+            moveDisplaced: Transition {
+                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
+            }
+            property string dragId: ""
+            delegate: Loader {
+                width: containerList.width
+                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+                visible: height > 0
+                sourceComponent: containerDelegate
+            }
+        }
+    }
+    QQC.Label {
+        visible: containerModel.count === 0 && page.hasGeckoBrowsers() && page.searchText.length === 0
+        text: "No containers found. Zen and Firefox write them to containers.json in the profile folder."
+        font: Kirigami.Theme.smallFont
+        color: Kirigami.Theme.disabledTextColor
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        Layout.bottomMargin: Kirigami.Units.smallSpacing
+    }
+
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.largeSpacing
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.smallSpacing
+        QQC.ToolButton {
+            icon.name: page.pwasExpanded ? "arrow-down" : "arrow-right"
+            flat: true
+            onClicked: page.pwasExpanded = !page.pwasExpanded
+        }
+        Kirigami.Heading {
+            level: 4
+            Layout.fillWidth: true
+            text: "Installed web apps (" + page.matchCount(pwaModel) + ")"
+        }
+    }
+    FormCard.FormCard {
+        visible: (page.pwasExpanded || page.searchText.length > 0) && page.matchCount(pwaModel) > 0
         ListView {
             id: pwaList
             model: pwaModel
             interactive: false
             spacing: 0
             Layout.fillWidth: true
-            implicitHeight: count * page.rowHeight
+            implicitHeight: contentHeight
             moveDisplaced: Transition {
                 YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
             delegate: Loader {
                 width: pwaList.width
+                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+                visible: height > 0
                 sourceComponent: pwaDelegate
             }
         }
     }
 
-    FormCard.FormHeader {
-        title: "Private windows"
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.largeSpacing
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.smallSpacing
+        QQC.ToolButton {
+            icon.name: page.privateExpanded ? "arrow-down" : "arrow-right"
+            flat: true
+            onClicked: page.privateExpanded = !page.privateExpanded
+        }
+        Kirigami.Heading {
+            level: 4
+            Layout.fillWidth: true
+            text: "Private windows (" + page.matchCount(privateModel) + ")"
+        }
     }
     FormCard.FormCard {
+        visible: (page.privateExpanded || page.searchText.length > 0) && page.matchCount(privateModel) > 0
         ListView {
             id: privateList
             model: privateModel
             interactive: false
             spacing: 0
             Layout.fillWidth: true
-            implicitHeight: count * page.rowHeight
+            implicitHeight: contentHeight
             delegate: Loader {
                 width: privateList.width
+                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+                visible: height > 0
                 sourceComponent: privateDelegate
             }
         }
     }
 
-    FormCard.FormHeader {
-        title: "Custom apps"
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.largeSpacing
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.smallSpacing
+        QQC.ToolButton {
+            icon.name: page.customsExpanded ? "arrow-down" : "arrow-right"
+            flat: true
+            onClicked: page.customsExpanded = !page.customsExpanded
+        }
+        Kirigami.Heading {
+            level: 4
+            Layout.fillWidth: true
+            text: "Custom apps (" + page.matchCount(customModel) + ")"
+        }
     }
     FormCard.FormCard {
+        visible: page.customsExpanded || page.searchText.length > 0
         ListView {
             id: customList
             model: customModel
             interactive: false
             spacing: 0
             Layout.fillWidth: true
-            implicitHeight: count * page.rowHeight
+            implicitHeight: contentHeight
+            visible: count > 0
             moveDisplaced: Transition {
                 YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
             delegate: Loader {
                 width: customList.width
+                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+                visible: height > 0
                 sourceComponent: customDelegate
             }
         }
@@ -386,12 +651,20 @@ FormCard.FormCardPage {
             id: customCommand
             label: "Command"
             placeholderText: "firefox -P work $url"
+            status: page.customCommandError.length > 0 ? Kirigami.MessageType.Error : Kirigami.MessageType.Information
+            statusMessage: page.customCommandError
+            onTextEdited: page.customCommandError = ""
         }
         FormCard.FormButtonDelegate {
             text: "Add custom app"
             icon.name: "list-add"
             onClicked: {
-                controller.addCustomTarget(customName.text, customCommand.text)
+                const error = controller.addCustomTarget(customName.text, customCommand.text)
+                if (error.length > 0) {
+                    page.customCommandError = error
+                    return
+                }
+                page.customCommandError = ""
                 customName.text = ""
                 customCommand.text = ""
             }

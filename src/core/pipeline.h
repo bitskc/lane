@@ -4,11 +4,11 @@
 
 #include <functional>
 
-namespace Tern
+namespace Lane
 {
 
 using UnshortenFn = std::function<QString(const QString &)>;
 
 Click runPipeline(const QString &rawUrl, const Config &config, const UnshortenFn &unshorten = {});
 
-} // namespace Tern
+} // namespace Lane

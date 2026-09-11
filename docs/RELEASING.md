@@ -1,36 +1,36 @@
-# Releasing Tern
+# Releasing Lane
 
-This is the checklist for cutting a Tern release. It works the same
+This is the checklist for cutting a Lane release. It works the same
 whether a human runs it by hand or an agent runs it.
 
-The version number lives in one place: `project(tern VERSION x.y.z)`
+The version number lives in one place: `project(lane VERSION x.y.z)`
 in the top-level `CMakeLists.txt`. `ecm_setup_version` turns that into
-`tern_version.h` at configure time, and the app reads
-`TERN_VERSION_STRING` from there. `tern --version`, the About dialog,
+`lane_version.h` at configure time, and the app reads
+`LANE_VERSION_STRING` from there. `lane --version`, the About dialog,
 and the Settings sidebar all pick the number up automatically. Do not
 hardcode a version anywhere else, and do not put a version number in
 QML.
 
 ## Versioning
 
-Tern is pre-1.0. Normal semver rules apply, with the usual 0.x
+Lane is pre-1.0. Normal semver rules apply, with the usual 0.x
 caveat: a 0.x minor bump can still contain a breaking change.
 
 - Patch release (`0.1.0` -> `0.1.1`): bug fixes only, no new user
   facing behavior.
 - Minor release (`0.1.0` -> `0.2.0`): new features, while still 0.x.
-- 1.0.0: Andy decides when Tern is done enough to call it 1.0. Nobody
+- 1.0.0: Andy decides when Lane is done enough to call it 1.0. Nobody
   else bumps to 1.0.
 
 ## Three files move together
 
 Every release touches exactly these three places, in lockstep:
 
-1. `CMakeLists.txt` - bump `project(tern VERSION x.y.z ...)`.
+1. `CMakeLists.txt` - bump `project(lane VERSION x.y.z ...)`.
 2. `CHANGELOG.md` - turn the `## [Unreleased]` section into a dated
    section for the new version, then add a fresh empty `Unreleased`
    section above it.
-3. `data/app.tern.Tern.metainfo.xml` - add a new `<release>` entry at
+3. `data/app.lane.Lane.metainfo.xml` - add a new `<release>` entry at
    the top of `<releases>` (newest first) with the version and date,
    and a short human-readable summary. Do not paste the whole
    changelog entry in here; a few bullet points is enough.
@@ -40,6 +40,8 @@ ready.
 
 ## Steps
 
+Release from the `main` branch after the changes you want are merged.
+
 1. **Confirm the changelog is current.** Every user-facing PR since
    the last release should already have an `Unreleased` bullet (see
    `CONTRIBUTING.md`). Read through `git log` since the last tag and
@@ -48,7 +50,7 @@ ready.
 2. **Bump the version.**
 
    ```bash
-   # edit CMakeLists.txt: project(tern VERSION 0.2.0 LANGUAGES CXX)
+   # edit CMakeLists.txt: project(lane VERSION 0.2.0 LANGUAGES CXX)
    ```
 
 3. **Update the changelog.** Move `## [Unreleased]` content into a new
@@ -58,7 +60,7 @@ ready.
    the file.
 
 4. **Update the AppStream metainfo.** Add the matching `<release>`
-   entry to `data/app.tern.Tern.metainfo.xml`, newest first:
+   entry to `data/app.lane.Lane.metainfo.xml`, newest first:
 
    ```xml
    <release version="0.2.0" date="YYYY-MM-DD">
@@ -72,9 +74,13 @@ ready.
    </release>
    ```
 
-5. **Rebuild and test.**
+5. **Reconfigure, rebuild, and test.** The version string is baked in at
+   configure time (`ecm_setup_version` writes `lane_version.h`), so you
+   must re-run CMake after bumping `CMakeLists.txt`. If you do not have a
+   `build/` directory yet, create one first.
 
    ```bash
+   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
    cmake --build build
    ctest --test-dir build --output-on-failure
    ```
@@ -83,31 +89,31 @@ ready.
    have `appstreamcli` installed):
 
    ```bash
-   appstreamcli validate --pedantic data/app.tern.Tern.metainfo.xml
+   appstreamcli validate --pedantic data/app.lane.Lane.metainfo.xml
    ```
 
    `appstreamcli` will flag `PolyForm-Noncommercial-1.0.0` as not
    being on its list of well-known SPDX license identifiers, or may
    otherwise note it as an uncommon license. That is expected and
-   correct. Tern's license is PolyForm Noncommercial, not GPL or MIT,
+   correct. Lane's license is PolyForm Noncommercial, not GPL or MIT,
    and the metainfo file must say so honestly even if some tooling
    does not recognize it. Do not change `project_license` to make a
    validator happy. As of this writing the file validates cleanly
    apart from a pre-existing pedantic note about the component ID
-   (`app.tern.Tern`) containing uppercase letters, which is
+   (`app.lane.Lane`) containing uppercase letters, which is
    intentional: it matches the D-Bus name and desktop file ID.
 
 7. **Commit the release.**
 
    ```bash
-   git add CMakeLists.txt CHANGELOG.md data/app.tern.Tern.metainfo.xml
+   git add CMakeLists.txt CHANGELOG.md data/app.lane.Lane.metainfo.xml
    git commit -m "Release v0.2.0"
    ```
 
 8. **Tag it.** Use an annotated tag so it carries a message and date:
 
    ```bash
-   git tag -a v0.2.0 -m "Tern 0.2.0"
+   git tag -a v0.2.0 -m "Lane 0.2.0"
    ```
 
 9. **Push.**
@@ -133,7 +139,7 @@ ready.
     release by hand instead of skipping it:
 
     ```bash
-    gh release create v0.2.0 --title "Tern 0.2.0" \
+    gh release create v0.2.0 --title "Lane 0.2.0" \
       --notes-file <(sed -n '/## \[0.2.0\]/,/## \[/p' CHANGELOG.md | sed '$d')
     ```
 

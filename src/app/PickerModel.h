@@ -4,13 +4,19 @@
 
 #include <QAbstractListModel>
 
-namespace Tern
+namespace Lane
 {
 
 class PickerModel : public QAbstractListModel
 {
     Q_OBJECT
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
+    // Number of distinct section headers list.qml will actually render for
+    // the currently shown rows (see sectionFor() in PickerModel.cpp: up to
+    // five -- Containers, Web apps, Actions, Apps, Browsers). Exists so the
+    // picker window can size itself for however many headers are really
+    // present instead of a hardcoded guess.
+    Q_PROPERTY(int sectionCount READ sectionCount NOTIFY countChanged)
 
 public:
     enum Roles {
@@ -19,6 +25,8 @@ public:
         SubtitleRole,
         IconRole,
         KindRole,
+        SectionRole,
+        ColorRole,
         ShortcutRole,
         SuggestedRole,
         IncognitoRole,
@@ -33,6 +41,7 @@ public:
     void reset(QList<Target> targets, const QString &filter = {});
     Q_INVOKABLE void setFilter(const QString &filter);
     Target targetAt(int row) const;
+    int sectionCount() const { return m_sectionCount; }
     QList<Target> all() const { return m_all; }
 
 Q_SIGNALS:
@@ -44,6 +53,7 @@ private:
     QList<Target> m_all;
     QList<Target> m_shown;
     QString m_filter;
+    int m_sectionCount = 0;
 };
 
-} // namespace Tern
+} // namespace Lane

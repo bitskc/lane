@@ -23,10 +23,22 @@ jobs:
             qt6-base qt6-declarative qt6-svg \
             kirigami kirigami-addons ki18n kcoreaddons kconfig \
             kdbusaddons knotifications kwindowsystem kiconthemes kcolorscheme \
-            kstatusnotifieritem kcrash layer-shell-qt qqc2-desktop-style
+            kstatusnotifieritem kcrash layer-shell-qt qqc2-desktop-style \
+            appstream
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
       - name: Build
         run: cmake --build build
+      - name: Install to a throwaway prefix
+        # appstreamtest (registered by ECM's KDECMakeSettings when
+        # appstreamcli is found) reads build/install_manifest.txt and
+        # checks each listed metainfo file with QFile::exists-style logic
+        # against the *exact* paths recorded there, so this must be a real
+        # --prefix install (whose manifest records that prefix), not a
+        # DESTDIR install (whose manifest still records the undecorated
+        # system paths, which then don't exist and the test silently
+        # no-ops instead of validating anything). The prefix lives inside
+        # build/ and is discarded with the rest of it.
+        run: cmake --install build --prefix build/throwaway-install
       - name: Test
         run: ctest --test-dir build --output-on-failure

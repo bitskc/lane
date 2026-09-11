@@ -2,9 +2,9 @@
 
 #include "types.h"
 
-namespace Tern
+namespace Lane
 {
 
 bool ruleMatches(const Rule &rule, const Click &click);
 
-} // namespace Tern
+} // namespace Lane

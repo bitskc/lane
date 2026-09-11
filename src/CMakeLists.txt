@@ -1,4 +1,4 @@
-set(tern_core_SRCS
+set(lane_core_SRCS
     core/urlutil.cpp
     core/matcher.cpp
     core/pipeline.cpp
@@ -8,18 +8,20 @@ set(tern_core_SRCS
     core/router.cpp
     core/launcher.cpp
     core/unshorten.cpp
+    core/version.cpp
+    core/updatemessages.cpp
 )
 
-add_library(tern-core STATIC ${tern_core_SRCS})
-target_include_directories(tern-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(tern-core
+add_library(lane-core STATIC ${lane_core_SRCS})
+target_include_directories(lane-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(lane-core
     PUBLIC
         Qt6::Core
         Qt6::Gui
         Qt6::Network
 )
 
-set(tern_SRCS
+set(lane_SRCS
     app/main.cpp
     app/Controller.cpp
     app/PickerModel.cpp
@@ -27,13 +29,14 @@ set(tern_SRCS
     app/RuleModel.cpp
     app/Autostart.cpp
     app/SourceInfo.cpp
+    app/UpdateChecker.cpp
 )
 
-qt_add_executable(tern ${tern_SRCS})
-target_include_directories(tern PRIVATE ${CMAKE_BINARY_DIR})
+qt_add_executable(lane ${lane_SRCS})
+target_include_directories(lane PRIVATE ${CMAKE_BINARY_DIR})
 
-qt_add_qml_module(tern
-    URI app.tern
+qt_add_qml_module(lane
+    URI app.lane
     VERSION 1.0
     QML_FILES
         qml/Picker.qml
@@ -46,9 +49,9 @@ qt_add_qml_module(tern
     RESOURCE_PREFIX /qt/qml
 )
 
-target_link_libraries(tern
+target_link_libraries(lane
     PRIVATE
-        tern-core
+        lane-core
         Qt6::Core
         Qt6::Gui
         Qt6::Qml
@@ -71,4 +74,4 @@ target_link_libraries(tern
         LayerShellQt::Interface
 )
 
-install(TARGETS tern ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+install(TARGETS lane ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
