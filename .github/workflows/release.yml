@@ -1,0 +1,53 @@
+# Triggered by annotated tags vX.Y.Z after the version bump documented in docs/RELEASING.md.
+name: Release
+on:
+  push:
+    tags:
+      - v*
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract changelog section
+        id: notes
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          if [[ -f CHANGELOG.md ]]; then
+            body=$(awk -v ver="$tag" '
+              BEGIN { found=0 }
+              /^## \[?[0-9]/ {
+                if (found) exit
+                line=$0
+                gsub(/^## \[?/, "", line)
+                gsub(/\].*$/, "", line)
+                gsub(/^## /, "", line)
+                if (line == ver) found=1
+                next
+              }
+              found { print }
+            ' CHANGELOG.md)
+            if [[ -n "${body//[[:space:]]/}" ]]; then
+              {
+                echo "body<<EOF"
+                echo "$body"
+                echo "EOF"
+              } >> "$GITHUB_OUTPUT"
+              echo "use_changelog=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "use_changelog=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "use_changelog=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.use_changelog == 'true' && steps.notes.outputs.body || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.use_changelog != 'true' }}
+          draft: false
+          prerelease: false

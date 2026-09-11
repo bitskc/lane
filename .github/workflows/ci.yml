@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install git
+        run: pacman -Syu --noconfirm && pacman -S --noconfirm git
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          pacman -S --noconfirm --needed \
+            base-devel cmake extra-cmake-modules ninja \
+            qt6-base qt6-declarative qt6-svg \
+            kirigami kirigami-addons ki18n kcoreaddons kconfig \
+            kdbusaddons knotifications kwindowsystem kiconthemes \
+            kstatusnotifieritem layer-shell-qt qqc2-desktop-style
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
