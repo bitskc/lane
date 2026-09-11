@@ -78,5 +78,5 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.desktop DESTINATION ${KD
 install(FILES data/app.tern.Tern.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
 install(FILES data/app.tern.Tern.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.service DESTINATION ${KDE_INSTALL_DBUSSERVICEDIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tern.service DESTINATION ${KDE_INSTALL_SYSTEMDUSERUNITDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tern.service DESTINATION ${CMAKE_INSTALL_DATADIR}/systemd/user)
 install(FILES data/icons/app.tern.Tern.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
