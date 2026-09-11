@@ -39,9 +39,10 @@ Top-level keys:
   "holdMs": 1600,
   "autostart": false,
   "defaultTargetId": "",
-  "hiddenTargetIds": [],
   "targetOrder": [],
   "targetAliases": {},
+  "remembered": {},
+  "recentTargetIds": [],
   "rules": [],
   "customTargets": [],
   "substitutions": []

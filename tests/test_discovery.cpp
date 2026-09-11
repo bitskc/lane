@@ -157,6 +157,60 @@ private Q_SLOTS:
         QCOMPARE(result.at(0).id, QStringLiteral("browser:brave:personal"));
         QCOMPARE(result.at(1).id, QStringLiteral("browser:zen:def"));
     }
+
+    void moveIdAmongSiblingsSkipsIncognito()
+    {
+        QList<Target> targets;
+        Target zen;
+        zen.id = QStringLiteral("zen");
+        zen.kind = Kind::BrowserProfile;
+        zen.incognito = false;
+        Target zenPrivate;
+        zenPrivate.id = QStringLiteral("zen-private");
+        zenPrivate.kind = Kind::BrowserProfile;
+        zenPrivate.incognito = true;
+        Target brave;
+        brave.id = QStringLiteral("brave");
+        brave.kind = Kind::BrowserProfile;
+        brave.incognito = false;
+        targets = {zen, zenPrivate, brave};
+
+        const auto result = moveIdAmongSiblings(targets, QStringLiteral("brave"), 0);
+        QCOMPARE(result, QStringList({QStringLiteral("brave"), QStringLiteral("zen-private"), QStringLiteral("zen")}));
+    }
+
+    void moveIdAmongSiblingsUnknownId()
+    {
+        QList<Target> targets;
+        Target zen;
+        zen.id = QStringLiteral("zen");
+        zen.kind = Kind::BrowserProfile;
+        Target brave;
+        brave.id = QStringLiteral("brave");
+        brave.kind = Kind::BrowserProfile;
+        targets = {zen, brave};
+
+        const auto result = moveIdAmongSiblings(targets, QStringLiteral("nonexistent"), 0);
+        QCOMPARE(result, QStringList({QStringLiteral("zen"), QStringLiteral("brave")}));
+    }
+
+    void moveIdAmongSiblingsClampsIndex()
+    {
+        QList<Target> targets;
+        Target zen;
+        zen.id = QStringLiteral("zen");
+        zen.kind = Kind::BrowserProfile;
+        Target brave;
+        brave.id = QStringLiteral("brave");
+        brave.kind = Kind::BrowserProfile;
+        Target firefox;
+        firefox.id = QStringLiteral("firefox");
+        firefox.kind = Kind::BrowserProfile;
+        targets = {zen, brave, firefox};
+
+        const auto result = moveIdAmongSiblings(targets, QStringLiteral("zen"), 99);
+        QCOMPARE(result, QStringList({QStringLiteral("brave"), QStringLiteral("firefox"), QStringLiteral("zen")}));
+    }
 };
 
 QTEST_MAIN(DiscoveryTest)

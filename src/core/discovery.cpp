@@ -588,4 +588,49 @@ QList<Target> applyConfigToTargets(QList<Target> targets, const Config &config)
     return targets;
 }
 
+QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id, int newIndexInKind)
+{
+    QStringList fullOrder;
+    fullOrder.reserve(targets.size());
+    for (const auto &t : targets) {
+        fullOrder << t.id;
+    }
+
+    int movingIndex = -1;
+    for (int i = 0; i < targets.size(); ++i) {
+        if (targets.at(i).id == id) {
+            movingIndex = i;
+            break;
+        }
+    }
+    if (movingIndex < 0) {
+        return fullOrder;
+    }
+
+    const Kind kind = targets.at(movingIndex).kind;
+    const bool incognito = targets.at(movingIndex).incognito;
+
+    QList<int> siblingSlots;
+    QStringList siblingIds;
+    for (int i = 0; i < targets.size(); ++i) {
+        if (targets.at(i).kind == kind && targets.at(i).incognito == incognito) {
+            siblingSlots.append(i);
+            siblingIds << targets.at(i).id;
+        }
+    }
+
+    const int oldPos = siblingIds.indexOf(id);
+    if (oldPos < 0) {
+        return fullOrder;
+    }
+
+    siblingIds.move(oldPos, qBound(0, newIndexInKind, siblingIds.size() - 1));
+
+    for (int i = 0; i < siblingSlots.size(); ++i) {
+        fullOrder[siblingSlots.at(i)] = siblingIds.at(i);
+    }
+
+    return fullOrder;
+}
+
 } // namespace Tern

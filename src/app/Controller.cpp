@@ -426,37 +426,7 @@ void Controller::renameTarget(const QString &id, const QString &name)
 
 void Controller::moveTarget(const QString &id, int newIndexInKind)
 {
-    const Target *moving = findTarget(m_targets, id);
-    if (!moving) {
-        return;
-    }
-    const Kind kind = moving->kind;
-
-    QStringList fullOrder;
-    for (const auto &t : m_targets) {
-        fullOrder << t.id;
-    }
-
-    QList<int> kindIndices;
-    QStringList kindIds;
-    for (int i = 0; i < m_targets.size(); ++i) {
-        if (m_targets.at(i).kind == kind) {
-            kindIndices.append(i);
-            kindIds << m_targets.at(i).id;
-        }
-    }
-
-    const int oldPos = kindIds.indexOf(id);
-    if (oldPos < 0) {
-        return;
-    }
-    kindIds.move(oldPos, qBound(0, newIndexInKind, kindIds.size() - 1));
-
-    for (int i = 0; i < kindIndices.size(); ++i) {
-        fullOrder[kindIndices.at(i)] = kindIds.at(i);
-    }
-
-    m_config.targetOrder = fullOrder;
+    m_config.targetOrder = moveIdAmongSiblings(m_targets, id, newIndexInKind);
     persist();
     m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
     m_targetModel->setTargets(m_targets);
