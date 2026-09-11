@@ -10,6 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: archlinux:latest
+    env:
+      QT_QPA_PLATFORM: offscreen
     steps:
       - name: Install git
         run: pacman -Syu --noconfirm && pacman -S --noconfirm git
