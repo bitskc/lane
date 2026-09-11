@@ -13,6 +13,11 @@ ctest --test-dir build --output-on-failure
 ## Rules
 
 - Keep changes focused. One feature per PR.
+- User-facing changes need a bullet under `## [Unreleased]` in
+  `CHANGELOG.md`. See `docs/RELEASING.md` for the format.
+- Version bumps only happen in a release commit, following
+  `docs/RELEASING.md`. Don't bump `CMakeLists.txt`'s `VERSION` in a
+  feature PR.
 - Do not change the user's default browser without the settings button.
 - Custom handlers run as argv, not through a shell. Keep it that way.
 - http and https only. Do not add handlers for file, javascript, or

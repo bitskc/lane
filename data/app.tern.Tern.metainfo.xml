@@ -4,25 +4,59 @@
   <name>Tern</name>
   <summary>Open links in the right browser, profile, or app</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>GPL-3.0-or-later</project_license>
+  <project_license>PolyForm-Noncommercial-1.0.0</project_license>
   <url type="homepage">https://github.com/bitskc/tern</url>
+  <url type="bugtracker">https://github.com/bitskc/tern/issues</url>
+  <url type="vcs-browser">https://github.com/bitskc/tern</url>
   <developer id="app.tern">
     <name>Andy Hayes</name>
   </developer>
   <description>
     <p>
-      Tern is a Plasma-native link router. It becomes your default browser, then
-      sends each click to the right profile, installed web app, or custom handler.
+      Tern is a link router for KDE Plasma. It becomes your default browser,
+      then sends each click to the right browser profile, web app, or custom
+      handler. It does not touch your default browser until you click the
+      button on the Overview page, and it never takes mailto links or PDFs.
     </p>
     <p>
-      Rules, remembered sites, Outlook safe-link unwrapping, and a keyboard-first
-      picker cover the same job as Browser Tamer and Velja, with first-class
-      Firefox PWA support.
+      Tern discovers Firefox, Zen, LibreWolf, Floorp, Waterfox, and Chromium
+      family profiles, plus firefoxpwa sites. It remembers destinations by
+      path, not just by host, so github.com/you can go somewhere different
+      from github.com. A short hold bar gives you a chance to stop a link
+      before it opens silently.
     </p>
   </description>
   <launchable type="desktop-id">app.tern.Tern.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <caption>The picker overlay, shown when Tern does not already know where a link should go</caption>
+      <image>https://raw.githubusercontent.com/bitskc/tern/main/docs/screenshots/picker.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The hold bar, a short pause before a link opens silently so you can stop it</caption>
+      <image>https://raw.githubusercontent.com/bitskc/tern/main/docs/screenshots/hold.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings overview: default browser, autostart, and discovered targets</caption>
+      <image>https://raw.githubusercontent.com/bitskc/tern/main/docs/screenshots/settings.png</image>
+    </screenshot>
+  </screenshots>
   <provides>
     <binary>tern</binary>
   </provides>
+  <releases>
+    <release version="0.1.0" date="2026-09-11">
+      <description>
+        <p>First public release.</p>
+        <ul>
+          <li>Picker, hold bar, and two-pane settings window</li>
+          <li>Path-scoped memory for remembered destinations</li>
+          <li>Rules, drag-reorder, and rename for browsers and apps</li>
+          <li>Agent-friendly config.json plus tern --list and --explain</li>
+          <li>http and https only, opt-in default browser</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
   <content_rating type="oars-1.1" />
 </component>

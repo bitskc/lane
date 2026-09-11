@@ -3,6 +3,12 @@
 Guide for AI agents (Claude Code, Codex, and similar) that need to
 configure or inspect Tern without a GUI.
 
+The `version` key in `config.json` below is a schema version integer
+for the config file format. It is not the app version. The app
+version comes from CMake (`project(tern VERSION x.y.z)` in
+`CMakeLists.txt`) and shows up in `tern --version` and the Settings
+sidebar. Don't confuse the two.
+
 ## Config file
 
 Path: `~/.config/tern/config.json`
@@ -39,6 +45,7 @@ Top-level keys:
   "holdMs": 1600,
   "autostart": false,
   "defaultTargetId": "",
+  "hiddenTargetIds": [],
   "targetOrder": [],
   "targetAliases": {},
   "remembered": {},

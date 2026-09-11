@@ -4,7 +4,7 @@ pkgrel=1
 pkgdesc="Plasma-native link router: open the right browser, profile, or app"
 arch=('x86_64')
 url="https://github.com/bitskc/tern"
-license=('GPL-3.0-or-later')
+license=('custom:PolyForm-Noncommercial-1.0.0')
 depends=(
   qt6-base qt6-declarative qt6-svg
   kirigami kirigami-addons

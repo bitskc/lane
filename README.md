@@ -20,6 +20,12 @@ or Velja, but native to Plasma.
 ![Settings overview](docs/screenshots/settings.png)
 *Overview page: default browser, autostart, and discovered targets.*
 
+## Releases
+
+The version you have lives in [GitHub Releases](https://github.com/bitskc/tern/releases).
+What changed between versions is in [CHANGELOG.md](CHANGELOG.md). Run
+`tern --version` to check what's installed.
+
 ## What it does
 
 Tern discovers Gecko profiles (Firefox, Zen, LibreWolf, Floorp, Waterfox)
