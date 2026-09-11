@@ -23,6 +23,7 @@ class Controller : public QObject
     Q_PROPERTY(PickerModel *pickerModel READ pickerModel CONSTANT)
     Q_PROPERTY(TargetModel *targetModel READ targetModel CONSTANT)
     Q_PROPERTY(RuleModel *ruleModel READ ruleModel CONSTANT)
+    Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
     Q_PROPERTY(QString currentUrl READ currentUrl NOTIFY currentChanged)
     Q_PROPERTY(QString currentHost READ currentHost NOTIFY currentChanged)
     Q_PROPERTY(QString currentPrettyUrl READ currentPrettyUrl NOTIFY currentChanged)
@@ -55,6 +56,7 @@ public:
     PickerModel *pickerModel() const { return m_pickerModel; }
     TargetModel *targetModel() const { return m_targetModel; }
     RuleModel *ruleModel() const { return m_ruleModel; }
+    QString appVersion() const;
 
     QString currentUrl() const { return m_click.openUrl; }
     QString currentHost() const { return m_click.host; }

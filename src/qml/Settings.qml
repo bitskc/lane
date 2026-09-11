@@ -45,7 +45,7 @@ QQC.ApplicationWindow {
                             font.weight: Font.DemiBold
                         }
                         QQC.Label {
-                            text: "Link router"
+                            text: "v" + controller.appVersion
                             font.pixelSize: 11
                             opacity: 0.5
                         }

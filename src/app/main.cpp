@@ -72,6 +72,13 @@ int main(int argc, char **argv)
                      QStringLiteral("Open links in the right browser, profile, or app"),
                      KAboutLicense::Custom,
                      QStringLiteral("© 2026 Andy Hayes"));
+    about.setLicenseText(QStringLiteral(
+        "PolyForm Noncommercial License 1.0.0\n\n"
+        "Personal and hobby use is free. Using Tern as part of a product "
+        "you sell, or any other commercial use, needs a separate "
+        "commercial license from Andy Hayes (andy@boundlessitsystems.com).\n\n"
+        "See LICENSE and COMMERCIAL.md in the source repository for the "
+        "full terms."));
     about.setOrganizationDomain(QByteArrayLiteral("tern.app"));
     about.setDesktopFileName(QStringLiteral("app.tern.Tern"));
     KAboutData::setApplicationData(about);

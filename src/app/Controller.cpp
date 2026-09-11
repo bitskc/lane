@@ -9,6 +9,7 @@
 #include "core/router.h"
 #include "core/unshorten.h"
 #include "core/urlutil.h"
+#include "tern_version.h"
 
 #include <LayerShellQt/Window>
 #include <KCrash>
@@ -40,7 +41,6 @@ Controller::Controller(QObject *parent)
 {
     m_configPath = defaultConfigPath();
     reload();
-
     m_tray = new KStatusNotifierItem(QStringLiteral("tern"), this);
     m_tray->setTitle(QStringLiteral("Tern"));
     m_tray->setToolTipTitle(QStringLiteral("Tern"));
@@ -61,6 +61,11 @@ Controller::Controller(QObject *parent)
         m_config.rules = m_ruleModel->rules();
         persist();
     });
+}
+
+QString Controller::appVersion() const
+{
+    return QStringLiteral(TERN_VERSION_STRING);
 }
 
 QString Controller::currentPrettyUrl() const
