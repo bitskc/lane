@@ -1,5 +1,6 @@
 #include "Autostart.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -36,12 +37,15 @@ void setAutostart(bool enabled)
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         return;
     }
+    const QString exe = QCoreApplication::applicationFilePath();
+    const QString exec = exe.isEmpty() ? QStringLiteral("tern --daemon")
+                                        : exe + QStringLiteral(" --daemon");
     QTextStream s(&f);
     s << QStringLiteral("[Desktop Entry]\n")
       << QStringLiteral("Type=Application\n")
       << QStringLiteral("Name=Tern\n")
       << QStringLiteral("Comment=Open links in the right browser, profile, or app\n")
-      << QStringLiteral("Exec=tern --daemon\n")
+      << QStringLiteral("Exec=") << exec << QStringLiteral("\n")
       << QStringLiteral("Icon=app.tern.Tern\n")
       << QStringLiteral("Terminal=false\n")
       << QStringLiteral("Categories=Network;\n")

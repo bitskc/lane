@@ -155,6 +155,11 @@ cmake --install build
 update-desktop-database "$HOME/.local/share/applications"
 ```
 
+The install prefix is baked into the desktop and service files, so the
+launcher finds the binary even when `$HOME/.local/bin` is not on PATH.
+Run `update-desktop-database` after installing so the menu picks up the
+new entry.
+
 Launch Tern from the app menu, then click "Use Tern as default browser".
 Turn on "Start Tern when I log in" so the first click is instant.
 

@@ -66,9 +66,17 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-install(FILES data/app.tern.Tern.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+set(TERN_BIN "${CMAKE_INSTALL_FULL_BINDIR}/tern")
+configure_file(data/app.tern.Tern.desktop.in
+               ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.desktop @ONLY)
+configure_file(data/dbus/app.tern.Tern.service.in
+               ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.service @ONLY)
+configure_file(data/systemd/tern.service.in
+               ${CMAKE_CURRENT_BINARY_DIR}/tern.service @ONLY)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES data/app.tern.Tern.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
 install(FILES data/app.tern.Tern.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
-install(FILES data/dbus/app.tern.Tern.service DESTINATION ${KDE_INSTALL_DBUSSERVICEDIR})
-install(FILES data/systemd/tern.service DESTINATION ${KDE_INSTALL_SYSTEMDUSERUNITDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.service DESTINATION ${KDE_INSTALL_DBUSSERVICEDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tern.service DESTINATION ${KDE_INSTALL_SYSTEMDUSERUNITDIR})
 install(FILES data/icons/app.tern.Tern.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
