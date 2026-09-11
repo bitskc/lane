@@ -19,6 +19,17 @@ version is 0, minor releases may still contain breaking changes.
   grouped `border.color`/`border.width` properties. This made link
   clicks bounce in the taskbar and then do nothing. Fixed in
   `Picker.qml` and `Hold.qml`.
+- Firefox-family browsers (Firefox, Zen, LibreWolf, Floorp, Waterfox)
+  were launched with `-P <internal name>`, and on Zen that internal
+  name is often `Default Profile` or `Default (release)`, which don't
+  round-trip cleanly as a launch argument. Tern now launches with
+  `--profile <folder>`, using the profile's real directory instead.
+  Discovery also picks whichever config folder actually holds a
+  browser's `profiles.ini` (instead of guessing based on folder
+  order), skips profiles whose folder is gone or was never opened,
+  and no longer lists a browser twice when two `.desktop` files point
+  at the same install. Zen's install-default profile is now labeled
+  "Default" instead of its raw internal name.
 
 ## [0.1.0] - 2026-09-11
 

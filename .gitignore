@@ -10,3 +10,8 @@ CMakeUserPresets.json
 compile_commands.json
 .clangd/
 .cache
+
+# test_discovery mirrors tests/fixtures/gecko/{zen,firefox} into these on
+# every run; they are regenerated, not source.
+/tests/fixtures/config/zen/
+/tests/fixtures/config/mozilla/

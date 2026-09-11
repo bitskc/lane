@@ -1,6 +1,8 @@
 #include "core/discovery.h"
 
 #include <QDir>
+#include <QFileInfo>
+#include <QTemporaryDir>
 #include <algorithm>
 #include <QFile>
 #include <QStandardPaths>
@@ -11,6 +13,27 @@ using namespace Tern;
 static QString fixtureRoot()
 {
     return QStringLiteral(TERN_FIXTURE_ROOT);
+}
+
+// Recursively mirrors `src` into `dst`, overwriting any existing files.
+// Used to stage a whole Gecko profile tree (profiles.ini plus each
+// profile's directory, so directory-existence and prefs.js checks in
+// geckoProfiles() see real files) into a synthesized configHome.
+static void copyTree(const QString &src, const QString &dst)
+{
+    const QDir srcDir(src);
+    QDir().mkpath(dst);
+    const auto entries = srcDir.entryList(QDir::NoDotAndDotDot | QDir::AllEntries);
+    for (const auto &entry : entries) {
+        const QString srcPath = src + QLatin1Char('/') + entry;
+        const QString dstPath = dst + QLatin1Char('/') + entry;
+        if (QFileInfo(srcPath).isDir()) {
+            copyTree(srcPath, dstPath);
+        } else {
+            QFile::remove(dstPath);
+            QFile::copy(srcPath, dstPath);
+        }
+    }
 }
 
 class DiscoveryTest : public QObject
@@ -25,17 +48,13 @@ private Q_SLOTS:
         p.dataHome = fixtureRoot() + QStringLiteral("/pwa");
         p.applicationDirs = {fixtureRoot() + QStringLiteral("/desktop")};
 
-        // Map gecko fixtures into configHome
-        // tests copy via CMake; we also accept the layout used in this test by
-        // pointing configHome at a synthesized tree.
-        QDir().mkpath(p.configHome + QStringLiteral("/zen"));
-        QDir().mkpath(p.configHome + QStringLiteral("/mozilla/firefox"));
+        // Stage full Gecko profile trees (profiles.ini plus each profile's
+        // directory and prefs.js) into a synthesized configHome, the way a
+        // real ~/.config/zen or ~/.config/mozilla/firefox looks.
         QDir().mkpath(p.configHome + QStringLiteral("/BraveSoftware/Brave-Browser/Default"));
-        QFile::remove(p.configHome + QStringLiteral("/zen/profiles.ini"));
-        QFile::copy(fixtureRoot() + QStringLiteral("/gecko/zen/profiles.ini"),
-                    p.configHome + QStringLiteral("/zen/profiles.ini"));
-        QFile::copy(fixtureRoot() + QStringLiteral("/gecko/firefox/profiles.ini"),
-                    p.configHome + QStringLiteral("/mozilla/firefox/profiles.ini"));
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/zen"), p.configHome + QStringLiteral("/zen"));
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/firefox"), p.configHome + QStringLiteral("/mozilla/firefox"));
+        QFile::remove(p.configHome + QStringLiteral("/BraveSoftware/Brave-Browser/Local State"));
         QFile::copy(fixtureRoot() + QStringLiteral("/chromium/BraveSoftware/Brave-Browser/Local State"),
                     p.configHome + QStringLiteral("/BraveSoftware/Brave-Browser/Local State"));
 
@@ -70,6 +89,119 @@ private Q_SLOTS:
             return t.id == QLatin1String("pwa:01KT1N5RHR7DYJ54DWPBWAY5V4") && t.name == QLatin1String("QBO");
         });
         QVERIFY(qboDesktopName);
+
+        // Zen has three real, initialized profiles in the fixture (Default
+        // Profile, Default (release), and Work); "missing-profile" is listed
+        // in profiles.ini but has no directory on disk and must be skipped.
+        const qsizetype zenProfileCount = std::count_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Zen") && t.kind == Kind::BrowserProfile && !t.incognito;
+        });
+        QCOMPARE(zenProfileCount, 3);
+        QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.profileDir.contains(QLatin1String("missing-profile"));
+        }));
+
+        // Two desktop files (zen.desktop, zen-browser.desktop) resolve to the
+        // same Zen install and profile store; they must not double the list,
+        // and the deterministic tie-break must not pick the also-installed
+        // duplicate's icon.
+        QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.icon == QLatin1String("zen-browser-duplicate");
+        }));
+
+        // Zen's Install-default profile (an internal name like
+        // "Default (release)") is labelled plain "Default", not the raw
+        // profiles.ini name.
+        const auto zenDefault = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Zen") && t.isBrowserDefault && !t.incognito;
+        });
+        QVERIFY(zenDefault != targets.end());
+        QCOMPARE(zenDefault->displayName(), QStringLiteral("Zen · Default"));
+
+        // Launch args identify the profile by its absolute directory via
+        // --profile, not the internal "-P <name>" form (Zen's internal names
+        // have spaces and parentheses that don't round-trip through -P).
+        QCOMPARE(zenDefault->args.size(), 4);
+        QCOMPARE(zenDefault->args.at(0), QStringLiteral("--profile"));
+        QCOMPARE(zenDefault->args.at(1), zenDefault->profileDir);
+        QVERIFY(QDir::isAbsolutePath(zenDefault->args.at(1)));
+        QCOMPARE(zenDefault->args.at(2), QStringLiteral("--new-tab"));
+
+        // A profile whose folder-name suffix ("Work") is more human than its
+        // generic profiles.ini Name ("default-release") is labelled with the
+        // suffix instead.
+        const bool hasWorkProfile = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Zen") && t.name == QLatin1String("Work") && !t.incognito;
+        });
+        QVERIFY(hasWorkProfile);
+
+        // Classic Firefox (no Install section) still honours the legacy
+        // per-profile Default=1 marker and gives it the same "Default" label.
+        const bool hasFirefoxDefault = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Firefox") && t.name == QLatin1String("Default") && !t.incognito;
+        });
+        QVERIFY(hasFirefoxDefault);
+    }
+
+    void fingerprintPrefersRicherGeckoDataDir()
+    {
+        // Regression for: when more than one Gecko data-dir candidate has a
+        // profiles.ini (e.g. a stale ~/.config/zen left over next to a real
+        // ~/.zen), the candidate whose Profile* entries actually resolve to
+        // directories on disk must win, not just whichever is checked first.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        QFile desktop(root + QStringLiteral("/apps/zen.desktop"));
+        QVERIFY(desktop.open(QIODevice::WriteOnly));
+        desktop.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Zen Browser\n"
+            "Exec=/opt/zen-browser-bin/zen-bin %u\n"
+            "Icon=zen-browser\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n"));
+        desktop.close();
+
+        // configHome/zen: profiles.ini exists but its one entry points at a
+        // directory that was never created (score 0).
+        QDir().mkpath(root + QStringLiteral("/config/zen"));
+        QFile sparse(root + QStringLiteral("/config/zen/profiles.ini"));
+        QVERIFY(sparse.open(QIODevice::WriteOnly));
+        sparse.write(QByteArrayLiteral(
+            "[Profile0]\nName=Sparse\nIsRelative=1\nPath=sparse-profile\n"));
+        sparse.close();
+
+        // home/.zen: profiles.ini with two entries whose directories really
+        // exist (score 2). This is the one actually in use.
+        QDir().mkpath(root + QStringLiteral("/home/.zen/rich1"));
+        QDir().mkpath(root + QStringLiteral("/home/.zen/rich2"));
+        QVERIFY(QFile(root + QStringLiteral("/home/.zen/rich1/prefs.js")).open(QIODevice::WriteOnly));
+        QVERIFY(QFile(root + QStringLiteral("/home/.zen/rich2/prefs.js")).open(QIODevice::WriteOnly));
+        QFile rich(root + QStringLiteral("/home/.zen/profiles.ini"));
+        QVERIFY(rich.open(QIODevice::WriteOnly));
+        rich.write(QByteArrayLiteral(
+            "[Profile0]\nName=Rich1\nIsRelative=1\nPath=rich1\n\n"
+            "[Profile1]\nName=Rich2\nIsRelative=1\nPath=rich2\n"));
+        rich.close();
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+        const qsizetype zenProfileCount = std::count_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Zen") && t.kind == Kind::BrowserProfile && !t.incognito;
+        });
+        QCOMPARE(zenProfileCount, 2);
+        QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.name == QLatin1String("Sparse");
+        }));
     }
 
     void applyConfigAliasesAndOrder()

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Zen Browser (duplicate)
+Exec=/opt/zen-browser-bin/zen-bin %u
+Icon=zen-browser-duplicate
+Type=Application
+Categories=Network;WebBrowser;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;
