@@ -19,6 +19,7 @@ FormCard.FormCardPage {
     }
 
     ListModel { id: browserModel }
+    ListModel { id: containerModel }
     ListModel { id: pwaModel }
     ListModel { id: customModel }
     ListModel { id: privateModel }
@@ -43,6 +44,70 @@ FormCard.FormCardPage {
                         if (newIndex >= 0 && browserList.dragId !== "") {
                             controller.moveTarget(browserList.dragId, newIndex)
                             browserList.dragId = ""
+                        }
+                    }
+                }
+                Kirigami.Icon {
+                    source: model.iconName
+                    implicitWidth: 22
+                    implicitHeight: 22
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.TextField {
+                    text: model.name
+                    placeholderText: model.discoveredName
+                    Layout.fillWidth: true
+                    background: Item {}
+                    verticalAlignment: TextInput.AlignVCenter
+                    onEditingFinished: {
+                        var id = model.targetId
+                        var nm = text.trim()
+                        if (nm !== model.name) {
+                            renameTimer.targetId = id
+                            renameTimer.newName = nm
+                            renameTimer.start()
+                        }
+                    }
+                    Keys.onEscapePressed: {
+                        text = model.name
+                        focus = false
+                    }
+                }
+                QQC.Switch {
+                    checked: !model.hidden
+                    onToggled: controller.hideTarget(model.targetId, !checked)
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                QQC.Button {
+                    text: "Default"
+                    flat: true
+                    onClicked: controller.defaultTargetId = model.targetId
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+        }
+    }
+
+    Component {
+        id: containerDelegate
+        QQC.ItemDelegate {
+            id: listItem
+            width: containerList.width
+            height: page.rowHeight
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                Kirigami.ListItemDragHandle {
+                    listItem: listItem
+                    listView: containerList
+                    onMoveRequested: (oldIndex, newIndex) => {
+                        if (containerList.dragId === "")
+                            containerList.dragId = containerModel.get(oldIndex).targetId
+                        containerModel.move(oldIndex, newIndex, 1)
+                    }
+                    onDropped: (oldIndex, newIndex) => {
+                        if (newIndex >= 0 && containerList.dragId !== "") {
+                            controller.moveTarget(containerList.dragId, newIndex)
+                            containerList.dragId = ""
                         }
                     }
                 }
@@ -254,6 +319,10 @@ FormCard.FormCardPage {
             if (!browsers[i].incognito)
                 browserModel.append(browsers[i])
         }
+        containerModel.clear()
+        var containers = controller.targetModel.targetsByKind("container")
+        for (var i = 0; i < containers.length; i++)
+            containerModel.append(containers[i])
         pwaModel.clear()
         var pwas = controller.targetModel.targetsByKind("pwa")
         for (var i = 0; i < pwas.length; i++)
@@ -266,6 +335,15 @@ FormCard.FormCardPage {
         var privates = controller.targetModel.incognitoTargets()
         for (var i = 0; i < privates.length; i++)
             privateModel.append(privates[i])
+    }
+
+    function hasGeckoBrowsers() {
+        var browsers = controller.targetModel.targetsByKind("browser")
+        for (var i = 0; i < browsers.length; i++) {
+            if (!browsers[i].incognito && browsers[i].engine === "gecko")
+                return true
+        }
+        return false
     }
 
     Component.onCompleted: syncModels()
@@ -315,6 +393,49 @@ FormCard.FormCardPage {
                 sourceComponent: browserDelegate
             }
         }
+    }
+
+    FormCard.FormHeader {
+        title: "Containers"
+    }
+    QQC.Label {
+        text: "Opens the link in that Firefox or Zen container. Needs a container protocol extension in the browser (Open URL in Container, or Default Container Handler)."
+        font: Kirigami.Theme.smallFont
+        color: Kirigami.Theme.disabledTextColor
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        Layout.bottomMargin: Kirigami.Units.smallSpacing
+    }
+    FormCard.FormCard {
+        ListView {
+            id: containerList
+            model: containerModel
+            interactive: false
+            spacing: 0
+            Layout.fillWidth: true
+            implicitHeight: count * page.rowHeight
+            moveDisplaced: Transition {
+                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
+            }
+            property string dragId: ""
+            delegate: Loader {
+                width: containerList.width
+                sourceComponent: containerDelegate
+            }
+        }
+    }
+    QQC.Label {
+        visible: containerModel.count === 0 && page.hasGeckoBrowsers()
+        text: "No containers found. Zen and Firefox write them to containers.json in the profile folder."
+        font: Kirigami.Theme.smallFont
+        color: Kirigami.Theme.disabledTextColor
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        Layout.bottomMargin: Kirigami.Units.smallSpacing
     }
 
     FormCard.FormHeader {

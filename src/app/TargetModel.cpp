@@ -85,6 +85,7 @@ QVariantList TargetModel::targetsByKind(const QString &kind) const
         m[QStringLiteral("hidden")] = t.hidden;
         m[QStringLiteral("isDefault")] = t.isBrowserDefault;
         m[QStringLiteral("incognito")] = t.incognito;
+        m[QStringLiteral("engine")] = engineName(t.engine);
         out.append(m);
     }
     return out;

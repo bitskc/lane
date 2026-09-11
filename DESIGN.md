@@ -4,6 +4,8 @@
 
 Tern is a default-browser proxy. The product is what happens in the 200ms after a click: either nothing visible (correct app already opened) or a quiet overlay that can be dismissed from the keyboard.
 
+Firefox/Zen containers (contextual identities) are targets too, not a separate feature. Tern discovers them from a profile's `containers.json` and wraps the http(s) URL as `ext+container:name=...&url=...` when it launches the browser. Tern never registers or handles `ext+container` itself: that scheme is only ever argv to the browser, the same way `$url` is today. Whether the link actually lands in the container depends on the browser having a protocol-handler extension installed; Tern only lists containers for profiles where it can tell one is.
+
 ## Feel (Mac bar)
 
 Choosy / Velja / Opener, not a settings dialog:
@@ -48,5 +50,4 @@ the previous hold. Rule matches are never held — the user wrote the rule.
 ## Non-goals (v1)
 
 - Lua
-- Firefox containers
 - PDF / mailto handlers

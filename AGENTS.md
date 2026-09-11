@@ -135,6 +135,26 @@ auto-discover. Each has `id`, `name`, `exec`, `args`, `icon`, and `kind`
 (`"app"`, `"action"`, `"browser"`, or `"pwa"`).
 
 
+### Containers
+
+Firefox/Zen contextual identities (containers) show up in `tern --list`
+as their own targets, kind `"container"`. The ID looks like
+`browser:zen:sahyoxd1.Default (release):container:2`: the parent
+profile's ID with `:container:<userContextId>` appended. Rules can
+point `targetId` at one of these the same as any other target.
+
+Tern only lists containers for a profile where it can tell a
+protocol-handler extension (Open URL in Container, Default Container
+Handler, or similar) is installed. Without one, the browser has
+nothing to act on an `ext+container` link with, so Tern doesn't offer
+the container as a target at all.
+
+Container launch args use a `$urlEncoded` placeholder (the http(s)
+URL, percent-encoded) instead of `$url`, since the URL is embedded
+inside an `ext+container:name=...&url=...` query value rather than
+passed on its own. You don't need to do anything with this when
+writing a rule; just set `targetId` to the container's ID.
+
 ### targetOrder
 
 Array of target IDs in display order. The settings page and the picker

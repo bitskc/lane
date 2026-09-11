@@ -7,6 +7,19 @@ version is 0, minor releases may still contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- Firefox and Zen contextual identities (containers) show up as
+  destinations, one row per container per profile, e.g.
+  "Zen · Default · Work". Launch wraps the http(s) URL in an
+  `ext+container:name=...&url=...` argument passed to the browser;
+  Tern itself still only ever opens `http`/`https` links, and does not
+  register `ext+container` as anything it handles. Containers only
+  show up for profiles where Tern can tell a protocol-handler
+  extension is installed (Open URL in Container, Default Container
+  Handler, or similar); without one, the browser has nothing to act
+  on an `ext+container` link with.
+
 ### Changed
 
 - Picker shows eight rows instead of six.

@@ -328,6 +328,152 @@ QString geckoProfileLabel(const QString &name, const QString &key, bool isInstal
     return base;
 }
 
+// Maps a Firefox/Zen contextual-identity color name to the color it renders
+// as in the browser's container UI. Colors introduced after this list was
+// written (e.g. "cyan") are left as the default QColor deliberately, per
+// product decision: an unmapped color is not worth guessing at.
+QColor containerColor(const QString &name)
+{
+    static const QHash<QString, QColor> colors = {
+        {QStringLiteral("blue"), QColor(0x37, 0xAD, 0xFF)},
+        {QStringLiteral("turquoise"), QColor(0x00, 0xC7, 0x9A)},
+        {QStringLiteral("green"), QColor(0x51, 0xCD, 0x00)},
+        {QStringLiteral("yellow"), QColor(0xFF, 0xCB, 0x00)},
+        {QStringLiteral("orange"), QColor(0xFF, 0x9F, 0x00)},
+        {QStringLiteral("red"), QColor(0xFF, 0x61, 0x3D)},
+        {QStringLiteral("pink"), QColor(0xFF, 0x4B, 0xDA)},
+        {QStringLiteral("purple"), QColor(0xAF, 0x51, 0xF5)},
+        {QStringLiteral("toolbar"), QColor(0x73, 0x73, 0x73)},
+    };
+    return colors.value(name.toLower());
+}
+
+// Only a handful of stock contextual identities ship without an explicit
+// "name"; they're addressed by l10nId instead. Any l10nId outside this set
+// is an identity Tern doesn't recognize (a future Firefox default, or a
+// corrupted entry) and is skipped rather than shown as a raw key.
+QString containerL10nName(const QString &l10nId)
+{
+    static const QHash<QString, QString> names = {
+        {QStringLiteral("user-context-personal"), QStringLiteral("Personal")},
+        {QStringLiteral("user-context-work"), QStringLiteral("Work")},
+        {QStringLiteral("user-context-banking"), QStringLiteral("Banking")},
+        {QStringLiteral("user-context-shopping"), QStringLiteral("Shopping")},
+    };
+    return names.value(l10nId);
+}
+
+enum class ContainerHandlerStatus { Present, Absent, Unknown };
+
+// A profile's containers.json lists every contextual identity Firefox/Zen
+// ever created, whether or not anything will act on ext+container links.
+// Without a protocol-handler extension (Open URL in Container, Default
+// Container Handler, ...) launching "ext+container:..." just opens a blank
+// tab, so containers are only offered as targets where the browser can
+// actually honor them. extensions.json (the startup cache Firefox/Zen
+// write for every installed add-on) is enough to tell: it embeds each
+// add-on's id, and known handlers are matched by id there. A literal
+// "ext+container" match covers any handler whose cached metadata mentions
+// the protocol directly.
+ContainerHandlerStatus containerHandlerStatus(const QString &profileDir)
+{
+    // Open URL in Container (addons.mozilla.org). Other handlers (e.g.
+    // Default Container Handler) are matched via the literal scan below.
+    static const QByteArray kOpenUrlInContainerId = QByteArrayLiteral("{f069aec0-43c5-4bbf-b6b4-df95c4326b98}");
+
+    QFile f(profileDir + QStringLiteral("/extensions.json"));
+    if (!f.open(QIODevice::ReadOnly)) {
+        return ContainerHandlerStatus::Unknown;
+    }
+    const QByteArray data = f.readAll();
+    if (data.contains(kOpenUrlInContainerId) || data.contains(QByteArrayLiteral("ext+container"))) {
+        return ContainerHandlerStatus::Present;
+    }
+    return ContainerHandlerStatus::Absent;
+}
+
+// Builds the container targets for one already-discovered real (non-private)
+// Gecko profile target. `profile` must already have its final id, exec,
+// icon and profileDir set.
+QList<Target> geckoContainers(const Target &profile)
+{
+    QList<Target> out;
+    if (profile.profileDir.isEmpty()) {
+        return out;
+    }
+    QFile f(profile.profileDir + QStringLiteral("/containers.json"));
+    if (!f.open(QIODevice::ReadOnly)) {
+        return out;
+    }
+    const auto doc = QJsonDocument::fromJson(f.readAll());
+    const auto identities = doc.object().value(QStringLiteral("identities")).toArray();
+
+    const auto handlerStatus = containerHandlerStatus(profile.profileDir);
+    if (handlerStatus == ContainerHandlerStatus::Absent) {
+        // extensions.json was readable and named no known handler: the
+        // browser can't act on ext+container links here, so don't offer any.
+        return out;
+    }
+    if (handlerStatus == ContainerHandlerStatus::Unknown) {
+        // extensions.json couldn't be inspected at all. Fall back to a
+        // weaker signal: a person who never made a custom container almost
+        // certainly never installed a protocol-handler extension either.
+        const bool hasCustomName = std::any_of(identities.begin(), identities.end(), [](const QJsonValue &v) {
+            const auto id = v.toObject();
+            return id.value(QStringLiteral("public")).toBool()
+                && !id.value(QStringLiteral("name")).toString().trimmed().isEmpty();
+        });
+        if (!hasCustomName) {
+            return out;
+        }
+    }
+
+    const QString browserName = profile.displayName();
+    QSet<int> seenIds;
+    for (const auto &v : identities) {
+        const auto id = v.toObject();
+        if (!id.value(QStringLiteral("public")).toBool()) {
+            continue;
+        }
+        const int userContextId = id.value(QStringLiteral("userContextId")).toInt();
+        if (seenIds.contains(userContextId)) {
+            continue;
+        }
+        QString name = id.value(QStringLiteral("name")).toString().trimmed();
+        if (name.isEmpty()) {
+            name = containerL10nName(id.value(QStringLiteral("l10nId")).toString());
+        }
+        if (name.isEmpty() || name.startsWith(QLatin1String("userContextIdInternal"))) {
+            continue;
+        }
+        seenIds.insert(userContextId);
+
+        Target t;
+        t.id = profile.id + QStringLiteral(":container:") + QString::number(userContextId);
+        t.kind = Kind::Container;
+        t.engine = profile.engine;
+        t.name = name;
+        t.browserName = browserName;
+        t.subtitle = browserName + QStringLiteral(" · ") + name;
+        t.exec = profile.exec;
+        const QString encodedName = QString::fromUtf8(QUrl::toPercentEncoding(name));
+        t.args = {
+            QStringLiteral("--profile"),
+            profile.profileDir,
+            QStringLiteral("--new-tab"),
+            QStringLiteral("ext+container:name=") + encodedName + QStringLiteral("&url=$urlEncoded"),
+        };
+        t.icon = profile.icon;
+        t.profileKey = profile.profileKey;
+        t.profileDir = profile.profileDir;
+        t.containerId = userContextId;
+        t.containerName = name;
+        t.color = containerColor(id.value(QStringLiteral("color")).toString());
+        out.append(t);
+    }
+    return out;
+}
+
 QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
 {
     QList<Target> out;
@@ -429,6 +575,7 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
         t.profileDir = r.path;
         t.isBrowserDefault = isInstallDefault;
         out.append(t);
+        out.append(geckoContainers(t));
 
         Target priv = t;
         priv.id += QStringLiteral(":private");

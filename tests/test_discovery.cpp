@@ -143,6 +143,75 @@ private Q_SLOTS:
         QVERIFY(hasFirefoxDefault);
     }
 
+    void discoversGeckoContainers()
+    {
+        DiscoveryPaths p;
+        p.home = fixtureRoot();
+        p.configHome = fixtureRoot() + QStringLiteral("/config");
+        p.dataHome = fixtureRoot() + QStringLiteral("/pwa");
+        p.applicationDirs = {fixtureRoot() + QStringLiteral("/desktop")};
+
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/zen"), p.configHome + QStringLiteral("/zen"));
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/firefox"), p.configHome + QStringLiteral("/mozilla/firefox"));
+
+        const auto targets = discoverTargets(p);
+
+        // The install-default Zen profile ships a protocol-handler extension
+        // (Open URL in Container) in its extensions.json fixture, so its
+        // public containers become targets.
+        const auto work = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.browserName.contains(QLatin1String("Zen"))
+                && t.containerName == QLatin1String("Work");
+        });
+        QVERIFY(work != targets.end());
+        QVERIFY(work->id.startsWith(QLatin1String("browser:")));
+        QVERIFY(work->id.contains(QLatin1String(":container:2")));
+        QVERIFY(work->displayName().contains(QLatin1String("Work")));
+        QVERIFY(work->args.contains(QStringLiteral("--new-tab")));
+        const bool hasUrlEncodedArg = std::any_of(work->args.begin(), work->args.end(), [](const QString &a) {
+            return a.contains(QLatin1String("$urlEncoded"));
+        });
+        QVERIFY(hasUrlEncodedArg);
+        const bool hasContainerArg = std::any_of(work->args.begin(), work->args.end(), [](const QString &a) {
+            return a.contains(QLatin1String("ext+container:name=Work"));
+        });
+        QVERIFY(hasContainerArg);
+        QCOMPARE(work->containerId, 2);
+        QVERIFY(!work->incognito);
+
+        const bool hasDev = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.containerName == QLatin1String("Dev");
+        });
+        QVERIFY(hasDev);
+
+        // The internal placeholder identity (public: false) never becomes a target.
+        const bool hasInternal = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.name.startsWith(QLatin1String("userContextIdInternal"));
+        });
+        QVERIFY(!hasInternal);
+
+        // No container target is ever incognito; containers never mix with
+        // private-window rows.
+        const bool anyIncognitoContainer = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.incognito;
+        });
+        QVERIFY(!anyIncognitoContainer);
+
+        // The second Zen profile (qq35x6ld.Default Profile) only has the
+        // four stock l10n containers and no protocol-handler extension: it
+        // must not grow any container targets.
+        const bool secondProfileHasContainers = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.profileDir.contains(QLatin1String("qq35x6ld"));
+        });
+        QVERIFY(!secondProfileHasContainers);
+
+        // Firefox profiles in the fixture have no containers.json at all.
+        const bool firefoxHasContainers = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.browserName.contains(QLatin1String("Firefox"));
+        });
+        QVERIFY(!firefoxHasContainers);
+    }
+
     void fingerprintPrefersRicherGeckoDataDir()
     {
         // Regression for: when more than one Gecko data-dir candidate has a

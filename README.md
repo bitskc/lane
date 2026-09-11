@@ -32,6 +32,10 @@ Tern discovers Gecko profiles (Firefox, Zen, LibreWolf, Floorp, Waterfox)
 and Chromium profiles (Brave, Chrome, Edge, Vivaldi, Opera), plus
 `firefoxpwa` sites. Desktop `Name=` wins over the PWA manifest name.
 
+Zen and Firefox containers (contextual identities) show up as
+destinations too, wherever `containers.json` exists and the browser
+has a protocol-handler extension installed to act on them.
+
 Decision order: rules first, then remembered destination, then unique
 PWA if you prefer PWAs, then picker policy, then default.
 

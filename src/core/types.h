@@ -23,6 +23,7 @@ enum class Kind {
     Pwa,
     Custom,
     Action,
+    Container,
 };
 
 enum class MatchScope {
@@ -58,6 +59,8 @@ struct Target {
     QString profileDir;
     QString pwaUlid;
     QString pwaScope;
+    int containerId = 0;
+    QString containerName;
     QColor color;
     QString customName;
     bool hidden = false;
@@ -166,10 +169,29 @@ inline QString kindName(Kind k)
         return QStringLiteral("app");
     case Kind::Action:
         return QStringLiteral("action");
+    case Kind::Container:
+        return QStringLiteral("container");
     case Kind::BrowserProfile:
         return QStringLiteral("browser");
     }
     return QStringLiteral("browser");
+}
+
+inline QString engineName(Engine e)
+{
+    switch (e) {
+    case Engine::Chromium:
+        return QStringLiteral("chromium");
+    case Engine::Gecko:
+        return QStringLiteral("gecko");
+    case Engine::Pwa:
+        return QStringLiteral("pwa");
+    case Engine::Action:
+        return QStringLiteral("action");
+    case Engine::Generic:
+        return QStringLiteral("generic");
+    }
+    return QStringLiteral("generic");
 }
 
 } // namespace Tern

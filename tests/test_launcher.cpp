@@ -17,6 +17,38 @@ private Q_SLOTS:
         QCOMPARE(args.size(), 4);
     }
 
+    void expandsUrlEncodedPlaceholder()
+    {
+        Target t;
+        t.args = {QStringLiteral("--profile"), QStringLiteral("/prof"), QStringLiteral("--new-tab"),
+                   QStringLiteral("ext+container:name=Work&url=$urlEncoded")};
+        const auto args = expandArgs(t, QStringLiteral("https://example.com/a b?x=1&y=2"));
+        QCOMPARE(args.size(), 4);
+        QCOMPARE(args.last(),
+                 QStringLiteral("ext+container:name=Work&url=https%3A%2F%2Fexample.com%2Fa%20b%3Fx%3D1%26y%3D2"));
+    }
+
+    void urlEncodedPlaceholderEscapesUnicode()
+    {
+        Target t;
+        t.args = {QStringLiteral("--new-tab"), QStringLiteral("ext+container:name=Dev&url=$urlEncoded")};
+        const auto args = expandArgs(t, QString::fromUtf8("https://example.com/caf\xc3\xa9"));
+        QVERIFY(!args.last().contains(QString::fromUtf8("caf\xc3\xa9")));
+        QVERIFY(args.last().contains(QStringLiteral("caf%C3%A9")));
+    }
+
+    void urlEncodedPlaceholderNeverInjectsNewline()
+    {
+        Target t;
+        t.args = {QStringLiteral("ext+container:name=Dev&url=$urlEncoded")};
+        // Percent-encoding keeps the substitution inside a single argv
+        // token rather than letting a raw newline slip through.
+        const auto args = expandArgs(t, QStringLiteral("https://example.com/\nrm -rf"));
+        QCOMPARE(args.size(), 1);
+        QVERIFY(!args.first().contains(QLatin1Char('\n')));
+        QVERIFY(!args.first().contains(QLatin1Char(' ')));
+    }
+
     void appendsWhenMissing()
     {
         Target t;

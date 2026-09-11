@@ -46,7 +46,12 @@ QStringList expandArgs(const Target &target, const QString &url)
 {
     QStringList out;
     bool placed = false;
+    const QString encodedUrl = QString::fromUtf8(QUrl::toPercentEncoding(url));
     for (QString a : target.args) {
+        if (a.contains(QLatin1String("$urlEncoded"))) {
+            a.replace(QStringLiteral("$urlEncoded"), encodedUrl);
+            placed = true;
+        }
         if (a.contains(QLatin1String("$url")) || a.contains(QLatin1String("%url%"))
             || a.contains(QLatin1String("%u"))) {
             a.replace(QStringLiteral("$url"), url);
