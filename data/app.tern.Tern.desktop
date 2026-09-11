@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Tern
+GenericName=Link Router
+Comment=Open links in the right browser, profile, or app
+Exec=tern %u
+Icon=app.tern.Tern
+Terminal=false
+StartupNotify=true
+DBusActivatable=true
+Categories=Network;WebBrowser;Qt;KDE;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Keywords=browser;chooser;profile;pwa;opener;
+X-KDE-Shortcuts=Ctrl+Alt+O

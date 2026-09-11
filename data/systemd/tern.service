@@ -1,0 +1,13 @@
+[Unit]
+Description=Tern link router
+PartOf=graphical-session.target
+After=plasma-plasmashell.service
+
+[Service]
+Type=dbus
+BusName=app.tern.Tern
+ExecStart=tern --daemon
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

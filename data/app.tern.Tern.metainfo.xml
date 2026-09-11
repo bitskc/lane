@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component type="desktop-application">
+  <id>app.tern.Tern</id>
+  <name>Tern</name>
+  <summary>Open links in the right browser, profile, or app</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <url type="homepage">https://github.com/bitskc/tern</url>
+  <developer id="app.tern">
+    <name>Andy Hayes</name>
+  </developer>
+  <description>
+    <p>
+      Tern is a Plasma-native link router. It becomes your default browser, then
+      sends each click to the right profile, installed web app, or custom handler.
+    </p>
+    <p>
+      Rules, remembered sites, Outlook safe-link unwrapping, and a keyboard-first
+      picker cover the same job as Browser Tamer and Velja, with first-class
+      Firefox PWA support.
+    </p>
+  </description>
+  <launchable type="desktop-id">app.tern.Tern.desktop</launchable>
+  <provides>
+    <binary>tern</binary>
+  </provides>
+  <content_rating type="oars-1.1" />
+</component>

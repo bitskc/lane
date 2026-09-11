@@ -1,0 +1,19 @@
+{
+  "sites": {
+    "01KV62HYP6YRMPPPBMVTRA23HX": {
+      "ulid": "01KV62HYP6YRMPPPBMVTRA23HX",
+      "manifest": {"name": "Claude", "scope": "https://claude.ai/", "start_url": "https://claude.ai/"},
+      "config": {}
+    },
+    "01KSY7FR0Z2Y7YBKKDSGNEKETP": {
+      "ulid": "01KSY7FR0Z2Y7YBKKDSGNEKETP",
+      "manifest": {"name": "Perplexity", "scope": "https://www.perplexity.ai/", "start_url": "https://www.perplexity.ai/"},
+      "config": {}
+    },
+    "01KT1N5RHR7DYJ54DWPBWAY5V4": {
+      "ulid": "01KT1N5RHR7DYJ54DWPBWAY5V4",
+      "manifest": {"name": "Home", "scope": "https://qbo.intuit.com/", "start_url": "https://qbo.intuit.com/"},
+      "config": {}
+    }
+  }
+}

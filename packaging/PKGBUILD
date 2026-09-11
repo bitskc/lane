@@ -1,0 +1,32 @@
+pkgname=tern
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Plasma-native link router: open the right browser, profile, or app"
+arch=('x86_64')
+url="https://github.com/bitskc/tern"
+license=('GPL-3.0-or-later')
+depends=(
+  qt6-base qt6-declarative qt6-svg
+  kirigami kirigami-addons
+  ki18n kcoreaddons kconfig kdbusaddons knotifications
+  kwindowsystem kiconthemes kstatusnotifieritem
+  layer-shell-qt qqc2-desktop-style
+)
+makedepends=(cmake extra-cmake-modules ninja)
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cmake -S "$srcdir/$pkgname-$pkgver" -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build build
+}
+
+check() {
+  ctest --test-dir build --output-on-failure
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}

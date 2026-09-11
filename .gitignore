@@ -1,0 +1,12 @@
+/build/
+/cmake-build-*/
+/.cache/
+/.idea/
+/.vscode/
+*.user
+*.AppImage
+CMakeUserPresets.json
+.DS_Store
+compile_commands.json
+.clangd/
+.cache

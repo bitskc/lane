@@ -1,0 +1,16 @@
+set(TERN_FIXTURE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+
+function(tern_test name)
+    add_executable(${name} ${name}.cpp)
+    target_link_libraries(${name} PRIVATE tern-core Qt6::Test)
+    target_compile_definitions(${name} PRIVATE TERN_FIXTURE_ROOT="${TERN_FIXTURE_ROOT}")
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
+tern_test(test_url)
+tern_test(test_matcher)
+tern_test(test_pipeline)
+tern_test(test_discovery)
+tern_test(test_router)
+tern_test(test_config)
+tern_test(test_launcher)

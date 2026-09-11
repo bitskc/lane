@@ -1,0 +1,9 @@
+[Global]
+AppName=Tern
+IconName=app.tern.Tern
+Comment=Link router
+
+[Event/opened]
+Name=Link opened
+Comment=Shown when Tern opens a link
+Action=Popup

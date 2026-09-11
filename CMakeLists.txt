@@ -1,0 +1,74 @@
+cmake_minimum_required(VERSION 3.22)
+project(tern VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+
+set(QT_MIN_VERSION "6.6.0")
+set(KF_MIN_VERSION "6.0.0")
+
+find_package(ECM ${KF_MIN_VERSION} REQUIRED NO_MODULE)
+set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
+
+include(KDEInstallDirs)
+include(KDECMakeSettings)
+include(KDECompilerSettings NO_POLICY_SCOPE)
+include(ECMSetupVersion)
+include(ECMFindQmlModule)
+include(CTest)
+
+# KDECompilerSettings injects -Werror=...; keep the warnings, drop the errors.
+string(REPLACE "-Werror=" "-W" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+string(REPLACE "-Werror=" "-W" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
+    Core
+    Gui
+    Qml
+    Quick
+    QuickControls2
+    Widgets
+    DBus
+    Network
+    Test
+    Svg
+)
+find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
+    I18n
+    CoreAddons
+    Config
+    DBusAddons
+    Notifications
+    WindowSystem
+    IconThemes
+    ColorScheme
+    StatusNotifierItem
+    Crash
+)
+ecm_find_qmlmodule(org.kde.kirigami REQUIRED)
+ecm_find_qmlmodule(org.kde.kirigamiaddons.formcard REQUIRED)
+ecm_find_qmlmodule(org.kde.layershell REQUIRED)
+find_package(LayerShellQt REQUIRED)
+
+qt_policy(SET QTP0001 NEW)
+qt_policy(SET QTP0004 NEW)
+
+ecm_setup_version(PROJECT
+    VARIABLE_PREFIX TERN
+    VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/tern_version.h"
+)
+
+add_subdirectory(src)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+
+install(FILES data/app.tern.Tern.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+install(FILES data/app.tern.Tern.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
+install(FILES data/app.tern.Tern.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
+install(FILES data/dbus/app.tern.Tern.service DESTINATION ${KDE_INSTALL_DBUSSERVICEDIR})
+install(FILES data/systemd/tern.service DESTINATION ${KDE_INSTALL_SYSTEMDUSERUNITDIR})
+install(FILES data/icons/app.tern.Tern.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)

@@ -1,0 +1,530 @@
+#include "Controller.h"
+
+#include "Autostart.h"
+#include "SourceInfo.h"
+#include "core/config.h"
+#include "core/discovery.h"
+#include "core/launcher.h"
+#include "core/router.h"
+#include "core/unshorten.h"
+
+#include <LayerShellQt/Window>
+#include <KCrash>
+#include <KNotification>
+#include <KStatusNotifierItem>
+#include <KWindowEffects>
+
+#include <QClipboard>
+#include <QDebug>
+#include <QFileInfo>
+#include <QGuiApplication>
+#include <QProcess>
+#include <QQmlContext>
+#include <QQmlError>
+#include <QQuickStyle>
+#include <QMenu>
+#include <QScreen>
+#include <QTimer>
+#include <QUuid>
+namespace Tern
+{
+
+Controller::Controller(QObject *parent)
+    : QObject(parent)
+    , m_pickerModel(new PickerModel(this))
+    , m_targetModel(new TargetModel(this))
+    , m_ruleModel(new RuleModel(this))
+{
+    m_configPath = defaultConfigPath();
+    reload();
+
+    m_tray = new KStatusNotifierItem(QStringLiteral("tern"), this);
+    m_tray->setTitle(QStringLiteral("Tern"));
+    m_tray->setToolTipTitle(QStringLiteral("Tern"));
+    m_tray->setToolTipSubTitle(QStringLiteral("Link router"));
+    m_tray->setIconByName(QStringLiteral("app.tern.Tern"));
+    m_tray->setStatus(KStatusNotifierItem::Passive);
+    m_tray->setCategory(KStatusNotifierItem::ApplicationStatus);
+    m_tray->setStandardActionsEnabled(false);
+    auto *menu = new QMenu();
+    menu->addAction(QStringLiteral("Settings"), this, &Controller::openSettings);
+    menu->addAction(QStringLiteral("Rediscover browsers"), this, &Controller::rediscover);
+    m_tray->setContextMenu(menu);
+    connect(m_tray, &KStatusNotifierItem::activateRequested, this, [this](bool, const QPoint &) {
+        openSettings();
+    });
+
+    connect(m_ruleModel, &RuleModel::rulesChanged, this, [this]() {
+        m_config.rules = m_ruleModel->rules();
+        persist();
+    });
+}
+
+QString Controller::currentPrettyUrl() const
+{
+    QString u = m_click.openUrl;
+    u.replace(QStringLiteral("https://"), QString());
+    u.replace(QStringLiteral("http://"), QString());
+    return u;
+}
+
+void Controller::setAlwaysForHost(bool on)
+{
+    m_alwaysForHost = on;
+    Q_EMIT currentChanged();
+}
+
+bool Controller::isDefaultBrowser() const
+{
+    QProcess p;
+    p.start(QStringLiteral("xdg-settings"), {QStringLiteral("get"), QStringLiteral("default-web-browser")});
+    p.waitForFinished(1500);
+    return QString::fromUtf8(p.readAllStandardOutput()).trimmed() == QLatin1String("app.tern.Tern.desktop");
+}
+
+QString Controller::pickerPolicy() const
+{
+    return pickerPolicyToString(m_config.pickerPolicy);
+}
+
+void Controller::setPickerPolicy(const QString &p)
+{
+    m_config.pickerPolicy = pickerPolicyFromString(p);
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setPreferPwa(bool on)
+{
+    m_config.preferPwa = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setToastEnabled(bool on)
+{
+    m_config.toast = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setUnwrapO365(bool on)
+{
+    m_config.unwrapO365 = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setUnshorten(bool on)
+{
+    m_config.unshorten = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setAutostartEnabled(bool on)
+{
+    m_config.autostart = on;
+    setAutostart(on);
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setCloseOnFocusLoss(bool on)
+{
+    m_config.closeOnFocusLoss = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setShowUrl(bool on)
+{
+    m_config.showUrl = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setDefaultTargetId(const QString &id)
+{
+    m_config.defaultTargetId = id;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+QStringList Controller::targetIds() const
+{
+    QStringList ids;
+    for (const auto &t : m_targets) {
+        if (!t.hidden) {
+            ids << t.id;
+        }
+    }
+    return ids;
+}
+
+QStringList Controller::targetNames() const
+{
+    QStringList names;
+    for (const auto &t : m_targets) {
+        if (!t.hidden) {
+            names << t.displayName();
+        }
+    }
+    return names;
+}
+
+QStringList Controller::rememberedHosts() const
+{
+    return m_config.remembered.keys();
+}
+
+void Controller::handleArgs(const QStringList &args)
+{
+    QStringList rest = args;
+    if (!rest.isEmpty() && rest.first().contains(QLatin1String("tern"))) {
+        rest.removeFirst();
+    }
+    bool daemon = false;
+    bool forcePicker = false;
+    QString url;
+    for (const QString &a : rest) {
+        if (a == QLatin1String("--daemon")) {
+            daemon = true;
+        } else if (a == QLatin1String("--pick") || a == QLatin1String("-p")) {
+            forcePicker = true;
+        } else if (a == QLatin1String("--settings") || a == QLatin1String("--configure")) {
+            openSettings();
+        } else if (a == QLatin1String("--rediscover")) {
+            rediscover();
+        } else if (!a.startsWith(QLatin1Char('-'))) {
+            url = a;
+        }
+    }
+    if (!url.isEmpty()) {
+        openUrl(url, forcePicker);
+        return;
+    }
+    if (!daemon && rest.contains(QStringLiteral("--settings")) == false && rest.isEmpty()) {
+        openSettings();
+    }
+}
+
+void Controller::openUrl(const QString &url, bool forcePicker)
+{
+    const auto src = activeSource();
+    m_click = runPipeline(url, m_config, unshortenFn());
+    m_click.forcePicker = forcePicker;
+    m_click.processName = src.processName;
+    m_click.windowTitle = src.windowTitle;
+    m_alwaysForHost = false;
+    Q_EMIT currentChanged();
+    applyDecision(route(m_click, m_targets, m_config));
+}
+
+void Controller::pick(int row)
+{
+    const Target t = m_pickerModel->targetAt(row);
+    if (t.id.isEmpty()) {
+        return;
+    }
+    pickId(t.id);
+}
+
+void Controller::pickId(const QString &id)
+{
+    const Target *t = findTarget(m_targets, id);
+    if (!t) {
+        return;
+    }
+    if (m_alwaysForHost && !m_click.host.isEmpty() && t->kind != Kind::Action) {
+        m_config.remembered.insert(m_click.host, t->id);
+        persist();
+    }
+    hidePicker();
+    if (t->id == QLatin1String("action:copy")) {
+        copyCurrent();
+        return;
+    }
+    launch(*t, QStringLiteral("picker"));
+}
+
+void Controller::cancelPicker()
+{
+    hidePicker();
+}
+
+void Controller::copyCurrent()
+{
+    if (auto *clip = QGuiApplication::clipboard()) {
+        clip->setText(m_click.openUrl);
+    }
+    hidePicker();
+}
+
+void Controller::openSettings()
+{
+    ensureSettingsEngine();
+    if (m_settingsWindow) {
+        m_settingsWindow->show();
+        m_settingsWindow->requestActivate();
+        m_settingsWindow->raise();
+    }
+}
+
+void Controller::rediscover()
+{
+    reload();
+}
+
+void Controller::makeDefaultBrowser()
+{
+    QProcess::execute(QStringLiteral("xdg-mime"),
+                      {QStringLiteral("default"), QStringLiteral("app.tern.Tern.desktop"), QStringLiteral("x-scheme-handler/http")});
+    QProcess::execute(QStringLiteral("xdg-mime"),
+                      {QStringLiteral("default"), QStringLiteral("app.tern.Tern.desktop"), QStringLiteral("x-scheme-handler/https")});
+    QProcess::execute(QStringLiteral("xdg-settings"),
+                      {QStringLiteral("set"), QStringLiteral("default-web-browser"), QStringLiteral("app.tern.Tern.desktop")});
+    Q_EMIT defaultBrowserChanged();
+}
+
+void Controller::hideTarget(const QString &id, bool hidden)
+{
+    m_config.hiddenTargetIds.removeAll(id);
+    if (hidden) {
+        m_config.hiddenTargetIds.append(id);
+    }
+    persist();
+    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    m_targetModel->setTargets(m_targets);
+    Q_EMIT settingsChanged();
+}
+
+void Controller::save()
+{
+    persist();
+}
+
+QString Controller::displayNameFor(const QString &id) const
+{
+    if (const Target *t = findTarget(m_targets, id)) {
+        return t->displayName();
+    }
+    return id;
+}
+
+QString Controller::rememberedTarget(const QString &host) const
+{
+    return m_config.remembered.value(host);
+}
+
+void Controller::forgetHost(const QString &host)
+{
+    m_config.remembered.remove(host);
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::addCustomTarget(const QString &name, const QString &command)
+{
+    const QStringList parts = QProcess::splitCommand(command.trimmed());
+    if (parts.isEmpty()) {
+        return;
+    }
+    Target t;
+    t.kind = Kind::Custom;
+    t.engine = Engine::Generic;
+    t.name = name.trimmed().isEmpty() ? QFileInfo(parts.first()).fileName() : name.trimmed();
+    t.browserName = QStringLiteral("Custom");
+    t.subtitle = QStringLiteral("Custom");
+    t.exec = parts.first();
+    t.args = parts.mid(1);
+    bool placed = false;
+    for (const auto &a : t.args) {
+        if (a.contains(QLatin1String("$url")) || a.contains(QLatin1String("%url%")) || a.contains(QLatin1String("%u"))) {
+            placed = true;
+            break;
+        }
+    }
+    if (!placed) {
+        t.args << QStringLiteral("$url");
+    }
+    t.id = QStringLiteral("custom:") + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    t.icon = QStringLiteral("application-x-executable");
+    m_config.customTargets.append(t);
+    persist();
+    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    m_targetModel->setTargets(m_targets);
+    Q_EMIT settingsChanged();
+}
+
+void Controller::removeCustomTarget(const QString &id)
+{
+    QList<Target> kept;
+    for (const auto &t : m_config.customTargets) {
+        if (t.id != id) {
+            kept.append(t);
+        }
+    }
+    m_config.customTargets = kept;
+    persist();
+    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    m_targetModel->setTargets(m_targets);
+    Q_EMIT settingsChanged();
+}
+
+void Controller::reload()
+{
+    m_config = loadConfig(m_configPath);
+    m_config.autostart = autostartEnabled();
+    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    if (m_config.defaultTargetId.isEmpty()) {
+        if (const Target *t = defaultTarget(m_targets, m_config)) {
+            m_config.defaultTargetId = t->id;
+        }
+    }
+    m_targetModel->setTargets(m_targets);
+    m_ruleModel->setRules(m_config.rules);
+    Q_EMIT settingsChanged();
+    Q_EMIT defaultBrowserChanged();
+}
+
+void Controller::persist()
+{
+    m_config.rules = m_ruleModel->rules();
+    saveConfig(m_configPath, m_config);
+}
+
+void Controller::applyDecision(const Decision &d)
+{
+    if (d.action == Decision::Action::Pick) {
+        m_pickerModel->reset(d.pickerTargets);
+        showPicker();
+        return;
+    }
+    if (d.target.id == QLatin1String("action:copy")) {
+        copyCurrent();
+        return;
+    }
+    launch(d.target, d.reason);
+}
+
+void Controller::showPicker()
+{
+    ensurePickerEngine();
+    if (m_pickerWindow) {
+        m_pickerWindow->show();
+        m_pickerWindow->requestActivate();
+    }
+    Q_EMIT pickerVisibleChanged(true);
+}
+
+void Controller::hidePicker()
+{
+    if (m_pickerWindow) {
+        m_pickerWindow->hide();
+    }
+    Q_EMIT pickerVisibleChanged(false);
+}
+
+void Controller::launch(const Target &target, const QString &reason)
+{
+    if (target.id.isEmpty()) {
+        showPicker();
+        return;
+    }
+    launchTarget(target, m_click.openUrl);
+    m_config.recentTargetIds.removeAll(target.id);
+    m_config.recentTargetIds.prepend(target.id);
+    while (m_config.recentTargetIds.size() > 12) {
+        m_config.recentTargetIds.removeLast();
+    }
+    persist();
+    if (m_config.toast) {
+        toast(target, reason);
+    }
+}
+
+void Controller::toast(const Target &target, const QString &reason)
+{
+    auto *n = new KNotification(QStringLiteral("opened"), KNotification::CloseOnTimeout, this);
+    n->setTitle(QStringLiteral("Opened in %1").arg(target.displayName()));
+    n->setText(m_click.host.isEmpty() ? m_click.openUrl : m_click.host);
+    n->setIconName(target.icon.isEmpty() ? QStringLiteral("app.tern.Tern") : target.icon);
+    Q_UNUSED(reason);
+    n->sendEvent();
+}
+
+void Controller::ensurePickerEngine()
+{
+    if (m_pickerEngine) {
+        return;
+    }
+    m_pickerEngine = new QQmlApplicationEngine(this);
+    connect(m_pickerEngine, &QQmlApplicationEngine::warnings, this, [](const QList<QQmlError> &warnings) {
+        for (const auto &w : warnings) {
+            qWarning() << "Tern picker:" << w.toString();
+        }
+    });
+    m_pickerEngine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
+    m_pickerEngine->loadFromModule(QStringLiteral("app.tern"), QStringLiteral("Picker"));
+    if (m_pickerEngine->rootObjects().isEmpty()) {
+        qWarning() << "Tern: picker QML failed to load";
+        return;
+    }
+    m_pickerWindow = qobject_cast<QWindow *>(m_pickerEngine->rootObjects().constFirst());
+    if (m_pickerWindow) {
+        configureLayerShell(m_pickerWindow);
+    }
+}
+
+void Controller::ensureSettingsEngine()
+{
+    if (m_settingsEngine) {
+        return;
+    }
+    m_settingsEngine = new QQmlApplicationEngine(this);
+    connect(m_settingsEngine, &QQmlApplicationEngine::warnings, this, [](const QList<QQmlError> &warnings) {
+        for (const auto &w : warnings) {
+            qWarning() << "Tern settings:" << w.toString();
+        }
+    });
+    m_settingsEngine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
+    m_settingsEngine->loadFromModule(QStringLiteral("app.tern"), QStringLiteral("Settings"));
+    if (m_settingsEngine->rootObjects().isEmpty()) {
+        qWarning() << "Tern: settings QML failed to load";
+        return;
+    }
+    m_settingsWindow = qobject_cast<QWindow *>(m_settingsEngine->rootObjects().constFirst());
+}
+
+void Controller::configureLayerShell(QWindow *window)
+{
+    auto *ls = LayerShellQt::Window::get(window);
+    ls->setLayer(LayerShellQt::Window::LayerOverlay);
+    LayerShellQt::Window::Anchors anchors;
+    anchors.setFlag(LayerShellQt::Window::AnchorTop);
+    anchors.setFlag(LayerShellQt::Window::AnchorBottom);
+    anchors.setFlag(LayerShellQt::Window::AnchorLeft);
+    anchors.setFlag(LayerShellQt::Window::AnchorRight);
+    ls->setAnchors(anchors);
+    ls->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
+    ls->setExclusiveZone(-1);
+    ls->setScope(QStringLiteral("tern-picker"));
+    ls->setWantsToBeOnActiveScreen(true);
+    ls->setActivateOnShow(true);
+    auto *screen = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
+    if (screen) {
+        window->setGeometry(screen->geometry());
+    }
+    KWindowEffects::enableBlurBehind(window, true);
+}
+
+UnshortenFn Controller::unshortenFn() const
+{
+    if (!m_config.unshorten) {
+        return {};
+    }
+    return [](const QString &url) { return unshortenSync(url, 1800); };
+}
+
+} // namespace Tern
