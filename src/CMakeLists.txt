@@ -4,6 +4,7 @@ set(tern_core_SRCS
     core/pipeline.cpp
     core/config.cpp
     core/discovery.cpp
+    core/destination.cpp
     core/router.cpp
     core/launcher.cpp
     core/unshorten.cpp
@@ -36,6 +37,7 @@ qt_add_qml_module(tern
     VERSION 1.0
     QML_FILES
         qml/Picker.qml
+        qml/Hold.qml
         qml/Settings.qml
         qml/pages/OverviewPage.qml
         qml/pages/TargetsPage.qml

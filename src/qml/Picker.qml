@@ -39,6 +39,16 @@ Window {
     Shortcut { sequence: "Down"; onActivated: list.incrementCurrentIndex() }
     Shortcut { sequence: "Up"; onActivated: list.decrementCurrentIndex() }
     Shortcut { sequence: "Alt+A"; onActivated: controller.alwaysForHost = !controller.alwaysForHost }
+    Shortcut {
+        sequence: ","
+        enabled: filterField.text.length === 0 && controller.destinationIndex < controller.destinationLadder.length - 1
+        onActivated: controller.destinationIndex = controller.destinationIndex + 1
+    }
+    Shortcut {
+        sequence: "."
+        enabled: filterField.text.length === 0 && controller.destinationIndex > 0
+        onActivated: controller.destinationIndex = controller.destinationIndex - 1
+    }
     Repeater {
         model: 9
         Shortcut {
@@ -234,10 +244,38 @@ Window {
                     id: alwaysBox
                     checked: controller.alwaysForHost
                     onToggled: controller.alwaysForHost = checked
-                    text: controller.currentHost.length ? "Always for " + controller.currentHost : "Always for this site"
+                    text: controller.currentDestinationKey.length > 0
+                          ? "Always for " + controller.currentDestinationKey
+                          : "Always for this site"
                     font.pixelSize: 12
                 }
                 Item { Layout.fillWidth: true }
+                RowLayout {
+                    spacing: 2
+                    QQC.ToolButton {
+                        text: "‹"
+                        enabled: controller.destinationIndex > 0
+                        onClicked: controller.destinationIndex = controller.destinationIndex - 1
+                        flat: true
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                    }
+                    QQC.Label {
+                        text: controller.currentDestinationKey
+                        font.pixelSize: 10
+                        opacity: 0.5
+                        elide: Text.ElideRight
+                        Layout.preferredWidth: 120
+                    }
+                    QQC.ToolButton {
+                        text: "›"
+                        enabled: controller.destinationIndex < controller.destinationLadder.length - 1
+                        onClicked: controller.destinationIndex = controller.destinationIndex + 1
+                        flat: true
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                    }
+                }
                 QQC.Label {
                     text: "esc"
                     font.pixelSize: 10

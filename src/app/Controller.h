@@ -9,6 +9,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlApplicationEngine>
+#include <QVariantAnimation>
 #include <QWindow>
 
 class KStatusNotifierItem;
@@ -41,6 +42,13 @@ class Controller : public QObject
     Q_PROPERTY(QStringList targetIds READ targetIds NOTIFY settingsChanged)
     Q_PROPERTY(QStringList targetNames READ targetNames NOTIFY settingsChanged)
     Q_PROPERTY(QStringList rememberedHosts READ rememberedHosts NOTIFY settingsChanged)
+    Q_PROPERTY(bool holdAutoOpen READ holdAutoOpen WRITE setHoldAutoOpen NOTIFY settingsChanged)
+    Q_PROPERTY(qreal holdProgress READ holdProgress NOTIFY holdProgressChanged)
+    Q_PROPERTY(QString holdTargetName READ holdTargetName NOTIFY holdChanged)
+    Q_PROPERTY(QString holdDestinationKey READ holdDestinationKey NOTIFY holdChanged)
+    Q_PROPERTY(QStringList destinationLadder READ destinationLadder NOTIFY currentChanged)
+    Q_PROPERTY(int destinationIndex READ destinationIndex WRITE setDestinationIndex NOTIFY currentChanged)
+    Q_PROPERTY(QString currentDestinationKey READ currentDestinationKey NOTIFY currentChanged)
 public:
     explicit Controller(QObject *parent = nullptr);
 
@@ -70,6 +78,17 @@ public:
     void setAutostartEnabled(bool on);
     bool closeOnFocusLoss() const { return m_config.closeOnFocusLoss; }
     void setCloseOnFocusLoss(bool on);
+    QStringList rememberedHosts() const;
+
+    bool holdAutoOpen() const { return m_config.holdAutoOpen; }
+    void setHoldAutoOpen(bool on);
+    qreal holdProgress() const { return m_holdProgress; }
+    QString holdTargetName() const { return m_holdTargetName; }
+    QString holdDestinationKey() const { return m_holdDestinationKey; }
+    QStringList destinationLadder() const { return m_destinationLadder; }
+    int destinationIndex() const { return m_destinationIndex; }
+    void setDestinationIndex(int idx);
+    QString currentDestinationKey() const;
     bool showUrl() const { return m_config.showUrl; }
     void setShowUrl(bool on);
     QString defaultTargetId() const { return m_config.defaultTargetId; }
@@ -77,7 +96,8 @@ public:
     int targetCount() const { return m_targets.size(); }
     QStringList targetIds() const;
     QStringList targetNames() const;
-    QStringList rememberedHosts() const;
+    Q_INVOKABLE void confirmHold();
+    Q_INVOKABLE void cancelHold();
 
     Q_INVOKABLE void handleArgs(const QStringList &args);
     Q_INVOKABLE void openUrl(const QString &url, bool forcePicker = false);
@@ -100,6 +120,8 @@ Q_SIGNALS:
     void settingsChanged();
     void defaultBrowserChanged();
     void pickerVisibleChanged(bool visible);
+    void holdProgressChanged();
+    void holdChanged();
 
 private:
     void reload();
@@ -111,7 +133,11 @@ private:
     void toast(const Target &target, const QString &reason);
     void ensurePickerEngine();
     void ensureSettingsEngine();
+    void ensureHoldEngine();
     void configureLayerShell(QWindow *window);
+    bool shouldHold(const QString &reason) const;
+    void startHold(const Target &target, const QString &reason, const QString &memoryKey);
+    void hideHold();
     UnshortenFn unshortenFn() const;
 
     Config m_config;
@@ -126,9 +152,21 @@ private:
 
     QQmlApplicationEngine *m_pickerEngine = nullptr;
     QQmlApplicationEngine *m_settingsEngine = nullptr;
+    QQmlApplicationEngine *m_holdEngine = nullptr;
     QPointer<QWindow> m_pickerWindow;
     QPointer<QWindow> m_settingsWindow;
+    QPointer<QWindow> m_holdWindow;
     KStatusNotifierItem *m_tray = nullptr;
+
+    QVariantAnimation *m_holdAnimation = nullptr;
+    Target m_holdTarget;
+    QString m_holdReason;
+    QString m_holdMemoryKey;
+    QString m_holdTargetName;
+    QString m_holdDestinationKey;
+    qreal m_holdProgress = 0;
+    QStringList m_destinationLadder;
+    int m_destinationIndex = 0;
 };
 
 } // namespace Tern

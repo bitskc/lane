@@ -113,6 +113,7 @@ struct Decision {
     Target target;
     QString reason;
     QString ruleId;
+    QString memoryKey;
     QList<Target> pickerTargets;
 };
 
@@ -127,6 +128,8 @@ struct Config {
     bool unshorten = true;
     bool openUnwrapped = false;
     bool preferPwa = true;
+    bool holdAutoOpen = true;
+    int holdMs = 1600;
     bool autostart = false;
     QString defaultTargetId;
     QStringList hiddenTargetIds;

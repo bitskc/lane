@@ -1,9 +1,11 @@
 #include "router.h"
 
+#include "destination.h"
 #include "matcher.h"
 #include "urlutil.h"
 
 #include <QSet>
+
 namespace Tern
 {
 
@@ -38,17 +40,6 @@ const Target *defaultTarget(const QList<Target> &targets, const Config &config)
         }
     }
     return browserDefault ? browserDefault : first;
-}
-
-static QList<Target> visible(const QList<Target> &targets)
-{
-    QList<Target> out;
-    for (const auto &t : targets) {
-        if (!t.hidden) {
-            out.append(t);
-        }
-    }
-    return out;
 }
 
 static QList<const Target *> pwaMatches(const Click &click, const QList<Target> &targets)
@@ -96,7 +87,7 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
     for (const auto *t : pwaMatches(click, targets)) {
         push(*t);
     }
-    if (const Target *t = findTarget(targets, config.remembered.value(click.host))) {
+    if (const Target *t = findTarget(targets, lookupRemembered(click.matchUrl, config.remembered))) {
         push(*t);
     }
     if (const Target *t = defaultTarget(targets, config)) {
@@ -117,7 +108,6 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
             push(t);
         }
     }
-    Q_UNUSED(visible);
     return ranked;
 }
 
@@ -169,7 +159,8 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
         }
     }
 
-    const QString rememberedId = config.remembered.value(click.host);
+    d.memoryKey = destinationKeyMatchesBest(click.matchUrl, config.remembered);
+    const QString rememberedId = lookupRemembered(click.matchUrl, config.remembered);
     if (const Target *t = findTarget(targets, rememberedId)) {
         if (!t->hidden) {
             d.action = Decision::Action::Launch;
@@ -180,9 +171,15 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
     }
 
     const auto pwas = pwaMatches(click, targets);
-    if (config.preferPwa && pwas.size() == 1) {
+    QList<const Target *> autoPwas;
+    for (const auto *t : pwas) {
+        if (pwaShouldAutoOpen(*t, click.matchUrl)) {
+            autoPwas.append(t);
+        }
+    }
+    if (config.preferPwa && autoPwas.size() == 1) {
         d.action = Decision::Action::Launch;
-        d.target = *pwas.front();
+        d.target = *autoPwas.front();
         d.reason = QStringLiteral("pwa");
         return d;
     }

@@ -43,6 +43,13 @@ FormCard.FormCardPage {
             checked: controller.closeOnFocusLoss
             onToggled: controller.closeOnFocusLoss = checked
         }
+        FormCard.FormDelegateSeparator {}
+        FormCard.FormSwitchDelegate {
+            text: "Pause before opening"
+            description: "Hold remembered, app, and default opens for a moment so you can undo."
+            checked: controller.holdAutoOpen
+            onToggled: controller.holdAutoOpen = checked
+        }
     }
 
     FormCard.FormHeader {

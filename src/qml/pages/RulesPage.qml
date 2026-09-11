@@ -12,7 +12,7 @@ FormCard.FormCardPage {
     readonly property var scopeLabels: ["Domain", "Path", "Entire URL"]
 
     FormCard.FormHeader {
-        title: "Match first, then remembered hosts, then apps"
+        title: "Match first, then remembered destinations, then apps"
     }
     FormCard.FormCard {
         Repeater {
@@ -72,13 +72,13 @@ FormCard.FormCardPage {
     }
 
     FormCard.FormHeader {
-        title: "Remembered sites"
+        title: "Remembered destinations"
     }
     FormCard.FormCard {
         FormCard.FormTextDelegate {
             visible: controller.rememberedHosts.length === 0
             text: "None yet"
-            description: "Use Always for this site in the picker."
+            description: "Use Always for this destination in the picker."
         }
         Repeater {
             model: controller.rememberedHosts

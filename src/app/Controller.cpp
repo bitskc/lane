@@ -3,6 +3,7 @@
 #include "Autostart.h"
 #include "SourceInfo.h"
 #include "core/config.h"
+#include "core/destination.h"
 #include "core/discovery.h"
 #include "core/launcher.h"
 #include "core/router.h"
@@ -183,6 +184,31 @@ QStringList Controller::rememberedHosts() const
     return m_config.remembered.keys();
 }
 
+void Controller::setHoldAutoOpen(bool on)
+{
+    m_config.holdAutoOpen = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setDestinationIndex(int idx)
+{
+    idx = qBound(0, idx, qMax(0, m_destinationLadder.size() - 1));
+    if (idx == m_destinationIndex) {
+        return;
+    }
+    m_destinationIndex = idx;
+    Q_EMIT currentChanged();
+}
+
+QString Controller::currentDestinationKey() const
+{
+    if (m_destinationLadder.isEmpty()) {
+        return m_click.host;
+    }
+    return m_destinationLadder.value(m_destinationIndex, m_destinationLadder.constFirst());
+}
+
 void Controller::handleArgs(const QStringList &args)
 {
     QStringList rest = args;
@@ -216,14 +242,26 @@ void Controller::handleArgs(const QStringList &args)
 
 void Controller::openUrl(const QString &url, bool forcePicker)
 {
+    if (m_holdAnimation && m_holdAnimation->state() == QAbstractAnimation::Running) {
+        m_holdAnimation->stop();
+        hideHold();
+    }
+
     const auto src = activeSource();
     m_click = runPipeline(url, m_config, unshortenFn());
     m_click.forcePicker = forcePicker;
     m_click.processName = src.processName;
     m_click.windowTitle = src.windowTitle;
     m_alwaysForHost = false;
+
+    const Decision d = route(m_click, m_targets, m_config);
+
+    m_destinationLadder = Tern::destinationLadder(m_click.matchUrl);
+    const Target *suggested = d.action == Decision::Action::Launch ? &d.target : nullptr;
+    m_destinationIndex = Tern::suggestedLadderIndex(m_click.matchUrl, suggested, m_config.remembered);
+
     Q_EMIT currentChanged();
-    applyDecision(route(m_click, m_targets, m_config));
+    applyDecision(d);
 }
 
 void Controller::pick(int row)
@@ -243,7 +281,7 @@ void Controller::pickId(const QString &id)
     }
     if (m_alwaysForHost && !m_click.host.isEmpty() && t->kind != Kind::Action
         && isSafeOpenUrl(m_click.openUrl) && !isPrivateOrLocalHost(m_click.host)) {
-        m_config.remembered.insert(m_click.host, t->id);
+        m_config.remembered.insert(currentDestinationKey(), t->id);
         persist();
     }
     hidePicker();
@@ -399,6 +437,10 @@ void Controller::applyDecision(const Decision &d)
         copyCurrent();
         return;
     }
+    if (shouldHold(d.reason)) {
+        startHold(d.target, d.reason, d.memoryKey);
+        return;
+    }
     launch(d.target, d.reason);
 }
 
@@ -529,6 +571,102 @@ UnshortenFn Controller::unshortenFn() const
         return {};
     }
     return [](const QString &url) { return unshortenSync(url, 1800); };
+}
+
+bool Controller::shouldHold(const QString &reason) const
+{
+    if (!m_config.holdAutoOpen || m_config.holdMs <= 0) {
+        return false;
+    }
+    return reason == QLatin1String("remembered")
+        || reason == QLatin1String("pwa")
+        || reason == QLatin1String("default");
+}
+
+void Controller::startHold(const Target &target, const QString &reason, const QString &memoryKey)
+{
+    m_holdTarget = target;
+    m_holdReason = reason;
+    m_holdMemoryKey = memoryKey;
+    m_holdTargetName = target.displayName();
+    m_holdDestinationKey = memoryKey.isEmpty() ? displayUrl(m_click.openUrl) : memoryKey;
+    m_holdProgress = 0;
+
+    Q_EMIT holdChanged();
+    Q_EMIT holdProgressChanged();
+
+    ensureHoldEngine();
+    if (m_holdWindow) {
+        m_holdWindow->show();
+        m_holdWindow->requestActivate();
+    }
+
+    if (!m_holdAnimation) {
+        m_holdAnimation = new QVariantAnimation(this);
+        connect(m_holdAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant &v) {
+            m_holdProgress = v.toReal();
+            Q_EMIT holdProgressChanged();
+        });
+        connect(m_holdAnimation, &QVariantAnimation::finished, this, [this]() {
+            hideHold();
+            launch(m_holdTarget, m_holdReason);
+        });
+    }
+    m_holdAnimation->setDuration(qMax(1, m_config.holdMs));
+    m_holdAnimation->setStartValue(0.0);
+    m_holdAnimation->setEndValue(1.0);
+    m_holdAnimation->start();
+}
+
+void Controller::confirmHold()
+{
+    if (!m_holdAnimation || m_holdAnimation->state() != QAbstractAnimation::Running) {
+        return;
+    }
+    m_holdAnimation->stop();
+    hideHold();
+    launch(m_holdTarget, m_holdReason);
+}
+
+void Controller::cancelHold()
+{
+    if (!m_holdAnimation || m_holdAnimation->state() != QAbstractAnimation::Running) {
+        return;
+    }
+    m_holdAnimation->stop();
+    hideHold();
+    m_pickerModel->reset(rankForPicker(m_click, m_targets, m_config));
+    showPicker();
+}
+
+void Controller::hideHold()
+{
+    if (m_holdWindow) {
+        m_holdWindow->hide();
+    }
+}
+
+void Controller::ensureHoldEngine()
+{
+    if (m_holdEngine) {
+        return;
+    }
+    m_holdEngine = new QQmlApplicationEngine(this);
+    connect(m_holdEngine, &QQmlApplicationEngine::warnings, this, [](const QList<QQmlError> &warnings) {
+        for (const auto &w : warnings) {
+            qWarning() << "Tern hold:" << w.toString();
+        }
+    });
+    m_holdEngine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
+    m_holdEngine->loadFromModule(QStringLiteral("app.tern"), QStringLiteral("Hold"));
+    if (m_holdEngine->rootObjects().isEmpty()) {
+        qWarning() << "Tern: hold QML failed to load";
+        return;
+    }
+    m_holdWindow = qobject_cast<QWindow *>(m_holdEngine->rootObjects().constFirst());
+    if (m_holdWindow) {
+        configureLayerShell(m_holdWindow);
+    }
 }
 
 } // namespace Tern

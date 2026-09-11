@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QFileInfo>
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QUuid>
@@ -149,6 +150,8 @@ Config loadConfig(const QString &path)
     c.unshorten = o[QStringLiteral("unshorten")].toBool(true);
     c.openUnwrapped = o[QStringLiteral("openUnwrapped")].toBool(false);
     c.preferPwa = o[QStringLiteral("preferPwa")].toBool(true);
+    c.holdAutoOpen = o[QStringLiteral("holdAutoOpen")].toBool(true);
+    c.holdMs = o[QStringLiteral("holdMs")].toInt(1600);
     c.autostart = o[QStringLiteral("autostart")].toBool(false);
     c.defaultTargetId = o[QStringLiteral("defaultTargetId")].toString();
 
@@ -209,6 +212,8 @@ bool saveConfig(const QString &path, const Config &config)
     o[QStringLiteral("unshorten")] = config.unshorten;
     o[QStringLiteral("openUnwrapped")] = config.openUnwrapped;
     o[QStringLiteral("preferPwa")] = config.preferPwa;
+    o[QStringLiteral("holdAutoOpen")] = config.holdAutoOpen;
+    o[QStringLiteral("holdMs")] = config.holdMs;
     o[QStringLiteral("autostart")] = config.autostart;
     o[QStringLiteral("defaultTargetId")] = config.defaultTargetId;
     o[QStringLiteral("hiddenTargetIds")] = QJsonArray::fromStringList(config.hiddenTargetIds);

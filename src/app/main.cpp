@@ -40,6 +40,9 @@ static int explainUrl(const QString &url)
     std::fprintf(stdout, "host\t%s\n", qPrintable(click.host));
     std::fprintf(stdout, "action\t%s\n", actionName(d.action));
     std::fprintf(stdout, "reason\t%s\n", qPrintable(d.reason));
+    if (!d.memoryKey.isEmpty()) {
+        std::fprintf(stdout, "memoryKey\t%s\n", qPrintable(d.memoryKey));
+    }
     if (!d.target.id.isEmpty()) {
         std::fprintf(stdout, "target\t%s\t%s\n", qPrintable(d.target.id), qPrintable(d.target.displayName()));
     }
@@ -81,13 +84,20 @@ int main(int argc, char **argv)
     QCommandLineOption listOpt(QStringLiteral("list"), QStringLiteral("Print discovered targets and exit"));
     QCommandLineOption explainOpt(QStringLiteral("explain"), QStringLiteral("Print the routing decision and exit"));
     QCommandLineOption settingsOpt(QStringLiteral("settings"), QStringLiteral("Open settings"));
+    QCommandLineOption configPathOpt(QStringLiteral("config-path"), QStringLiteral("Print the config file path and exit"));
     parser.addOption(daemonOpt);
     parser.addOption(pickOpt);
     parser.addOption(listOpt);
     parser.addOption(explainOpt);
     parser.addOption(settingsOpt);
+    parser.addOption(configPathOpt);
     parser.addPositionalArgument(QStringLiteral("url"), QStringLiteral("URL to open"), QStringLiteral("[url]"));
     parser.process(app);
+
+    if (parser.isSet(configPathOpt)) {
+        std::fprintf(stdout, "%s\n", qPrintable(Tern::defaultConfigPath()));
+        return 0;
+    }
 
     if (parser.isSet(listOpt)) {
         const auto cfg = Tern::loadConfig(Tern::defaultConfigPath());

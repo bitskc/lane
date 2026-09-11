@@ -29,13 +29,21 @@ Choosy / Velja / Opener, not a settings dialog:
 
 ## Decision order
 
-1. Explicit rules (first match)
-2. Remembered host from “Always for …”
-3. Unique PWA scope, if Prefer PWAs is on
+1. Explicit rules (first match) — open immediately, no hold
+2. Remembered destination key (path-scoped, longest match wins)
+3. Unique PWA scope, if Prefer PWAs is on (origin-wide PWA scopes do not auto-open tenant paths)
 4. Picker policy (`no-rule` default)
 5. Default target
 
 Rules beat convenience. A work GitHub rule will beat the GitHub PWA.
+
+### Hold on silent opens
+
+Remembered, PWA, and default opens are *silent convenience* opens. When
+`holdAutoOpen` is on (default), Tern shows a compact hold HUD for `holdMs`
+(default 1600 ms) before launching. Enter launches now; Esc or Space cancels
+the hold and shows the picker. A new URL arriving during the hold cancels
+the previous hold. Rule matches are never held — the user wrote the rule.
 
 ## Non-goals (v1)
 
