@@ -117,10 +117,20 @@ ready.
    git push origin v0.2.0
    ```
 
-10. **GitHub Release.** Pushing a `v*` tag triggers the release
-    workflow in `.github/workflows`, which builds and publishes the
-    GitHub Release from the tag. If that workflow is ever missing or
-    broken, create the release by hand instead of skipping it:
+10. **GitHub Release.** Pushing a `v*` tag triggers
+    `.github/workflows/release.yml`. That workflow does not build
+    anything; it just creates the GitHub Release for the tag and
+    fills the release notes from the matching `## [x.y.z]` section of
+    `CHANGELOG.md`. GitHub attaches the source `.zip` and `.tar.gz`
+    to the release automatically. There is no separate binary,
+    AppImage, AUR, or Flathub artifact to build or upload.
+
+    Building and testing happen separately, in
+    `.github/workflows/ci.yml`, on every push and pull request to
+    `main`.
+
+    If the release workflow is ever missing or broken, create the
+    release by hand instead of skipping it:
 
     ```bash
     gh release create v0.2.0 --title "Tern 0.2.0" \

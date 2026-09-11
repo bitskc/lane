@@ -54,12 +54,6 @@ First public release.
   Personal and hobby use is free; commercial use needs a separate
   license. See `COMMERCIAL.md`.
 
-### Fixed
-
-- Picker overlay window now finds the launcher binary correctly from
-  Plasma's application menu (was previously relying on a relative
-  path that only worked from a shell with the right `PATH`).
-
 ### Security
 
 - Tern only ever opens `http` and `https` URLs. It rejects `file`,

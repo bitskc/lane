@@ -27,6 +27,7 @@ jobs:
                 if (line == ver) found=1
                 next
               }
+              found && /^\[/ { exit }
               found { print }
             ' CHANGELOG.md)
             if [[ -n "${body//[[:space:]]/}" ]]; then
