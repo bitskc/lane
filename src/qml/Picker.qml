@@ -19,7 +19,7 @@ Window {
     LayerShell.Window.scope: "tern-picker"
     LayerShell.Window.exclusionZone: -1
 
-    readonly property int maxRows: 6
+    readonly property int maxRows: 8
     readonly property int rowHeight: 48
 
     onVisibleChanged: {
@@ -61,7 +61,7 @@ Window {
     Rectangle {
         id: dim
         anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.38)
+        color: Qt.rgba(0, 0, 0, 0.12)
         opacity: root.visible ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         MouseArea {

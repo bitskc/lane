@@ -7,6 +7,11 @@ version is 0, minor releases may still contain breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- Picker shows eight rows instead of six.
+- Overlay tints the desktop instead of dimming it out. (Picker/hold no longer blur the whole screen.)
+
 ### Fixed
 
 - Picker and hold overlays failed to load on current Kirigami (6.28),

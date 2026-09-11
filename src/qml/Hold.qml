@@ -29,7 +29,7 @@ Window {
     Rectangle {
         id: dim
         anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.28)
+        color: Qt.rgba(0, 0, 0, 0.08)
         opacity: root.visible ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
         MouseArea {

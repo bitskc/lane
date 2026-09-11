@@ -15,7 +15,6 @@
 #include <KCrash>
 #include <KNotification>
 #include <KStatusNotifierItem>
-#include <KWindowEffects>
 
 #include <QClipboard>
 #include <QDebug>
@@ -596,7 +595,6 @@ void Controller::configureLayerShell(QWindow *window, const QString &scope)
     if (screen) {
         window->setGeometry(screen->geometry());
     }
-    KWindowEffects::enableBlurBehind(window, true);
 }
 
 UnshortenFn Controller::unshortenFn() const
