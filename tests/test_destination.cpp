@@ -165,6 +165,29 @@ private Q_SLOTS:
         QCOMPARE(d.reason, QStringLiteral("pwa"));
     }
 
+    void suggestedLadderIndexTenantPathDefaultsToPathScope()
+    {
+        const int idx = suggestedLadderIndex(QStringLiteral("https://github.com/bitskc/tern"), nullptr, {});
+        QCOMPARE(idx, 1);
+        const QStringList ladder = destinationLadder(QStringLiteral("https://github.com/bitskc/tern"));
+        QCOMPARE(ladder.value(idx), QStringLiteral("github.com/bitskc"));
+    }
+
+    void suggestedLadderIndexChromePathStaysHost()
+    {
+        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://news.ycombinator.com/item?id=1"), nullptr, {}), 0);
+    }
+
+    void suggestedLadderIndexRootPathStaysHost()
+    {
+        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://example.com/"), nullptr, {}), 0);
+    }
+
+    void suggestedLadderIndexLoginIsChrome()
+    {
+        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://github.com/login"), nullptr, {}), 0);
+    }
+
     void configRoundTripHoldAndPathKey()
     {
         QTemporaryDir dir;

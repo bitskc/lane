@@ -79,6 +79,7 @@ const QSet<QString> &chromeSegments()
         QStringLiteral("timer"),
         QStringLiteral("timers"),
         QStringLiteral("unattended"),
+        QStringLiteral("item"),
         QStringLiteral("watch"),
         QStringLiteral("www"),
     };
@@ -183,6 +184,7 @@ QString lookupRemembered(const QString &url, const QMap<QString, QString> &remem
 
 int suggestedLadderIndex(const QString &url, const Target *target, const QMap<QString, QString> &remembered)
 {
+    Q_UNUSED(remembered);
     const QStringList ladder = destinationLadder(url);
     if (ladder.isEmpty()) {
         return 0;
@@ -193,25 +195,21 @@ int suggestedLadderIndex(const QString &url, const Target *target, const QMap<QS
     const QStringList segs = pathSegments(p.path);
     const bool tenantPath = !segs.isEmpty() && !isAppChromeSegment(segs.first());
 
-    if (target && target->kind == Kind::Pwa && !target->pwaScope.isEmpty()) {
-        if (!originWideScope(target->pwaScope)) {
-            const ParsedUrl scope = parseUrl(target->pwaScope);
-            QString want = scope.host;
-            for (const auto &s : pathSegments(scope.path)) {
-                want += QLatin1Char('/') + s;
-            }
-            const int found = ladder.indexOf(want);
-            if (found >= 0) {
-                idx = found;
-            }
-        } else if (tenantPath) {
-            idx = 1;
+    // Scoped PWA: prefer the ladder key matching its scope.
+    if (target && target->kind == Kind::Pwa && !target->pwaScope.isEmpty()
+        && !originWideScope(target->pwaScope)) {
+        const ParsedUrl scope = parseUrl(target->pwaScope);
+        QString want = scope.host;
+        for (const auto &s : pathSegments(scope.path)) {
+            want += QLatin1Char('/') + s;
         }
-    } else if (target && tenantPath) {
-        const QString existing = remembered.value(p.host);
-        if (!existing.isEmpty() && existing != target->id) {
-            idx = 1;
+        const int found = ladder.indexOf(want);
+        if (found >= 0) {
+            idx = found;
         }
+    } else if (tenantPath) {
+        // Tenant path (first segment not app-chrome): default to path-scoped.
+        idx = 1;
     }
     return qBound(0, idx, ladder.size() - 1);
 }

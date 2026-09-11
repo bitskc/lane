@@ -543,7 +543,7 @@ void Controller::ensureSettingsEngine()
     m_settingsWindow = qobject_cast<QWindow *>(m_settingsEngine->rootObjects().constFirst());
 }
 
-void Controller::configureLayerShell(QWindow *window)
+void Controller::configureLayerShell(QWindow *window, const QString &scope)
 {
     auto *ls = LayerShellQt::Window::get(window);
     ls->setLayer(LayerShellQt::Window::LayerOverlay);
@@ -555,7 +555,7 @@ void Controller::configureLayerShell(QWindow *window)
     ls->setAnchors(anchors);
     ls->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
     ls->setExclusiveZone(-1);
-    ls->setScope(QStringLiteral("tern-picker"));
+    ls->setScope(scope);
     ls->setWantsToBeOnActiveScreen(true);
     ls->setActivateOnShow(true);
     auto *screen = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
@@ -665,7 +665,7 @@ void Controller::ensureHoldEngine()
     }
     m_holdWindow = qobject_cast<QWindow *>(m_holdEngine->rootObjects().constFirst());
     if (m_holdWindow) {
-        configureLayerShell(m_holdWindow);
+        configureLayerShell(m_holdWindow, QStringLiteral("tern-hold"));
     }
 }
 

@@ -134,7 +134,7 @@ private:
     void ensurePickerEngine();
     void ensureSettingsEngine();
     void ensureHoldEngine();
-    void configureLayerShell(QWindow *window);
+    void configureLayerShell(QWindow *window, const QString &scope = QStringLiteral("tern-picker"));
     bool shouldHold(const QString &reason) const;
     void startHold(const Target &target, const QString &reason, const QString &memoryKey);
     void hideHold();
