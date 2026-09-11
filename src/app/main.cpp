@@ -72,8 +72,12 @@ int main(int argc, char **argv)
                      QStringLiteral("Open links in the right browser, profile, or app"),
                      KAboutLicense::Custom,
                      QStringLiteral("© 2026 Andy Hayes"));
+    about.setOrganizationDomain(QByteArrayLiteral("tern.app"));
     about.setDesktopFileName(QStringLiteral("app.tern.Tern"));
     KAboutData::setApplicationData(about);
+    app.setOrganizationDomain(QStringLiteral("tern.app"));
+    app.setApplicationName(QStringLiteral("Tern"));
+    app.setDesktopFileName(QStringLiteral("app.tern.Tern"));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Tern — Plasma link router"));
