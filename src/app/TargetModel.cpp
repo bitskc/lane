@@ -1,6 +1,6 @@
 #include "TargetModel.h"
 
-namespace Tern
+namespace Lane
 {
 
 TargetModel::TargetModel(QObject *parent)
@@ -109,4 +109,4 @@ QVariantList TargetModel::incognitoTargets() const
     return out;
 }
 
-} // namespace Tern
+} // namespace Lane

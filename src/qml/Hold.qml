@@ -10,13 +10,13 @@ Window {
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     visible: false
-    title: "Tern"
+    title: "Lane"
     width: Screen.width
     height: Screen.height
 
     LayerShell.Window.layer: LayerShell.Window.LayerOverlay
     LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityExclusive
-    LayerShell.Window.scope: "tern-hold"
+    LayerShell.Window.scope: "lane-hold"
     LayerShell.Window.exclusionZone: -1
 
     readonly property real progress: controller.holdProgress
@@ -54,6 +54,10 @@ Window {
         opacity: root.visible ? 1 : 0
         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         Behavior on opacity { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+
+        Accessible.role: Accessible.AlertMessage
+        Accessible.name: "Opening in " + controller.holdTargetName
+        Accessible.description: "Press Enter to open now, or Escape or Space to pick a different destination instead"
 
         Column {
             id: content

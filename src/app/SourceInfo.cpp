@@ -1,6 +1,6 @@
 #include "SourceInfo.h"
 
-namespace Tern
+namespace Lane
 {
 
 SourceInfo activeSource()
@@ -10,4 +10,4 @@ SourceInfo activeSource()
     return {};
 }
 
-} // namespace Tern
+} // namespace Lane

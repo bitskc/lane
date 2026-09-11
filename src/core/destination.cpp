@@ -4,7 +4,7 @@
 
 #include <QSet>
 
-namespace Tern
+namespace Lane
 {
 namespace
 {
@@ -229,4 +229,4 @@ bool pwaShouldAutoOpen(const Target &pwa, const QString &url)
     return false;
 }
 
-} // namespace Tern
+} // namespace Lane

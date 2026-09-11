@@ -4,7 +4,7 @@
 
 #include <QRegularExpression>
 
-namespace Tern
+namespace Lane
 {
 
 static QString haystack(const Rule &rule, const Click &click)
@@ -51,4 +51,4 @@ bool ruleMatches(const Rule &rule, const Click &click)
     return input.contains(pattern, Qt::CaseInsensitive);
 }
 
-} // namespace Tern
+} // namespace Lane

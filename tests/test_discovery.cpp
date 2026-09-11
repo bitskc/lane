@@ -8,11 +8,11 @@
 #include <QStandardPaths>
 #include <QTest>
 
-using namespace Tern;
+using namespace Lane;
 
 static QString fixtureRoot()
 {
-    return QStringLiteral(TERN_FIXTURE_ROOT);
+    return QStringLiteral(LANE_FIXTURE_ROOT);
 }
 
 // Recursively mirrors `src` into `dst`, overwriting any existing files.
@@ -68,7 +68,7 @@ private Q_SLOTS:
 
         QVERIFY(ids.contains(QStringLiteral("pwa:01KV62HYP6YRMPPPBMVTRA23HX")));
         QVERIFY(ids.contains(QStringLiteral("action:copy")));
-        QVERIFY(!ids.filter(QStringLiteral("app.tern")).size());
+        QVERIFY(!ids.filter(QStringLiteral("app.lane")).size());
 
         const bool hasZen = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
             return t.browserName == QLatin1String("Zen") && !t.incognito;

@@ -1,0 +1,14 @@
+[Global]
+AppName=Lane
+IconName=app.lane.Lane
+Comment=Link router
+
+[Event/opened]
+Name=Link opened
+Comment=Shown when Lane opens a link
+Action=Popup
+
+[Event/launch-failed]
+Name=Launch failed
+Comment=Shown when Lane cannot launch the selected destination
+Action=Popup

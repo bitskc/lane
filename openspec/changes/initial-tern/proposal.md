@@ -1,4 +1,4 @@
-# Tern initial product
+# Lane initial product
 
 Plasma-native default-browser proxy: discover browsers/profiles/PWAs, route with rules, remember hosts, picker overlay.
 
@@ -18,7 +18,7 @@ v1: discovery, pipeline (O365, unshorten, substitutions), rules, PWA auto-open, 
 - Picker is a Wayland layer-shell overlay sized to the active screen
 - Private/incognito/Tor stay available to rules but do not clutter the picker
 - Never steal the default browser except via the settings button
-- `tern --list` and `tern --explain URL` work without the unique daemon
+- `lane --list` and `lane --explain URL` work without the unique daemon
 
 ## Out of scope
 

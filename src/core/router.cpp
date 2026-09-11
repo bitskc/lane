@@ -6,7 +6,7 @@
 
 #include <QSet>
 
-namespace Tern
+namespace Lane
 {
 
 const Target *findTarget(const QList<Target> &targets, const QString &id)
@@ -17,6 +17,17 @@ const Target *findTarget(const QList<Target> &targets, const QString &id)
         }
     }
     return nullptr;
+}
+
+QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &config)
+{
+    QStringList out;
+    for (auto it = config.remembered.begin(); it != config.remembered.end(); ++it) {
+        if (!findTarget(targets, it.value())) {
+            out.append(it.key());
+        }
+    }
+    return out;
 }
 
 const Target *defaultTarget(const QList<Target> &targets, const Config &config)
@@ -77,7 +88,11 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
     QSet<QString> seen;
 
     auto push = [&](const Target &t) {
-        if (t.hidden || t.incognito || seen.contains(t.id)) {
+        // action:copy is never a row: it moved to a footer control (see
+        // Picker.qml) bound to Controller::copyCurrent(), so it must not
+        // consume a row or a number shortcut here regardless of how it
+        // would otherwise have been reached (targetOrder pinning included).
+        if (t.hidden || t.incognito || seen.contains(t.id) || t.id == QLatin1String("action:copy")) {
             return;
         }
         seen.insert(t.id);
@@ -97,11 +112,6 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
     }
     for (const auto &t : targets) {
         if (t.kind != Kind::Action) {
-            push(t);
-        }
-    }
-    for (const auto &t : targets) {
-        if (t.id == QLatin1String("action:copy")) {
             push(t);
         }
     }
@@ -154,6 +164,14 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
             d.reason = QStringLiteral("conflict");
             return d;
         }
+        // pickerPolicy is Never: the user asked to never see the picker, so
+        // a genuine conflict still honors the first matching rule rather
+        // than falling through past it.
+        d.action = Decision::Action::Launch;
+        d.target = *rules.front().second;
+        d.ruleId = rules.front().first->id;
+        d.reason = QStringLiteral("rule");
+        return d;
     }
 
     d.memoryKey = destinationKeyMatchesBest(click.matchUrl, config.remembered);
@@ -204,4 +222,4 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
     return d;
 }
 
-} // namespace Tern
+} // namespace Lane

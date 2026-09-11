@@ -7,7 +7,7 @@
 #include <QList>
 #include <QMap>
 
-namespace Tern
+namespace Lane
 {
 
 enum class Engine {
@@ -194,4 +194,4 @@ inline QString engineName(Engine e)
     return QStringLiteral("generic");
 }
 
-} // namespace Tern
+} // namespace Lane

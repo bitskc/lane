@@ -9,7 +9,7 @@
 #include <QTimer>
 #include <QUrl>
 
-namespace Tern
+namespace Lane
 {
 
 QString unshortenSync(const QString &url, int timeoutMs)
@@ -24,7 +24,7 @@ QString unshortenSync(const QString &url, int timeoutMs)
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     req.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
     req.setTransferTimeout(timeoutMs);
-    req.setRawHeader("User-Agent", "Tern/0.1");
+    req.setRawHeader("User-Agent", "Lane/0.1");
     req.setMaximumRedirectsAllowed(0);
 
     QNetworkReply *reply = nam.head(req);
@@ -62,4 +62,4 @@ QString unshortenSync(const QString &url, int timeoutMs)
     return result.isEmpty() ? url : result;
 }
 
-} // namespace Tern
+} // namespace Lane

@@ -7,4 +7,4 @@
 - [x] Settings: named rule targets, remembered hosts, custom apps
 - [x] CLI: `--list`, `--pick`, `--explain`, `--daemon`
 - [x] Tests for router, discovery, pipeline
-- [ ] User sets Tern as default browser from settings (not automatic)
+- [ ] User sets Lane as default browser from settings (not automatic)

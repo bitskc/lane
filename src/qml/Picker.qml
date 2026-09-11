@@ -10,17 +10,18 @@ Window {
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     visible: false
-    title: "Tern"
+    title: "Lane"
     width: Screen.width
     height: Screen.height
 
     LayerShell.Window.layer: LayerShell.Window.LayerOverlay
     LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityExclusive
-    LayerShell.Window.scope: "tern-picker"
+    LayerShell.Window.scope: "lane-picker"
     LayerShell.Window.exclusionZone: -1
 
     readonly property int maxRows: 8
     readonly property int rowHeight: 48
+    readonly property int sectionHeaderHeight: 26
 
     onVisibleChanged: {
         if (visible) {
@@ -33,30 +34,11 @@ Window {
     }
 
     Shortcut { sequence: "Escape"; onActivated: controller.cancelPicker() }
-    Shortcut { sequence: "Ctrl+C"; onActivated: controller.copyCurrent() }
     Shortcut { sequence: "Return"; onActivated: controller.pick(list.currentIndex) }
     Shortcut { sequence: "Enter"; onActivated: controller.pick(list.currentIndex) }
     Shortcut { sequence: "Down"; onActivated: list.incrementCurrentIndex() }
     Shortcut { sequence: "Up"; onActivated: list.decrementCurrentIndex() }
     Shortcut { sequence: "Alt+A"; onActivated: controller.alwaysForHost = !controller.alwaysForHost }
-    Shortcut {
-        sequence: ","
-        enabled: filterField.text.length === 0 && controller.destinationIndex < controller.destinationLadder.length - 1
-        onActivated: controller.destinationIndex = controller.destinationIndex + 1
-    }
-    Shortcut {
-        sequence: "."
-        enabled: filterField.text.length === 0 && controller.destinationIndex > 0
-        onActivated: controller.destinationIndex = controller.destinationIndex - 1
-    }
-    Repeater {
-        model: 9
-        Shortcut {
-            sequence: String(index + 1)
-            enabled: filterField.text.length === 0
-            onActivated: controller.pick(index)
-        }
-    }
 
     Rectangle {
         id: dim
@@ -86,6 +68,12 @@ Window {
         opacity: root.visible ? 1 : 0
         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+
+        Accessible.role: Accessible.Dialog
+        Accessible.name: "Open link"
+        Accessible.description: controller.currentHost.length > 0
+                                 ? "Choose where to open " + controller.currentHost
+                                 : "Choose where to open this link"
 
         Column {
             id: content
@@ -150,6 +138,45 @@ Window {
                     }
                     Keys.onDownPressed: list.incrementCurrentIndex()
                     Keys.onUpPressed: list.decrementCurrentIndex()
+                    // A focused TextField claims plain character keys (digits,
+                    // comma, period) and Ctrl+C at the shortcut-override stage
+                    // before a sibling Shortcut{} ever sees them, so those keys
+                    // are handled here instead. Return/Enter/Escape/Up/Down/
+                    // Alt+A are not claimed that way and stay as Shortcut{}
+                    // above.
+                    Keys.onPressed: (event) => {
+                        if (event.modifiers === Qt.ControlModifier && event.key === Qt.Key_C) {
+                            controller.copyCurrent()
+                            event.accepted = true
+                            return
+                        }
+                        if (filterField.text.length > 0 || event.modifiers !== Qt.NoModifier) {
+                            return
+                        }
+                        if (event.key >= Qt.Key_1 && event.key <= Qt.Key_9) {
+                            const row = event.key - Qt.Key_1
+                            if (row < root.maxRows) {
+                                controller.pick(row)
+                                event.accepted = true
+                            }
+                            return
+                        }
+                        if (event.key === Qt.Key_Comma) {
+                            if (controller.destinationIndex < controller.destinationLadder.length - 1) {
+                                controller.destinationIndex = controller.destinationIndex + 1
+                                event.accepted = true
+                            }
+                        } else if (event.key === Qt.Key_Period) {
+                            if (controller.destinationIndex > 0) {
+                                controller.destinationIndex = controller.destinationIndex - 1
+                                event.accepted = true
+                            }
+                        }
+                    }
+
+                    Accessible.role: Accessible.EditableText
+                    Accessible.name: "Filter destinations"
+                    Accessible.description: "Type to filter the list of destinations; number keys 1 through " + root.maxRows + " open a row directly when empty"
                 }
             }
 
@@ -157,12 +184,35 @@ Window {
                 id: list
                 width: parent.width
                 height: Math.min(root.maxRows, Math.max(1, count)) * root.rowHeight
+                        + (count > 0 ? 2 : 0) * root.sectionHeaderHeight
                 model: controller.pickerModel
                 clip: true
                 spacing: 0
                 currentIndex: 0
                 boundsBehavior: Flickable.StopAtBounds
                 highlightMoveDuration: 80
+
+                Accessible.role: Accessible.List
+                Accessible.name: "Destinations"
+
+                section.property: "section"
+                section.criteria: ViewSection.FullString
+                section.delegate: Rectangle {
+                    required property string section
+                    width: ListView.view.width
+                    height: root.sectionHeaderHeight
+                    color: "transparent"
+                    QQC.Label {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: section
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                        opacity: 0.5
+                    }
+                }
+
                 delegate: Rectangle {
                     required property int index
                     required property string name
@@ -171,6 +221,7 @@ Window {
                     required property string shortcut
                     required property bool suggested
                     required property string kind
+                    required property string colorName
 
                     width: ListView.view.width
                     height: root.rowHeight
@@ -178,6 +229,10 @@ Window {
                     color: ListView.isCurrentItem
                            ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.36)
                            : "transparent"
+
+                    Accessible.role: Accessible.ListItem
+                    Accessible.name: name + (shortcut.length > 0 && filterField.text.length === 0 ? ", shortcut " + shortcut : "")
+                    Accessible.description: kind === "pwa" ? "App" : (kind === "action" ? "Action" : subtitle)
 
                     MouseArea {
                         anchors.fill: parent
@@ -195,6 +250,22 @@ Window {
                             source: iconName
                             Layout.preferredWidth: 28
                             Layout.preferredHeight: 28
+                        }
+                        Rectangle {
+                            // Container rows carry a color from the browser's
+                            // own container definition; an unmapped color name
+                            // (containerColor() returning an invalid QColor)
+                            // falls back to a neutral dot rather than black,
+                            // and this is never the only way a container row
+                            // is told apart (its kind/subtitle text still says
+                            // so too).
+                            visible: kind === "container"
+                            Layout.preferredWidth: 8
+                            Layout.preferredHeight: 8
+                            radius: 4
+                            color: colorName.length > 0
+                                   ? colorName
+                                   : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.35)
                         }
                         Column {
                             Layout.fillWidth: true
@@ -275,6 +346,42 @@ Window {
                         Layout.preferredWidth: 24
                         Layout.preferredHeight: 24
                     }
+                }
+                Item {
+                    id: copyHint
+                    Layout.preferredWidth: copyRow.implicitWidth
+                    Layout.preferredHeight: 16
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Copy link"
+                    Accessible.description: "Copy the current link to the clipboard, shortcut Control C"
+
+                    RowLayout {
+                        id: copyRow
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 4
+                        Kirigami.Icon {
+                            source: "edit-copy"
+                            Layout.preferredWidth: 12
+                            Layout.preferredHeight: 12
+                            opacity: copyHover.hovered ? 0.7 : 0.4
+                        }
+                        QQC.Label {
+                            text: "^C"
+                            font.pixelSize: 10
+                            font.family: "monospace"
+                            opacity: copyHover.hovered ? 0.7 : 0.4
+                        }
+                    }
+                    HoverHandler {
+                        id: copyHover
+                        cursorShape: Qt.PointingHandCursor
+                    }
+                    TapHandler {
+                        onTapped: controller.copyCurrent()
+                    }
+                    QQC.ToolTip.visible: copyHover.hovered
+                    QQC.ToolTip.text: "Copy link"
                 }
                 QQC.Label {
                     text: "esc"

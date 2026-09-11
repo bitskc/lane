@@ -1,20 +1,27 @@
-pkgname=tern
+pkgname=lane
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Plasma-native link router: open the right browser, profile, or app"
 arch=('x86_64')
-url="https://github.com/bitskc/tern"
+url="https://github.com/bitskc/lane"
 license=('custom:PolyForm-Noncommercial-1.0.0')
 depends=(
   qt6-base qt6-declarative qt6-svg
   kirigami kirigami-addons
   ki18n kcoreaddons kconfig kdbusaddons knotifications
-  kwindowsystem kiconthemes kstatusnotifieritem
+  kwindowsystem kiconthemes kcolorscheme kcrash kstatusnotifieritem
   layer-shell-qt qqc2-desktop-style
 )
 makedepends=(cmake extra-cmake-modules ninja)
-source=("$pkgname-$pkgver.tar.gz")
-sha256sums=('SKIP')
+# PENDING: the GitHub repo (bitskc/tern) has not been renamed to bitskc/lane
+# yet. GitHub generates a tag's source tarball from the repo's *current*
+# name, so this source URL and checksum cannot be correct until the rename
+# happens: renaming changes the tarball's top-level directory name (and
+# therefore its bytes and sha256) for this exact v0.1.0 tag. Once the repo
+# is renamed, download this URL and run `sha256sum` on it to get the real
+# value below. Do not guess a checksum here.
+source=("$pkgname-$pkgver.tar.gz::https://github.com/bitskc/lane/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP') # PENDING: regenerate after the GitHub repo rename (see note above)
 
 build() {
   cmake -S "$srcdir/$pkgname-$pkgver" -B build -G Ninja \
@@ -24,9 +31,11 @@ build() {
 }
 
 check() {
-  ctest --test-dir build --output-on-failure
+  QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
 }
 
 package() {
   DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 "$srcdir/$pkgname-$pkgver/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

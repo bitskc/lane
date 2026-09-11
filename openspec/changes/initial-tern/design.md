@@ -1,6 +1,6 @@
 # Design
 
-Tern is a resident Qt 6 process. The unique D-Bus name is `app.tern.Tern`. Cold-start Qt is too slow for a picker, so autostart runs `tern --daemon`.
+Lane is a resident Qt 6 process. The unique D-Bus name is `app.lane.Lane`. Cold-start Qt is too slow for a picker, so autostart runs `lane --daemon`.
 
 ## Decision order
 

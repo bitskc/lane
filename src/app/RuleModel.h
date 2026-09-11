@@ -4,7 +4,7 @@
 
 #include <QAbstractListModel>
 
-namespace Tern
+namespace Lane
 {
 
 class RuleModel : public QAbstractListModel
@@ -42,4 +42,4 @@ private:
     QList<Rule> m_rules;
 };
 
-} // namespace Tern
+} // namespace Lane

@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=Tern
+Name=Lane
 GenericName=Link Router
 Comment=Open links in the right browser, profile, or app
-Exec=@TERN_BIN@ %u
-TryExec=@TERN_BIN@
-Icon=app.tern.Tern
+Exec=@LANE_BIN@ %u
+TryExec=@LANE_BIN@
+Icon=app.lane.Lane
 Terminal=false
 StartupNotify=true
 DBusActivatable=true

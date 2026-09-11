@@ -3,6 +3,7 @@
 #include "PickerModel.h"
 #include "RuleModel.h"
 #include "TargetModel.h"
+#include "UpdateChecker.h"
 #include "core/types.h"
 #include "core/pipeline.h"
 
@@ -14,7 +15,7 @@
 
 class KStatusNotifierItem;
 
-namespace Tern
+namespace Lane
 {
 
 class Controller : public QObject
@@ -44,12 +45,19 @@ class Controller : public QObject
     Q_PROPERTY(QStringList targetNames READ targetNames NOTIFY settingsChanged)
     Q_PROPERTY(QStringList rememberedHosts READ rememberedHosts NOTIFY settingsChanged)
     Q_PROPERTY(bool holdAutoOpen READ holdAutoOpen WRITE setHoldAutoOpen NOTIFY settingsChanged)
+    Q_PROPERTY(int holdMs READ holdMs WRITE setHoldMs NOTIFY settingsChanged)
     Q_PROPERTY(qreal holdProgress READ holdProgress NOTIFY holdProgressChanged)
     Q_PROPERTY(QString holdTargetName READ holdTargetName NOTIFY holdChanged)
     Q_PROPERTY(QString holdDestinationKey READ holdDestinationKey NOTIFY holdChanged)
     Q_PROPERTY(QStringList destinationLadder READ destinationLadder NOTIFY currentChanged)
     Q_PROPERTY(int destinationIndex READ destinationIndex WRITE setDestinationIndex NOTIFY currentChanged)
     Q_PROPERTY(QString currentDestinationKey READ currentDestinationKey NOTIFY currentChanged)
+    Q_PROPERTY(QString projectUrl READ projectUrl CONSTANT)
+    Q_PROPERTY(QString updateCheckState READ updateCheckState NOTIFY updateStateChanged)
+    Q_PROPERTY(QString updateLatestVersion READ updateLatestVersion NOTIFY updateStateChanged)
+    Q_PROPERTY(QString updateReleaseUrl READ updateReleaseUrl NOTIFY updateStateChanged)
+    Q_PROPERTY(QString updateErrorMessage READ updateErrorMessage NOTIFY updateStateChanged)
+    Q_PROPERTY(QString updateLastChecked READ updateLastChecked NOTIFY updateStateChanged)
 public:
     explicit Controller(QObject *parent = nullptr);
 
@@ -57,6 +65,12 @@ public:
     TargetModel *targetModel() const { return m_targetModel; }
     RuleModel *ruleModel() const { return m_ruleModel; }
     QString appVersion() const;
+    QString projectUrl() const;
+    QString updateCheckState() const;
+    QString updateLatestVersion() const { return m_updateChecker->latestVersion(); }
+    QString updateReleaseUrl() const { return m_updateChecker->releaseUrl(); }
+    QString updateErrorMessage() const { return m_updateChecker->errorMessage(); }
+    QString updateLastChecked() const;
 
     QString currentUrl() const { return m_click.openUrl; }
     QString currentHost() const { return m_click.host; }
@@ -84,6 +98,8 @@ public:
 
     bool holdAutoOpen() const { return m_config.holdAutoOpen; }
     void setHoldAutoOpen(bool on);
+    int holdMs() const { return m_config.holdMs; }
+    void setHoldMs(int ms);
     qreal holdProgress() const { return m_holdProgress; }
     QString holdTargetName() const { return m_holdTargetName; }
     QString holdDestinationKey() const { return m_holdDestinationKey; }
@@ -115,10 +131,15 @@ public:
     Q_INVOKABLE QString displayNameFor(const QString &id) const;
     Q_INVOKABLE QString rememberedTarget(const QString &host) const;
     Q_INVOKABLE void forgetHost(const QString &host);
-    Q_INVOKABLE void addCustomTarget(const QString &name, const QString &command);
+    Q_INVOKABLE QString addCustomTarget(const QString &name, const QString &command);
+    Q_INVOKABLE bool targetExists(const QString &id) const;
+    Q_INVOKABLE QStringList danglingRememberedHosts() const;
+    Q_INVOKABLE void clearDeadRemembered();
     Q_INVOKABLE void removeCustomTarget(const QString &id);
     Q_INVOKABLE void renameTarget(const QString &id, const QString &name);
     Q_INVOKABLE void moveTarget(const QString &id, int newIndexInKind);
+    Q_INVOKABLE void checkForUpdates();
+    Q_INVOKABLE void openExternalUrl(const QString &url);
 Q_SIGNALS:
     void currentChanged();
     void settingsChanged();
@@ -126,19 +147,27 @@ Q_SIGNALS:
     void pickerVisibleChanged(bool visible);
     void holdProgressChanged();
     void holdChanged();
-
+    void updateStateChanged();
 private:
     void reload();
     void persist();
     void applyDecision(const Decision &d);
     void showPicker();
     void hidePicker();
-    void launch(const Target &target, const QString &reason);
+    void launch(const Target &target, const QString &reason, const QString &activationToken = QString());
+    // Requests a fresh xdg-activation token from `window` (its most recent
+    // input event authorizes the token) and launches once the compositor
+    // answers, or immediately once a short deadline passes with no answer.
+    // `window` is null for a launch with no Lane-owned surface involved
+    // (nothing was ever shown), in which case whatever inbound activation
+    // token this click arrived with (see openUrl()) is used instead.
+    void requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window);
     void toast(const Target &target, const QString &reason);
+    void notifyBlocked();
     void ensurePickerEngine();
     void ensureSettingsEngine();
     void ensureHoldEngine();
-    void configureLayerShell(QWindow *window, const QString &scope = QStringLiteral("tern-picker"));
+    void configureLayerShell(QWindow *window, const QString &scope = QStringLiteral("lane-picker"));
     bool shouldHold(const QString &reason) const;
     void startHold(const Target &target, const QString &reason, const QString &memoryKey);
     void hideHold();
@@ -149,10 +178,17 @@ private:
     QList<Target> m_targets;
     Click m_click;
     bool m_alwaysForHost = false;
+    // Whatever inbound XDG_ACTIVATION_TOKEN this click's openUrl() call
+    // carried (from KDBusService relaying a caller's token, or inherited at
+    // process start), consumed at most once per click. Used only for a
+    // direct silent launch; the picker and hold paths request their own
+    // fresh token instead (see requestActivationAndLaunch()).
+    QString m_pendingActivationToken;
 
     PickerModel *m_pickerModel = nullptr;
     TargetModel *m_targetModel = nullptr;
     RuleModel *m_ruleModel = nullptr;
+    UpdateChecker *m_updateChecker = nullptr;
 
     QQmlApplicationEngine *m_pickerEngine = nullptr;
     QQmlApplicationEngine *m_settingsEngine = nullptr;
@@ -173,4 +209,4 @@ private:
     int m_destinationIndex = 0;
 };
 
-} // namespace Tern
+} // namespace Lane

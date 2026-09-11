@@ -10,6 +10,17 @@ FormCard.FormCardPage {
 
     readonly property var scopes: ["domain", "path", "any"]
     readonly property var scopeLabels: ["Domain", "Path", "Entire URL"]
+    property var danglingHosts: []
+
+    function refreshDangling() {
+        danglingHosts = controller.danglingRememberedHosts()
+    }
+
+    Component.onCompleted: refreshDangling()
+    Connections {
+        target: controller
+        function onSettingsChanged() { page.refreshDangling() }
+    }
 
     FormCard.FormHeader {
         title: "Match first, then remembered destinations, then apps"
@@ -25,6 +36,7 @@ FormCard.FormCardPage {
                 required property bool enabled
                 required property bool isRegex
                 readonly property int ruleIndex: index
+                readonly property bool targetMissing: !controller.targetExists(targetId)
                 spacing: 0
                 width: parent ? parent.width : 100
 
@@ -44,6 +56,27 @@ FormCard.FormCardPage {
                     model: controller.targetNames
                     currentIndex: Math.max(0, controller.targetIds.indexOf(targetId))
                     onActivated: controller.ruleModel.setTargetId(ruleIndex, controller.targetIds[currentIndex])
+                }
+                RowLayout {
+                    visible: targetMissing
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Kirigami.Units.largeSpacing
+                    Layout.rightMargin: Kirigami.Units.largeSpacing
+                    Layout.bottomMargin: Kirigami.Units.smallSpacing
+                    spacing: Kirigami.Units.smallSpacing
+                    Kirigami.Icon {
+                        source: "data-warning"
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                        color: Kirigami.Theme.neutralTextColor
+                    }
+                    QQC.Label {
+                        Layout.fillWidth: true
+                        text: "This rule's destination no longer exists (" + targetId + "). Pick a new one or remove the rule; it will never match until you do."
+                        color: Kirigami.Theme.neutralTextColor
+                        font: Kirigami.Theme.smallFont
+                        wrapMode: Text.WordWrap
+                    }
                 }
                 FormCard.FormSwitchDelegate {
                     text: "Regular expression"
@@ -84,10 +117,23 @@ FormCard.FormCardPage {
             model: controller.rememberedHosts
             delegate: FormCard.FormButtonDelegate {
                 required property string modelData
+                readonly property bool targetMissing: !controller.targetExists(controller.rememberedTarget(modelData))
                 text: modelData
-                description: controller.displayNameFor(controller.rememberedTarget(modelData))
-                icon.name: "edit-delete"
+                description: targetMissing
+                             ? "Destination no longer exists (" + controller.rememberedTarget(modelData) + ")"
+                             : controller.displayNameFor(controller.rememberedTarget(modelData))
+                icon.name: targetMissing ? "data-warning" : "edit-delete"
                 onClicked: controller.forgetHost(modelData)
+            }
+        }
+        FormCard.FormButtonDelegate {
+            visible: page.danglingHosts.length > 0
+            text: "Clear " + page.danglingHosts.length + " broken " + (page.danglingHosts.length === 1 ? "entry" : "entries")
+            description: "Removes remembered destinations pointing at a target that is no longer installed."
+            icon.name: "edit-clear-history"
+            onClicked: {
+                controller.clearDeadRemembered()
+                page.refreshDangling()
             }
         }
     }

@@ -1,12 +1,12 @@
 [Unit]
-Description=Tern link router
+Description=Lane link router
 PartOf=graphical-session.target
 After=plasma-plasmashell.service
 
 [Service]
 Type=dbus
-BusName=app.tern.Tern
-ExecStart=@TERN_BIN@ --daemon
+BusName=app.lane.Lane
+ExecStart=@LANE_BIN@ --daemon
 Restart=on-failure
 
 [Install]

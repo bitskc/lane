@@ -3,8 +3,9 @@
 #include "urlutil.h"
 
 #include <QRegularExpression>
+#include <QSet>
 
-namespace Tern
+namespace Lane
 {
 
 Click runPipeline(const QString &rawUrl, const Config &config, const UnshortenFn &unshorten)
@@ -17,9 +18,22 @@ Click runPipeline(const QString &rawUrl, const Config &config, const UnshortenFn
         working = unwrapO365(working);
     }
 
-    if (config.unshorten && unshorten && isShortener(working) && isSafeOpenUrl(working)) {
-        const QString expanded = unshorten(working);
-        if (isSafeOpenUrl(expanded) && !isPrivateOrLocalHost(hostOf(expanded))) {
+    if (config.unshorten && unshorten) {
+        static constexpr int kMaxUnshortenHops = 4;
+        QSet<QString> visited;
+        for (int hop = 0; hop < kMaxUnshortenHops; ++hop) {
+            if (!isShortener(working) || !isSafeOpenUrl(working)) {
+                break;
+            }
+            if (visited.contains(working)) {
+                // Redirect loop: A -> B -> A. Stop where we are rather than spin.
+                break;
+            }
+            visited.insert(working);
+            const QString expanded = unshorten(working);
+            if (expanded == working || !isSafeOpenUrl(expanded) || isPrivateOrLocalHost(hostOf(expanded))) {
+                break;
+            }
             working = expanded;
         }
     }
@@ -51,4 +65,4 @@ Click runPipeline(const QString &rawUrl, const Config &config, const UnshortenFn
     return click;
 }
 
-} // namespace Tern
+} // namespace Lane

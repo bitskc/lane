@@ -17,7 +17,7 @@
 #include <QRegularExpression>
 
 
-namespace Tern
+namespace Lane
 {
 namespace
 {
@@ -49,7 +49,7 @@ QString firstToken(const QString &execLine)
 bool skipDesktopId(const QString &id)
 {
     const QString lower = id.toLower();
-    return lower.startsWith(QLatin1String("app.tern"))
+    return lower.startsWith(QLatin1String("app.lane"))
         || lower.startsWith(QLatin1String("ffpwa-"))
         || lower.startsWith(QLatin1String("userapp-"))
         || lower.contains(QLatin1String("firefoxpwa"))
@@ -350,7 +350,7 @@ QColor containerColor(const QString &name)
 
 // Only a handful of stock contextual identities ship without an explicit
 // "name"; they're addressed by l10nId instead. Any l10nId outside this set
-// is an identity Tern doesn't recognize (a future Firefox default, or a
+// is an identity Lane doesn't recognize (a future Firefox default, or a
 // corrupted entry) and is skipped rather than shown as a raw key.
 QString containerL10nName(const QString &l10nId)
 {
@@ -751,7 +751,7 @@ QList<Target> actionTargets()
     copy.kind = Kind::Action;
     copy.engine = Engine::Action;
     copy.name = QStringLiteral("Copy link");
-    copy.browserName = QStringLiteral("Tern");
+    copy.browserName = QStringLiteral("Lane");
     copy.subtitle = QStringLiteral("Clipboard");
     copy.icon = QStringLiteral("edit-copy");
 
@@ -760,7 +760,7 @@ QList<Target> actionTargets()
     mail.kind = Kind::Action;
     mail.engine = Engine::Action;
     mail.name = QStringLiteral("Email link");
-    mail.browserName = QStringLiteral("Tern");
+    mail.browserName = QStringLiteral("Lane");
     mail.subtitle = QStringLiteral("Mail");
     mail.icon = QStringLiteral("mail-sent");
     mail.exec = QStringLiteral("xdg-email");
@@ -923,4 +923,4 @@ QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id,
     return fullOrder;
 }
 
-} // namespace Tern
+} // namespace Lane

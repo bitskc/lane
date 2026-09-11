@@ -3,7 +3,7 @@
 #include <QString>
 #include <QUrl>
 
-namespace Tern
+namespace Lane
 {
 
 struct ParsedUrl {
@@ -29,4 +29,4 @@ bool isPrivateOrLocalHost(const QString &host);
 QString displayUrl(const QString &raw);
 QString sanitizedOpenUrl(const QString &raw);
 
-} // namespace Tern
+} // namespace Lane

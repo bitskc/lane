@@ -5,7 +5,7 @@
 #include <QSet>
 #include <QUrlQuery>
 
-namespace Tern
+namespace Lane
 {
 
 static const QSet<QString> kShorteners = {
@@ -234,4 +234,4 @@ QString displayUrl(const QString &raw)
     return s;
 }
 
-} // namespace Tern
+} // namespace Lane

@@ -1,4 +1,4 @@
-# Tern
+# Lane
 
 Plasma-native link router (Qt 6 / Kirigami).
 
@@ -19,7 +19,7 @@ When the user's request matches an available skill, invoke it via the Skill tool
 - O365 unwrap is for matching only unless `openUnwrapped` is set.
 - Hidden targets stay hidden across rediscover.
 - Picker must be a layer-shell overlay, not a normal Wayland window.
-- Config is `~/.config/tern/config.json`. No live reload; restart daemon after edits.
+- Config is `~/.config/lane/config.json`. No live reload; restart daemon after edits.
 
 ## License
 

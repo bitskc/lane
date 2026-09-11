@@ -7,7 +7,7 @@ FormCard.FormCardPage {
 
     readonly property var policyIds: ["no-rule", "always", "conflict", "never"]
     readonly property var policyLabels: [
-        "Ask when Tern does not already know",
+        "Ask when Lane does not already know",
         "Always ask",
         "Ask only when rules disagree",
         "Never ask"
@@ -19,7 +19,7 @@ FormCard.FormCardPage {
     FormCard.FormCard {
         FormCard.FormComboBoxDelegate {
             text: "When to ask"
-            description: "The Velja-style default asks only when Tern does not already know."
+            description: "The Velja-style default asks only when Lane does not already know."
             model: policyLabels
             currentIndex: Math.max(0, policyIds.indexOf(controller.pickerPolicy))
             onActivated: controller.pickerPolicy = policyIds[currentIndex]
@@ -49,6 +49,19 @@ FormCard.FormCardPage {
             description: "Hold remembered, app, and default opens for a moment so you can undo."
             checked: controller.holdAutoOpen
             onToggled: controller.holdAutoOpen = checked
+        }
+        FormCard.FormDelegateSeparator { visible: controller.holdAutoOpen }
+        FormCard.FormSpinBoxDelegate {
+            id: holdMsDelegate
+            visible: controller.holdAutoOpen
+            label: "Pause duration"
+            value: controller.holdMs
+            from: 400
+            to: 5000
+            stepSize: 100
+            textFromValue: (value) => (value / 1000).toFixed(1) + "s"
+            valueFromText: (text) => Math.round(parseFloat(text) * 1000)
+            onValueModified: controller.holdMs = value
         }
     }
 

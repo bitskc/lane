@@ -4,7 +4,7 @@
 
 #include <QAbstractListModel>
 
-namespace Tern
+namespace Lane
 {
 
 class PickerModel : public QAbstractListModel
@@ -19,6 +19,8 @@ public:
         SubtitleRole,
         IconRole,
         KindRole,
+        SectionRole,
+        ColorRole,
         ShortcutRole,
         SuggestedRole,
         IncognitoRole,
@@ -46,4 +48,4 @@ private:
     QString m_filter;
 };
 
-} // namespace Tern
+} // namespace Lane

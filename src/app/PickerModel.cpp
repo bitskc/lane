@@ -1,7 +1,11 @@
 #include "PickerModel.h"
 
-namespace Tern
+#include <QHash>
+
+namespace Lane
 {
+
+static QString sectionFor(const Target &t);
 
 PickerModel::PickerModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -33,8 +37,14 @@ QVariant PickerModel::data(const QModelIndex &index, int role) const
         return t.icon;
     case KindRole:
         return kindName(t.kind);
+    case SectionRole:
+        return sectionFor(t);
+    case ColorRole:
+        return t.kind == Kind::Container && t.color.isValid() ? t.color.name() : QString();
     case ShortcutRole:
-        return index.row() < 9 ? QString::number(index.row() + 1) : QString();
+        // Must match Picker.qml's `maxRows` (8): that many number-key
+        // shortcuts are bound, so only that many rows may claim one.
+        return index.row() < 8 ? QString::number(index.row() + 1) : QString();
     case SuggestedRole:
         return index.row() == 0;
     case IncognitoRole:
@@ -52,6 +62,8 @@ QHash<int, QByteArray> PickerModel::roleNames() const
         {SubtitleRole, "subtitle"},
         {IconRole, "iconName"},
         {KindRole, "kind"},
+        {SectionRole, "section"},
+        {ColorRole, "colorName"},
         {ShortcutRole, "shortcut"},
         {SuggestedRole, "suggested"},
         {IncognitoRole, "incognito"},
@@ -82,22 +94,59 @@ Target PickerModel::targetAt(int row) const
     return m_shown.at(row);
 }
 
+static QString sectionFor(const Target &t)
+{
+    switch (t.kind) {
+    case Kind::Container:
+        return QStringLiteral("Containers");
+    case Kind::Pwa:
+        return QStringLiteral("Web apps");
+    case Kind::Action:
+        return QStringLiteral("Actions");
+    case Kind::Custom:
+        return QStringLiteral("Apps");
+    case Kind::BrowserProfile:
+        return QStringLiteral("Browsers");
+    }
+    return QStringLiteral("Browsers");
+}
+
 void PickerModel::applyFilter()
 {
     beginResetModel();
     m_shown.clear();
     const QString needle = m_filter.trimmed();
+    QList<Target> matched;
     for (const auto &t : m_all) {
         if (needle.isEmpty()
             || t.displayName().contains(needle, Qt::CaseInsensitive)
             || t.subtitle.contains(needle, Qt::CaseInsensitive)
             || t.browserName.contains(needle, Qt::CaseInsensitive)
             || kindName(t.kind).contains(needle, Qt::CaseInsensitive)) {
-            m_shown.append(t);
+            matched.append(t);
         }
     }
+
+    // rankForPicker() already decided priority order (current-site PWA and
+    // remembered destination lead); group same-kind rows together for the
+    // display only, via a stable partition keyed on each section's first
+    // occurrence, so the ranking itself is never touched but a 45-target
+    // list is still scannable in clusters instead of interleaved.
+    QHash<QString, QList<Target>> buckets;
+    QStringList sectionOrder;
+    for (const auto &t : matched) {
+        const QString key = sectionFor(t);
+        if (!buckets.contains(key)) {
+            sectionOrder << key;
+        }
+        buckets[key].append(t);
+    }
+    for (const auto &key : sectionOrder) {
+        m_shown += buckets.value(key);
+    }
+
     endResetModel();
     Q_EMIT countChanged();
 }
 
-} // namespace Tern
+} // namespace Lane

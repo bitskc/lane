@@ -7,7 +7,7 @@
 #include <QSet>
 #include <QStandardPaths>
 
-namespace Tern
+namespace Lane
 {
 namespace
 {
@@ -131,7 +131,7 @@ bool parseCustomCommand(const QString &command, Target *out, QString *error)
     return true;
 }
 
-bool launchTarget(const Target &target, const QString &url)
+bool launchTarget(const Target &target, const QString &url, const QString &activationToken)
 {
     if (target.kind == Kind::Action && target.id == QLatin1String("action:copy")) {
         return false;
@@ -147,7 +147,33 @@ bool launchTarget(const Target &target, const QString &url)
     if (exe.isEmpty()) {
         return false;
     }
-    return QProcess::startDetached(exe, expandArgs(target, open));
+    if (isBlockedInterpreter(exe)) {
+        return false;
+    }
+    // QProcess::startDetached(program, arguments) (the static, argument-only
+    // overload used below) takes no QProcessEnvironment and always forks
+    // from Lane's own live environment, unlike setProcessEnvironment() on a
+    // QProcess instance, which Qt documents as not always applying to a
+    // detached start. Setting XDG_ACTIVATION_TOKEN here, immediately around
+    // the spawn, and restoring whatever was there before right after, is
+    // therefore both correct for this call shape and as narrow a window as
+    // it allows. An empty activationToken leaves the environment untouched
+    // and this call behaves exactly as it always has.
+    const bool hadToken = !activationToken.isEmpty();
+    const bool hadPrevious = qEnvironmentVariableIsSet("XDG_ACTIVATION_TOKEN");
+    const QByteArray previous = hadPrevious ? qgetenv("XDG_ACTIVATION_TOKEN") : QByteArray();
+    if (hadToken) {
+        qputenv("XDG_ACTIVATION_TOKEN", activationToken.toUtf8());
+    }
+    const bool started = QProcess::startDetached(exe, expandArgs(target, open));
+    if (hadToken) {
+        if (hadPrevious) {
+            qputenv("XDG_ACTIVATION_TOKEN", previous);
+        } else {
+            qunsetenv("XDG_ACTIVATION_TOKEN");
+        }
+    }
+    return started;
 }
 
-} // namespace Tern
+} // namespace Lane

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(tern VERSION 0.1.0 LANGUAGES CXX)
+project(lane VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,7 +8,11 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 set(QT_MIN_VERSION "6.6.0")
-set(KF_MIN_VERSION "6.0.0")
+# 6.19 is required for KWaylandExtras::xdgActivationToken(), used by
+# Controller to hand off focus to a launched browser on Wayland (see
+# app/Controller.cpp). Below 6.19 only the deprecated serial/signal based
+# request exists.
+set(KF_MIN_VERSION "6.19.0")
 
 find_package(ECM ${KF_MIN_VERSION} REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
@@ -57,8 +61,8 @@ qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
 
 ecm_setup_version(PROJECT
-    VARIABLE_PREFIX TERN
-    VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/tern_version.h"
+    VARIABLE_PREFIX LANE
+    VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/lane_version.h"
 )
 
 add_subdirectory(src)
@@ -66,17 +70,17 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-set(TERN_BIN "${CMAKE_INSTALL_FULL_BINDIR}/tern")
-configure_file(data/app.tern.Tern.desktop.in
-               ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.desktop @ONLY)
-configure_file(data/dbus/app.tern.Tern.service.in
-               ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.service @ONLY)
-configure_file(data/systemd/tern.service.in
-               ${CMAKE_CURRENT_BINARY_DIR}/tern.service @ONLY)
+set(LANE_BIN "${CMAKE_INSTALL_FULL_BINDIR}/lane")
+configure_file(data/app.lane.Lane.desktop.in
+               ${CMAKE_CURRENT_BINARY_DIR}/app.lane.Lane.desktop @ONLY)
+configure_file(data/dbus/app.lane.Lane.service.in
+               ${CMAKE_CURRENT_BINARY_DIR}/app.lane.Lane.service @ONLY)
+configure_file(data/systemd/lane.service.in
+               ${CMAKE_CURRENT_BINARY_DIR}/lane.service @ONLY)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.desktop DESTINATION ${KDE_INSTALL_APPDIR})
-install(FILES data/app.tern.Tern.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
-install(FILES data/app.tern.Tern.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.tern.Tern.service DESTINATION ${KDE_INSTALL_DBUSSERVICEDIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tern.service DESTINATION ${CMAKE_INSTALL_DATADIR}/systemd/user)
-install(FILES data/icons/app.tern.Tern.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.lane.Lane.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+install(FILES data/app.lane.Lane.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
+install(FILES data/app.lane.Lane.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.lane.Lane.service DESTINATION ${KDE_INSTALL_DBUSSERVICEDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/lane.service DESTINATION ${CMAKE_INSTALL_DATADIR}/systemd/user)
+install(FILES data/icons/app.lane.Lane.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)

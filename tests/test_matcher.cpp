@@ -2,7 +2,7 @@
 
 #include <QTest>
 
-using namespace Tern;
+using namespace Lane;
 
 class MatcherTest : public QObject
 {
