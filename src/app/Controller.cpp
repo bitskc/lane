@@ -336,10 +336,24 @@ void Controller::openUrl(const QString &url, bool forcePicker)
     // (no daemon running yet) can also inherit one directly at process
     // start. Either way, capture and consume it now so a later click that
     // carries no token of its own can never reuse a stale one.
-    m_pendingActivationToken = qEnvironmentVariable("XDG_ACTIVATION_TOKEN");
-    if (!m_pendingActivationToken.isEmpty()) {
+    const QString token = qEnvironmentVariable("XDG_ACTIVATION_TOKEN");
+    if (!token.isEmpty()) {
         qunsetenv("XDG_ACTIVATION_TOKEN");
     }
+
+    // Re-entrancy guard: runPipeline → unshortenSync runs a nested
+    // QEventLoop::exec() for up to ~1.8 s on shortener URLs.  A second
+    // D-Bus openRequested during that nested loop would re-enter
+    // openUrl, overwrite m_click mid-pipeline, and stop the running
+    // hold animation.  Queue the second call and drain it after this
+    // invocation finishes applyDecision, each with its own captured token.
+    if (m_inOpenUrl) {
+        m_pendingUrls.append({url, forcePicker, token});
+        return;
+    }
+    m_inOpenUrl = true;
+
+    m_pendingActivationToken = token;
 
     if (m_holdAnimation && m_holdAnimation->state() == QAbstractAnimation::Running) {
         m_holdAnimation->stop();
@@ -361,6 +375,19 @@ void Controller::openUrl(const QString &url, bool forcePicker)
 
     Q_EMIT currentChanged();
     applyDecision(d);
+
+    m_inOpenUrl = false;
+
+    // Drain the queue: process the next pending URL with its own
+    // captured activation token (restored to the environment so openUrl
+    // captures it the same way as the original call).
+    if (!m_pendingUrls.isEmpty()) {
+        const auto next = m_pendingUrls.takeFirst();
+        if (!next.activationToken.isEmpty()) {
+            qputenv("XDG_ACTIVATION_TOKEN", next.activationToken.toLocal8Bit());
+        }
+        openUrl(next.url, next.forcePicker);
+    }
 }
 
 void Controller::pick(int row)
@@ -768,6 +795,10 @@ void Controller::ensureSettingsEngine()
 void Controller::configureLayerShell(QWindow *window, const QString &scope)
 {
     auto *ls = LayerShellQt::Window::get(window);
+    if (!ls) { // null on X11 / non-wlroots — window behaves as normal
+        qWarning() << "Lane: layer-shell unavailable; falling back to normal window";
+        return;
+    }
     ls->setLayer(LayerShellQt::Window::LayerOverlay);
     LayerShellQt::Window::Anchors anchors;
     anchors.setFlag(LayerShellQt::Window::AnchorTop);

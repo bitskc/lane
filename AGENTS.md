@@ -100,8 +100,9 @@ Array of rule objects. Rules are checked in order. First match wins.
 
 - `scope`: `"any"`, `"domain"`, or `"path"`. Path scope matches the full
   URL path, not just the host.
-- `location`: `"url"`, `"title"` (window title), or `"process"` (process
-  name of the app that opened the link).
+- `location`: `"url"` (the only value that can match; `"title"` and
+  `"process"` are parsed for compatibility but cannot match on Wayland
+  because the active caller identity is not available).
 - `regex`: if true, `pattern` is a regular expression. Keep regex
   patterns anchored and length-capped. Avoid patterns that can match
   arbitrarily long strings.

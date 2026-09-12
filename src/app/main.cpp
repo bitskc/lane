@@ -95,13 +95,15 @@ int main(int argc, char **argv)
     QCommandLineOption pickOpt(QStringList{QStringLiteral("p"), QStringLiteral("pick")}, QStringLiteral("Always show the picker"));
     QCommandLineOption listOpt(QStringLiteral("list"), QStringLiteral("Print discovered targets and exit"));
     QCommandLineOption explainOpt(QStringLiteral("explain"), QStringLiteral("Print the routing decision and exit"));
-    QCommandLineOption settingsOpt(QStringLiteral("settings"), QStringLiteral("Open settings"));
+    QCommandLineOption settingsOpt(QStringList{QStringLiteral("settings"), QStringLiteral("configure")}, QStringLiteral("Open settings"));
+    QCommandLineOption rediscoverOpt(QStringLiteral("rediscover"), QStringLiteral("Reload config and rescan browser targets in the running daemon"));
     QCommandLineOption configPathOpt(QStringLiteral("config-path"), QStringLiteral("Print the config file path and exit"));
     parser.addOption(daemonOpt);
     parser.addOption(pickOpt);
     parser.addOption(listOpt);
     parser.addOption(explainOpt);
     parser.addOption(settingsOpt);
+    parser.addOption(rediscoverOpt);
     parser.addOption(configPathOpt);
     parser.addPositionalArgument(QStringLiteral("url"), QStringLiteral("URL to open"), QStringLiteral("[url]"));
     parser.process(app);

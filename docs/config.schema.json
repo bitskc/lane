@@ -70,7 +70,7 @@
         "holdMs": {
             "type": "integer",
             "default": 1600,
-            "minimum": 0,
+            "minimum": 400,
             "description": "Hold duration in milliseconds before a silent open launches"
         },
         "autostart": {

@@ -1,5 +1,7 @@
 #include "matcher.h"
 
+#include <QDebug>
+
 #include "urlutil.h"
 
 #include <QRegularExpression>
@@ -31,6 +33,15 @@ bool ruleMatches(const Rule &rule, const Click &click)
 {
     if (!rule.enabled || rule.pattern.trimmed().isEmpty()) {
         return false;
+    }
+    if (rule.location != MatchLocation::Url) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            qWarning() << "Lane: rule" << rule.id
+                       << "uses a location condition (title/process) that cannot match — "
+                          "active caller identity is unavailable on Wayland";
+        }
     }
     const QString pattern = rule.pattern.trimmed();
     if (pattern.size() > (rule.regex ? 128 : 256)) {
