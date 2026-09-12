@@ -1,222 +1,306 @@
-# Tern: full gstack analysis
+# Lane: full gstack analysis
 
-Synthesis of four independent reviews run 2026-09-11 against Tern v0.1.0
+Synthesis of five independent reviews run 2026-09-12 against Lane v0.1.0
 (`docs/reviews/eng.md`, `docs/reviews/ceo.md`, `docs/reviews/design.md`,
-`docs/reviews/devex.md`). This document does not re-review the code; it
-reconciles what the four reviewers already found, resolves the two places
-they point in different directions, and orders everything into one fix
-list. See `docs/designs/tern-office-hours.md` for the product-strategy
-framing.
+`docs/reviews/devex.md`, `docs/reviews/openspec.md`). This document does
+not re-review the code; it reconciles what the five reviewers already
+found, resolves the three places they point in different directions,
+and orders everything into one fix list. See
+`docs/designs/lane-office-hours.md` for the product-strategy framing.
 
 ## Executive summary
 
-Tern is a Qt 6 / Kirigami daemon that becomes the KDE Plasma default
-browser handler and routes each `http`/`https` click to the right browser
-profile, container, PWA, or custom handler, tagged v0.1.0 today with 5,474
-lines under `src/`, 9 passing test suites, and zero outside users
-(`docs/reviews/eng.md:245-250`, `docs/reviews/ceo.md:3`). The routing core
-is genuinely well built - tested decision order, argv-only process launch,
-a real Wayland layer-shell overlay - but three independent defects sit
-between this and being safe to hand to a stranger: a hand-edited config
-target skips the interpreter blocklist entirely, a config write that is
-not atomic can silently wipe every rule on a bad-timed crash, and the
-README's own build instructions fail on a clean Arch box because two
-required packages are missing from both the README and the `PKGBUILD`
-(`docs/reviews/eng.md:21-75`). That last bug was found independently by
-two different reviewers, which is the strongest signal in this review
-round: it is not a matter of taste, it breaks the first-run path for
-every single new user until it is fixed. The single most important thing
-to do next is the roughly one day of fixes at the top of the fix list
-below, after which the CEO's recommendation to publish to AUR this week
-becomes safe to execute rather than premature.
+One day after v0.1.0 was tagged and PR #1 (rename + security fixes)
+merged, the picture is: the engineering is past the point where more
+features help, and all five round-1 fixes held. What stands between this
+and being safe to hand to a stranger is not a capability gap. It is two
+crash-class bugs in a default-browser handler (re-entrancy through
+unshorten's nested event loop, null deref on non-wlroots compositors),
+a set of docs that describe features that do not exist (CLI flags the
+binary rejects, rule locations the code stubs out, a schema minimum the
+UI clamps above), and a GitHub repo rename that blocks the update
+checker, the PKGBUILD checksum, and every doc link. The openspec change
+is stale, was never promoted to canonical spec, and contradicts the
+shipped product on containers, picker width, and memory scope. None of
+this is hard to fix. The single most important move is: rename the repo,
+land the two crash fixes and the doc fixes, tag 0.2.0, publish to AUR,
+and post to r/kde pointing at Junction issue #9. Everything else is a
+guess until a stranger installs it.
 
 ## Verdicts
 
 | Review | Verdict | Reason |
 |---|---|---|
-| Eng (`docs/reviews/eng.md`) | **SHIP WITH FIXES** | Routing core (`router.cpp`, `destination.cpp`, `matcher.cpp`) is small, well-factored, and genuinely tested; three concrete blocking defects (interpreter blocklist gap, non-atomic config write, missing build deps) need to land before 0.1.1 (`eng.md:8-19`) |
-| CEO (`docs/reviews/ceo.md`) | **NARROW THE WEDGE** | Engineering and taste are real, but there is zero outside validation, a licensing story that has never met a real buyer, and one already-visible instance of scope creep (containers); pick the one proven-desperate user, ship the one thing that gets them to switch, get five strangers using it (`ceo.md:7-9`) |
-| Design (`docs/reviews/design.md`) | **Fix the hold default, then the scale problem** (review has no single verdict line; this is its own stated "the one thing") | Scores span 3/10 (accessibility) to 8/10 (visual identity); the headline issue is `holdAutoOpen` defaulting to true, which contradicts `DESIGN.md`'s own "either nothing visible" promise on every remembered/PWA/default open (`design.md:22-28`) |
-| Devex (`docs/reviews/devex.md`) | **Buildable, but the docs misstate the first step** (review has no single verdict line; synthesized from its TTHW and ranked-fixes sections) | Clean build + test is ~42 seconds once dependencies are present, but the README's own `pacman` line omits two packages `CMakeLists.txt` requires, so a literal first-run fails at configure time (`devex.md:5-27`) |
+| Eng (`docs/reviews/eng.md`) | **SHIP WITH FIXES** | Routing core is small, well-factored, and tested. All five round-1 fixes held. Re-entrancy through `unshortenSync`'s nested `QEventLoop` and the `LayerShellQt::Window::get()` null deref are crash-class in a default handler; close both before 0.2. Two network code paths (`UpdateChecker`, `unshorten`) have zero direct test coverage (`eng.md:13-22`) |
+| CEO (`docs/reviews/ceo.md`) | **SHIP 0.2.0 AS THE DISTRIBUTION RELEASE** | Engineering is past the point where more features help. What is missing is not another capability; it is a single stranger who is not Andy. The Unreleased changelog already holds a release's worth of work. Rename the repo, publish the PKGBUILD to AUR, tag 0.2.0, post to r/kde (`ceo.md:7-9`) |
+| Design (`docs/reviews/design.md`) | **Scores up; one thing: holdAutoOpen default** | Eight dimensions scored 5-8, all improved since last round. The headline issue is `holdAutoOpen` still defaulting to true at 1600ms, contradicting DESIGN.md's "either nothing visible" promise on every remembered/PWA/default open (`design.md:22-28`) |
+| Devex (`docs/reviews/devex.md`) | **TTHW ~51s; docs describe features that do not exist** | Build with deps present is fast. But `lane --rediscover` and `lane --configure` exit 1 with "Unknown option" because `QCommandLineParser` never registers them. All user-facing URLs point at `bitskc/lane` which 404s. `appstreamtest` is a false green on the README path (`devex.md:53-55,56-59,18`) |
+| Openspec (`docs/reviews/openspec.md`) | **STALE: spec contradicts shipped product** | 3 uncovered requirements, 8 shipped features with no task line, `openspec validate` fails (no deltas), `openspec/specs/` does not exist, change was never archived. The repo has no canonical spec (`openspec.md:7,47,107-117`) |
 
 ## Cross-review consensus
 
-Three findings were reached independently by different reviewers, working
+Three findings were reached independently by different reviewers working
 from different parts of the codebase. Independent convergence is the
-strongest kind of signal in a four-review set, so each is named here as
+strongest kind of signal in a five-review set, so each is named here as
 one theme rather than scattered across separate line items.
 
-**Missing build dependencies - found separately by eng and devex.** The
-eng review traced `CMakeLists.txt:39-49`'s `REQUIRED COMPONENTS` list
-(which includes `ColorScheme` and `Crash`) against `README.md:158-160` and
-`packaging/PKGBUILD:8-14` and found both omit the Arch packages
-`kcolorscheme` and `kcrash` (`eng.md:60-75`). The devex review arrived at
-the same two missing packages independently, by literally following the
-README on a scratch build and cross-checking against what CI installs
-(`devex.md:18-27`). Two reviewers, one root cause, and it is not a
-cosmetic doc gap: it breaks the documented "clean clone on a fresh
-machine" path - the exact scenario the README section is written for -
-for every new user until it is fixed.
+**Docs describe a product that does not exist.** The eng review found
+that `SourceInfo.cpp:6-11` is a stub returning empty, so rules with
+`location: "title"` or `location: "process"` can never match, yet
+`AGENTS.md:103-104` documents them as working features
+(`docs/reviews/eng.md:136-142`). The devex review found that
+`lane --rediscover` and `lane --configure` are in README, AGENTS.md, and
+CHANGELOG but `QCommandLineParser` (`main.cpp:90-103`) never registers
+them, so they exit 1 with "Unknown option"
+(`docs/reviews/devex.md:53-55`). The devex review also found that
+`docs/config.schema.json:73` sets `holdMs` minimum to 0 while
+`PreferencesPage.qml:59-60` clamps to 400-5000
+(`docs/reviews/devex.md:79`). The openspec auditor found that the
+proposal says "no containers" but containers shipped, the design doc
+says "remembered host" but the code does path-scoped destination
+ladders, and the design doc says 520px card but the picker is 440px
+(`docs/reviews/openspec.md:51-67`). Three reviewers, one root cause:
+docs were written for intent, not behavior.
 
-**Nothing in the UI scales to the product's own success case.** The
-design review scored Settings IA 4/10 and picker density 5/10, both
-citing the same underlying problem: `TargetsPage.qml` and `Picker.qml`
-were built and screenshotted against a handful of targets
-(`design.md:12,15,94,108`). The eng review, working from the live daemon
-on this machine, measured 45 real targets - browser profiles, containers,
-and PWAs - via `tern --list` (`eng.md:256-259`). Tern's stated purpose is
-to discover and route across every profile, container, and PWA on a
-machine; the machine where it is actually running proves that once
-discovery does its job well, the picker and settings pages it hands that
-list to are the parts that break. The fix is the same UI investment
-either way (section headers, search, collapse), so this is one theme, not
-two separate findings from two reviewers.
+**The GitHub repo rename blocks everything.** The CEO review's first
+0.2.0 item is renaming the repo, because the update checker 404s on
+every press and the PKGBUILD cannot produce a real checksum
+(`docs/reviews/ceo.md:57`). The devex review found that every
+user-facing URL (README, CHANGELOG, metainfo, PKGBUILD,
+`test_version.cpp`) points at `bitskc/lane` which does not exist, while
+the git remote is still `bitskc/tern` (`docs/reviews/devex.md:56-59,103`).
+The eng review confirmed the update checker and repoinfo point at the
+nonexistent repo. One decision unlocks the release, the AUR checksum,
+the update checker, and every doc link. The code already committed to
+the rename in PR #1; the GitHub side just has not happened yet.
 
-**Tern fails silently in several distinct places.** Design blocking #1: a
-launch that fails (missing browser, broken custom command) shows nothing
-at all (`design.md:34`). Eng blocking #2: a crash mid-write can wipe the
-whole config file with no warning (`eng.md:44-58`). Eng should-fix: a rule
-or remembered mapping pointing at a target that no longer exists is
-dropped with no signal back to the user (`eng.md:133-144`). Design
-should-fix #6 and #7: a rejected custom-app command and a blocked URL both
-land the user on a UI with no explanation of what happened
-(`design.md:54,56`). Five separate line items across two reviews, but one
-underlying product decision undecided: what does Tern owe the user when
-it cannot do the thing it was asked to do. Right now the answer is
-"nothing," in five different code paths, and it should be one deliberate
-answer (a toast, a log line, a UI banner - something) applied
-consistently, not five point fixes.
+**Containers: convergent scope-creep flag.** The CEO review found that
+containers shipped after the 0.1.0 tag, before a single outside user
+had touched the core product, and reach 1.9K bridge-extension users out
+of 409K who have Multi-Account Containers (`docs/reviews/ceo.md:47-49`).
+The openspec auditor independently found that the proposal explicitly
+listed containers under "Out of scope" and the spec was never updated
+when they shipped (`docs/reviews/openspec.md:24,51-55`). This is not a
+call to rip containers out. It is a discipline call: stop adding
+features that serve a near-empty audience until the core product has
+real users. If 0.2.0 ships containers, the README should be honest
+about the 1.9K-user bridge dependency, not advertise containers as a
+top-line feature (`docs/reviews/ceo.md:51`).
 
-## Contradictions
+## Round-1 fix verification
 
-**1. Publish the PKGBUILD to AUR now, or fix it first?** The CEO review's
-top next-move is: publish the existing `PKGBUILD` to AUR this week,
-because it already exists, AUR does not gate on license freedom, and it
-is the cheapest way to get real users this week (`ceo.md:56`). The eng
-review and this director's own read of `packaging/PKGBUILD` found the
-artifact is not actually publishable as-is: `depends=` is missing
-`kcolorscheme` and `kcrash` (same root cause as the README gap,
-`eng.md:60-75`), and separately, `source=("$pkgname-$pkgver.tar.gz")` at
-`packaging/PKGBUILD:16` is a bare local tarball name with
-`sha256sums=('SKIP')` at line 17 - AUR requires a real fetchable source
-(a GitHub release tag tarball URL) and a real checksum, and the CEO
-review does not flag either gap. **Adjudication: the CEO's move is
-correct, the artifact is not ready, and the gap between "correct move"
-and "ready artifact" is about an hour of work** - add the two packages to
-`depends=`, point `source=` at
-`https://github.com/bitskc/tern/archive/refs/tags/v$pkgver.tar.gz`, and
-generate a real `sha256sum` against that tarball. Do the AUR publish this
-week as the CEO recommends, after that hour, not instead of it.
+All five round-1 fixes held. Verified in source by the eng review
+(`docs/reviews/eng.md:162-169`).
 
-**2. Should Tern ship its own container-bridge WebExtension?**
-`DESIGN.md:7` states a deliberate decision: "Tern never registers or
-handles `ext+container` itself... that scheme is only ever argv to the
-browser." The CEO review's 10-star recommendation is the opposite: ship
-and maintain Tern's own small WebExtension so container routing reaches
-Mozilla Multi-Account Containers' full 409K user base instead of the
-roughly 0.5% of them who also happen to have the third-party "Open URL in
-Container" extension (1.9K users) installed (`ceo.md:18,46-48`). This is
-not a reviewer misreading the design - the CEO review brought new
-evidence (the 409K vs. 1.9K adoption gap) that was not part of the
-original design decision, so it is a genuine re-opening of a considered
-choice, not a mistake to correct. **Adjudication: this is Andy's call, not
-a finding to action automatically.** The real cost the CEO review does not
-price in: shipping a browser extension means an AMO review pipeline, a
-second release train independent of Tern's own CMake/CI/AUR cycle, and an
-ongoing support surface in JavaScript and the WebExtensions API - a
-language and ecosystem the rest of Tern (Qt6/C++/QML) does not otherwise
-touch. That cost is real and ongoing, not a one-time build. Recommendation:
-do not commit to this until move 2 in "Next three moves" below has
-produced actual container-routing demand signal from outside users; right
-now the 409K number is proof the upstream category is large, not proof
-that Tern's specific users want Tern to be the one maintaining a browser
-extension for it.
+| Finding | Status | Evidence |
+|---|---|---|
+| Interpreter blocklist bypassed by absolute-path symlink | **Held** | `isBlockedInterpreterChain()` (launcher.cpp:112-142) walks `QFileInfo::symLinkTarget()` hop-by-hop. Tests: `launchTargetRejectsSymlinkToBlockedInterpreter` (test_launcher.cpp:144), `customTargetsDropSymlinkToBlockedInterpreter` (test_config.cpp:80). Both create a real symlink to `/bin/sh` and assert rejection. |
+| Blocklist never inspected `target.args`; `/usr/bin/env bash -c` bypass | **Held** | `env` and 17 other re-exec wrappers added to `blockedInterpreters()` (launcher.cpp:57-75). Tests: `launchTargetRejectsEnvReExecWrapper` (test_launcher.cpp:162), `customTargetsDropEnvReExecWrapper` (test_config.cpp:119). Both set `exec="/usr/bin/env"` and assert rejection. |
+| `Controller::persist()` discarded `saveConfig()`'s QSaveFile result | **Held** | `persist()` (Controller.cpp:582-600) checks `saveConfig()` return value; on failure fires `KNotification("save-failed")` with `setComponentName("app.lane.Lane")`. `data/app.lane.Lane.notifyrc` has matching `[Event/save-failed]` section. |
+| No test for `migrateLegacyConfig()` | **Held** | Four tests in test_config.cpp: `migrateLegacyConfigFreshCopy` (line 193), `migrateLegacyConfigIdempotentOnSecondRun` (line 220), `migrateLegacyConfigDestinationExistsWins` (line 249), `migrateLegacyConfigFailureLeavesSourceIntact` (line 278). All call the two-arg overload directly. |
+| Picker height hardcoded "2 section headers" | **Held** | `PickerModel::applyFilter()` (PickerModel.cpp:147) sets `m_sectionCount = sectionOrder.size()`. Exposed as `Q_PROPERTY(int sectionCount READ sectionCount NOTIFY countChanged)` (PickerModel.h:19). `Picker.qml:187` uses `controller.pickerModel.sectionCount` in the height formula. |
+
+## Contradictions adjudicated
+
+**1. holdAutoOpen default: off or holdMs ~400 (design) vs. keep true at 1600 (CEO).**
+
+The design review says default `holdAutoOpen` to off or cut `holdMs` from
+1600 to about 400, because `shouldHold()` runs the hold HUD on every
+remembered, PWA, and default open, producing dozens of 1.6s interruptions
+per day with trained memory (`docs/reviews/design.md:24-28`). The CEO
+review says this is Andy's call and it is fine, because the hold is a
+safety net for misrouted clicks and a consultant who loses client trust
+from a wrong-identity open has a higher cost than 1.6s of friction
+(`docs/reviews/ceo.md:72`). DESIGN.md line 5 promises "either nothing
+visible," which supports the design position.
+
+**Recommendation: default `holdAutoOpen` to false.** Remembered paths are
+user-confirmed by definition. Rule matches already skip the hold
+(`Controller.cpp:802-804`). The picker is the veto for ambiguous paths.
+The hold on remembered paths protects against wrong memory, but if
+memory is wrong, the user should fix the memory, not veto every open.
+The hold HUD is still available for users who want it: Preferences
+exposes the toggle and the duration slider (PreferencesPage.qml:54-65).
+The cost: a user who never opens Preferences loses the hold veto on
+silent opens. But they keep the picker for anything new, and rules still
+launch immediately. This is the second consecutive review round flagging
+this default against DESIGN.md's own contract. Set `holdAutoOpen = false`
+in `types.h:150`.
+
+**2. Ship 0.2.0 now (CEO) vs. ship with fixes first (eng).**
+
+The CEO review says tag 0.2.0 now because the Unreleased changelog
+already holds a release's worth of work and what is missing is users, not
+code (`docs/reviews/ceo.md:7-9`). The eng review says SHIP WITH FIXES
+because the re-entrancy window in `openUrl` and the `LayerShellQt` null
+deref are crash-class bugs in a default-browser handler
+(`docs/reviews/eng.md:13-22`).
+
+**Recommendation: sequence them.** Land the two P0 fixes and the P1 doc
+fixes first, then tag 0.2.0. The re-entrancy fix is a guard at the top of
+`openUrl` (a bool or a deferred queue, Controller.cpp:330-364). The null
+deref fix is a platform guard or null check in `configureLayerShell`
+(Controller.cpp:770). Both are small, local changes. A segfault in a
+default-browser handler is the worst possible first impression for a
+stranger installing from AUR. The doc fixes (register CLI flags or
+remove them, remove or implement dead rule locations, align schema
+minimum) should land in the same commit because a stranger following
+README instructions that produce "Unknown option" is nearly as bad.
+Sequence: (1) rename repo to `bitskc/lane`, (2) land P0 + P1 fixes,
+(3) regenerate PKGBUILD checksum, (4) tag 0.2.0, (5) publish to AUR,
+(6) post to r/kde.
+
+**3. OpenSpec repair: update-in-place then archive (auditor) vs. something else.**
+
+The openspec auditor recommends updating `proposal.md`, `design.md`, and
+`tasks.md` in place to match v0.1.0 shipped behavior, adding `specs/`
+deltas or `skip_specs: true`, running `openspec validate` until clean,
+then archiving to promote the first canonical spec. The auditor
+explicitly recommends against archive-and-rewrite from scratch, because
+the change ID `initial-tern` is already referenced by tooling and git
+history, and a rewrite would orphan it without adding correctness
+(`docs/reviews/openspec.md:134-167`).
+
+**Endorse: update in place, then archive.** The shipped product is
+coherent. The gap is documentation and OpenSpec structure, not unknown
+requirements. The concrete steps are: move containers from out-of-scope
+into scope in `proposal.md`, replace "remembered host" with
+"path-scoped remembered destination" in `design.md`, fix the card width
+to 440px, drop or implement the blur claim, expand `tasks.md` with the
+8 shipped features that have no task line, mark task 10 as done, add
+`specs/` deltas or `skip_specs: true`, add a "What Changes" section to
+`proposal.md`, validate, and archive. Do not leave `initial-tern`
+forever unarchived: as long as it sits in `changes/` with no `specs/`
+promotion, every future OpenSpec change starts from zero canonical
+baseline.
 
 ## Fix list
 
-Ordered by user impact, not by which reviewer raised it loudest. AI-assisted
-effort estimates assume an agent does the mechanical work and Andy reviews.
+Ordered by user impact, not by which reviewer raised it loudest.
 
-| Rank | Finding | Source review | File to change | Effort |
+### P0: crash/data-loss class
+
+| # | Finding | Source | File to change | Fix |
 |---|---|---|---|---|
-| 1 | README `pacman` line and `PKGBUILD` `depends=` both omit `kcolorscheme` and `kcrash`, so a documented clean build fails at `cmake` configure | eng (blocking #3), devex (fix #1) | `README.md:158-160`, `packaging/PKGBUILD:8-14` | 5 min |
-| 2 | Hand-edited/loaded custom targets in `config.json` skip the interpreter blocklist entirely - `targetFromJson` validates nothing and `launchTarget` never calls `isBlockedInterpreter` | eng (blocking #1) | `src/core/config.cpp:105-124`, `src/core/launcher.cpp:134-151` | 1-2 hrs |
-| 3 | `saveConfig()` writes `WriteOnly \| Truncate` directly to the live path with no temp file, no rename, no fsync; a bad-timed crash wipes rules/remembered/custom targets with no warning | eng (blocking #2) | `src/core/config.cpp:271-276` | 1-2 hrs |
-| 4 | `Picker.qml`'s `Repeater { model: 9 }` binds a working "9" shortcut to an index the UI never renders, since `maxRows` is 8 - pressing 9 silently picks whatever target sits at index 8 | director finding, echoed by devex doc fix #7 | `src/qml/Picker.qml:22,52-58` | 15-30 min |
-| 5 | `launchTarget()` returning false (missing browser, broken custom command) produces no user-visible feedback anywhere in the call chain | design (blocking #1) | `src/core/launcher.cpp:134-151`, `src/app/Controller.cpp` (launch path) | 1-2 hrs |
-| 6 | `PKGBUILD`'s `source=` is a bare local tarball name with `sha256sums=('SKIP')`; not fetchable by `makepkg`/AUR as shipped | director finding (not caught by eng or CEO specifically as a publish-blocker) | `packaging/PKGBUILD:16-17` | ~1 hr |
-| 7 | `holdAutoOpen` defaults to true, so every remembered/PWA/default open shows a 1.6s hold bar, contradicting `DESIGN.md`'s "either nothing visible" promise | design ("the one thing") | `src/core/types.h` | 5 min code change; needs Andy's call on the new default |
-| 8 | Conflicting rules under `pickerPolicy: never` fall through silently instead of honoring "first match," contradicting `DESIGN.md:34`'s documented decision order | eng (should-fix) | `src/core/router.cpp:136-157` | ~1 hr |
-| 9 | Blocked URLs (`javascript:`, etc.) show a bare picker with no banner explaining why, unlike the launch path which does notify on unsafe opens | design (should-fix #7) | routing/`applyDecision` path around `reason: "blocked"` | 1-2 hrs |
-| 10 | Rules and remembered mappings pointing at a deleted/uninstalled target are dropped with no signal; `Controller::displayNameFor` falls back to a raw internal id as the only hint | eng (should-fix), design (should-fix #4, related) | `src/core/router.cpp:59-72,159-168`, `src/app/Controller.cpp:356-362` | half day (a "broken rule" indicator) |
-| 11 | Rejected custom-app commands in Settings log a `qWarning` and give no inline UI error | design (should-fix #6) | `src/qml/TargetsPage.qml` (Add custom app flow) | ~1 hr |
-| 12 | `TargetsPage.qml` does not scale past roughly ten targets; five flat `ListView`s at 48px/row make forty-four targets an unusable scroll | design (should-fix #5), consensus item | `src/qml/TargetsPage.qml` | 1-2 days (search field, collapsible sections) |
-| 13 | Picker has no section headers or pinning; forty-plus targets are only reachable via filter, and sixteen same-pattern containers are name-only to tell apart | design (should-fix #1), consensus item | `src/qml/Picker.qml`, `PickerModel`, `rankForPicker()` | ~1 day |
-| 14 | No accessibility tree on picker/hold overlays - zero `Accessible` properties, so screen readers get an unnamed fullscreen window | design (blocking #3) | `src/qml/Picker.qml`, `src/qml/Hold.qml` | ~1 day |
-| 15 | Documented CLI/config surface has real gaps (`--version`, `--settings`, `-p`, `--rediscover`, `--configure` undocumented in places; `kind` field written but ignored on load) | devex (fixes #2, #4) | `README.md`, `AGENTS.md`, `docs/config.schema.json` | 30-45 min |
-| 16 | `docs/RELEASING.md` step 5 never reconfigures after the version bump, so `tern --version` can ship stale until someone re-runs `cmake` | devex (fix #3) | `docs/RELEASING.md` | 10 min |
-| 17 | Unshorten resolves only one redirect hop, so a chained shortener leaves rules/picker looking at the second-hop shortener host instead of the real destination | eng (should-fix) | `src/core/pipeline.cpp:16`, `src/core/unshorten.cpp:16-21` | ~1 hr (loop with a hop cap) |
-| 18 | No CONTRIBUTING section for "adding a browser family"; a new contributor has to reverse-engineer `discovery.cpp`'s fingerprint order | devex (fix #5) | new `CONTRIBUTING.md` section, points at `src/core/discovery.cpp` | 1-2 hrs |
+| 1 | `openUrl()` has no re-entrancy guard. `unshortenSync` runs a nested `QEventLoop::exec()` for up to 1800ms on shortener URLs. A second D-Bus `openRequested` during that loop re-enters `openUrl` and overwrites `m_click` mid-pipeline. Two quick clicks where one is a shortener URL is the trigger. | eng (should-fix #1) | `src/app/Controller.cpp:330-364`, `src/core/unshorten.cpp:31-37` | Add an in-flight guard (bool or deferred queue) at the top of `openUrl`, or move unshorten to async `QNetworkAccessManager` with a callback (like `UpdateChecker` already does). Async also fixes the 1.8s blocking UX: no user feedback during unshorten, which all five reviews missed. |
+| 2 | `configureLayerShell()` dereferences `LayerShellQt::Window::get(window)` with no null check. Null on X11/non-wlroots. Crash in a default-browser handler: no picker, no error, just a segfault. | eng (should-fix #5) | `src/app/Controller.cpp:770` | Add a `platformName() != "wayland"` guard at startup that refuses to run with a clear stderr message, or null-check `ls` and fall back to a normal window. |
+
+### P1: repo rename, doc fixes that lie to users
+
+| # | Finding | Source | File to change | Fix |
+|---|---|---|---|---|
+| 3 | GitHub remote is `bitskc/tern`; app, PKGBUILD, README, CHANGELOG, metainfo, update checker all say `bitskc/lane` which does not exist. Update checker 404s on every press. PKGBUILD cannot get a real checksum. Every doc link is broken. | CEO (#1), devex (fix #2), eng | GitHub repo settings, then regenerate `packaging/PKGBUILD` checksum | Rename the repo to `bitskc/lane`. The code already committed to this in PR #1. One-way door, but already open. |
+| 4 | `lane --rediscover` and `lane --configure` are in README, AGENTS.md, and CHANGELOG but `QCommandLineParser` (`main.cpp:90-103`) never registers them. They exit 1 with "Unknown option." Verified empirically. | devex (fix #1) | `src/app/main.cpp:90-103` | Register `--rediscover` and `--configure` in `QCommandLineParser` so `parser.process()` accepts them before `Controller::handleArgs` runs. Or remove them from all docs and document restart-only reload. |
+| 5 | AGENTS.md documents `location: "title"` and `location: "process"` rule conditions. `SourceInfo.cpp:6-11` is a stub returning empty. These rules can never fire. The settings UI exposes them. | eng (follow-up) | `src/app/SourceInfo.cpp:6-11`, `AGENTS.md:103-104` | Implement `activeSource()` to populate `m_click.processName` and `m_click.windowTitle`, or remove the dead rule locations from the UI and docs. The in-code comment is honest; the docs are not. |
+| 6 | `docs/config.schema.json:73` sets `holdMs` minimum to 0. `PreferencesPage.qml:59-60` clamps to 400-5000. A hand-edited `holdMs: 100` loads but the UI will not expose it. | devex (schema drift) | `docs/config.schema.json:73` | Set `minimum: 400` in the schema to match the UI clamp, or document the hand-edit vs UI range. |
+
+### P2: rediscovery-on-mutation, test coverage, openspec repair, holdAutoOpen
+
+| # | Finding | Source | File to change | Fix |
+|---|---|---|---|---|
+| 7 | `hideTarget`, `addCustomTarget`, `removeCustomTarget`, `renameTarget`, and `moveTarget` each call `discoverTargets(defaultDiscoveryPaths())`, re-scanning all desktop files, Gecko profiles, Chromium `Local State` files, and PWA manifests. Rename, reorder, and hide do not change what is installed. | eng (should-fix #2) | `src/app/Controller.cpp:448,516,532,552,561` | For mutations that do not change the installed set (rename, reorder, hide), call `applyConfigToTargets(m_targets, m_config)` on the existing target list. Reserve full `discoverTargets()` for `addCustomTarget`, `removeCustomTarget`, and `rediscover()`. |
+| 8 | `UpdateChecker::handleReply()` has zero test coverage. 172 lines of network logic: redirect vetting, HTTP status branching, JSON parsing, version comparison. The stale-reply guard and redirect safety check are untested. | eng (should-fix #3) | `src/app/UpdateChecker.cpp:71-158`, new test in `tests/test_version.cpp` | Drive `handleReply()` with a local `QHttpServer` or inject a fake `QNetworkReply`. Test the redirect safety check, rate-limit parsing, and stale-reply guard. |
+| 9 | `unshortenSync()` has zero direct test coverage. 63 lines of HTTP/redirect logic: HEAD request, manual redirect policy, three-tier `Location` header extraction, relative-URL resolution, redirect-target safety. | eng (should-fix #4) | `src/core/unshorten.cpp:15-63`, new test in `tests/test_pipeline.cpp` | Drive with a local `QHttpServer` or mock `QNetworkReply`. Test the raw-header fallback, redirect loop cap, and safety check. |
+| 10 | OpenSpec change `initial-tern` is stale, never archived, has no `specs/` deltas, and `openspec validate` fails. The repo has no canonical spec. Proposal says "no containers" but containers shipped. Design says "remembered host" but code does path-scoped ladders. Design says 520px card but picker is 440px. 8 shipped features have no task line. | openspec (full audit) | `openspec/changes/initial-tern/proposal.md`, `design.md`, `tasks.md`, new `specs/` dir | Update proposal/design/tasks in place to match v0.1.0 shipped behavior. Add `specs/` deltas or `skip_specs: true`. Add "What Changes" section. Mark task 10 done. Run `openspec validate` until clean. Archive to promote first canonical spec. |
+| 11 | `holdAutoOpen` still defaults to true at 1600ms. Second consecutive review round flagging this against DESIGN.md's "either nothing visible" contract. | design ("the one thing"), CEO (counter) | `src/core/types.h:150` | Default `holdAutoOpen` to false. See contradiction #1 adjudication above. |
+
+### P3: rest
+
+| # | Finding | Source | File to change | Fix |
+|---|---|---|---|---|
+| 12 | `remembered` map has no garbage collection. Dead entries (browser uninstalled, profile deleted) accumulate forever. `clearDeadRemembered()` exists but is manual-only. | eng (follow-up) | `src/core/config.cpp:252-255`, `src/app/Controller.cpp:488-499` | Prune dead entries on `reload()` or on target disappearance. |
+| 13 | `isDefaultBrowser()` spawns `xdg-settings` on every property read. Each read starts a `QProcess` with a 1500ms timeout. | eng (follow-up) | `src/app/Controller.cpp:159-165` | Cache the result; re-check only on `makeDefaultBrowser()`. |
+| 14 | Config schema not validated at runtime. `loadConfig()` silently ignores unknown keys. A hand-edited config with a typo (`"pickerPolcy"`) is silently treated as default. | eng (follow-up) | `src/core/config.cpp` | Add `qWarning()` on unrecognized top-level keys. |
+| 15 | `urlInScope` uses prefix match, not path-segment match. `up.startsWith(sp)` matches `/bitskc/lane` against scope `/bits`. `destinationKeyMatches` does proper segment-aware matching. | eng (follow-up) | `src/core/urlutil.cpp:133` | Use segment-aware matching like `destination.cpp:159`. |
+| 16 | `qputenv`/`qunsetenv` around `startDetached` is process-wide mutation. Safe today (single-threaded). Worth a comment if a worker thread is ever added. | eng (follow-up) | `src/core/launcher.cpp:250-260` | Add a comment noting the single-thread assumption. |
+| 17 | DESIGN.md drift: says six visible rows and blur; code shows eight rows and a tint without blur. | design (should-fix #6) | `DESIGN.md:14-15` | Align doc to code, or accept intentional drift explicitly. |
+| 18 | Stale screenshots: `docs/screenshots/*.png` still show "Tern", a six-row picker without section headers, and a flat Targets list without search/collapse. | design (should-fix #7) | `docs/screenshots/*.png` | Refresh after the next visual pass. |
+| 19 | Comma/period ladder keys are invisible in the footer. Footer shows chevrons and an elided key but no `,` / `.` hints. | design (should-fix #2) | `src/qml/Picker.qml:324-348` | Add `,` / `.` hints next to the ladder, or tooltips on the chevrons. |
+| 20 | Always checkbox omits the chosen target name. Labels `"Always for " + controller.currentDestinationKey` but not the highlighted row's `name`. | design (should-fix #3) | `src/qml/Picker.qml:318-320` | Append the current list selection: "Always open this path in Zen Work." |
+| 21 | Settings sidebar nav items lack `Accessible.*` names. Picker and hold are labeled; the settings shell is not. | design (should-fix #5) | `src/qml/Settings.qml:55-97` | Add `Accessible.role` / `Accessible.name` on nav items; mark the active page. |
+| 22 | CONTRIBUTING.md build block has only `cmake` commands. A stranger who reads CONTRIBUTING first hits configure failure on a clean box. | devex (fix #5) | `CONTRIBUTING.md:7-11` | Add "install deps from README" or repeat the `pacman` one-liner. |
+| 23 | `appstreamtest` is a false green on the README path. Without `cmake --install`, the test logs "Not installed yet, skipping" and still passes. | devex (TTHW) | `README.md` build section | Add `cmake --install` to README build section, or document that `appstreamtest` needs it. |
 
 ## Deliberately not doing
 
-Places to push back on the reviews rather than action them as-is:
+Places the suite considered and rejected:
 
-- **Splitting Containers into its own top-level Settings nav item**
-  (design should-fix #5's secondary suggestion). Decline for now. The nav
-  is already sparse at four items (`DESIGN.md:19`), and containers only
-  appear for profiles where Tern can detect a protocol-handler extension
-  (`DESIGN.md:7`) - most users will see zero or a handful, not sixteen.
-  Fix the search/collapse mechanism in `TargetsPage.qml` first (fix list
-  #12); only revisit a dedicated nav item if collapse alone does not make
-  the Containers section manageable once it's built.
-- **A headless QML smoke test in CI** (devex fix #6). Worth having
-  eventually, but not urgent right now: the specific Kirigami 6.28
-  regression it is meant to catch (`borderColor`/`borderWidth` vs. grouped
-  `border.color`/`border.width`) was already found and fixed by hand
-  before this review round (`CHANGELOG.md:29-34`). Revisit if a second
-  Kirigami-API-drift bug ships before this test exists.
-- **A `platformName() != "wayland"` startup guard for non-wlroots
-  compositors** (eng should-fix). Real hardening, but `LayerShellQt` is
-  already a hard `REQUIRED` build dependency (`CMakeLists.txt:53-54`) and
-  the entire target audience is KDE Plasma on Wayland. This is backlog
-  work, not something that blocks the fix list above.
-- **Relicensing to MIT/GPL right now** (CEO review's Option B). Decline
-  until there is a concrete reason to: zero emails have asked to pay and
-  zero distro packaging requests have been rejected on license grounds
-  yet (`docs/reviews/ceo.md:20`). Relicensing is a one-way door - it
-  permanently forecloses the commercial track - and should wait for
-  either a real "someone wants to pay" signal or a real "a distro said no
-  because of the license" signal, not be done preemptively.
-- **"Undo" on the post-open toast for a forgotten Always choice** (design
-  should-fix #4). A real usability nit, but `forgetHost` in
-  `RulesPage.qml` already gives a one-click path to fix a wrong memory,
-  and this is a low-frequency action relative to everything ranked above
-  it. Fine to leave for a later pass.
+- **Ripping out containers.** The CEO review calls containers scope creep
+  but explicitly says "this is not a call to rip containers out"
+  (`docs/reviews/ceo.md:51`). The openspec auditor flags the spec
+  contradiction but recommends updating the spec, not reverting the code.
+  Containers are small, tested, and honestly documented in DESIGN.md.
+  The call is to stop adding features for a near-empty audience, not to
+  remove what already works.
+- **Rewriting OpenSpec from scratch.** The auditor recommends
+  update-in-place then archive, not archive-and-rewrite
+  (`docs/reviews/openspec.md:134-141`). The change ID `initial-tern` is
+  referenced by tooling and git history. A rewrite orphans it without
+  adding correctness. The shipped product is coherent; the gap is
+  documentation and structure.
+- **Chasing distro packaging beyond AUR.** PolyForm Noncommercial blocks
+  Debian/Fedora/openSUSE official repos (`docs/reviews/ceo.md:20`). AUR
+  does not gate on license. Flathub hosts proprietary apps but adds a
+  review queue. AUR is the zero-cost, zero-license-conflict path to the
+  first stranger. Flathub can wait until AUR produces signal.
+- **Shipping a container-bridge WebExtension.** The prior round's CEO
+  review recommended this to reach the full 409K Multi-Account Containers
+  user base. The cost the recommendation did not price in: an AMO review
+  pipeline, a second release train independent of Lane's CMake/CI/AUR
+  cycle, and an ongoing support surface in JavaScript and WebExtensions
+  API, a language and ecosystem the rest of Lane does not touch. Wait
+  for container-routing demand signal from outside users before
+  committing.
+- **Relicensing to MIT/GPL now.** No email has asked to pay. No distro
+  has rejected the license. Relicensing is a one-way door that
+  permanently forecloses the commercial track. Hold until there is real
+  signal either way (`docs/reviews/ceo.md:73`).
+- **Headless QML smoke test in CI.** The Kirigami 6.28 `borderColor`
+  regression it would catch was already found and fixed by hand
+  (`docs/reviews/devex.md:92`). Revisit if a second Kirigami API-drift
+  bug ships before this test exists.
+- **Adding Lua scripting.** Still out of scope. Browser Tamer's Lua
+  scripts are a power-user feature that would expand the surface without
+  expanding the audience (`docs/reviews/ceo.md:67`).
 
-## Next three moves
+## What the repo already decided
 
-1. **Land fix-list items 1-5 (roughly one day of AI-assisted work).**
-   Why now: these are what stand between "the engineering is good" and
-   "safe to hand to a stranger" - a build that fails on a clean box, a
-   security check that silently doesn't apply to hand-edited config (which
-   matters because `AGENTS.md:19` explicitly invites agents to edit that
-   file), a crash that can wipe a user's config with zero warning, and a
-   picker shortcut that silently does the wrong thing. Every other move on
-   this list assumes these are already fixed.
-2. **Fix and publish the `PKGBUILD` to AUR, then post to r/kde or the KDE
-   Discourse pointing at Junction issue #9.** Why now: this is the one
-   move every validated premise in the CEO review actually supports today
-   (`docs/designs/tern-office-hours.md#premises`) - the artifact is an
-   hour from ready (fix list #6), the target user already showed up in
-   someone else's issue tracker four years ago, and it is the only way to
-   turn "zero outside validation" into real data instead of another
-   internal review.
-3. **Hold the WebExtension and relicensing decisions until move 2
-   produces real signal.** Why now: both are large, one-way commitments -
-   an AMO review pipeline and a second release train for the extension,
-   a foreclosed commercial track for relicensing - being considered
-   against premises both reviews mark unvalidated
-   (`docs/reviews/ceo.md:20`, contradiction #2 above). Move 2 is what
-   converts either from a guess into a decision backed by an actual
-   stranger's request.
+Settled calls a future session must not silently reverse:
+
+- **PolyForm Noncommercial + separate commercial track.** Free for
+  personal/hobby use; commercial use requires contacting Andy. Pricing is
+  unset, no checkout, email-only (`COMMERCIAL.md`, `README.md:176-180`).
+  Relicensing is a one-way door; hold for signal.
+- **Path-scoped memory, not just host.** `github.com/bitskc` can go
+  somewhere different from `github.com`. The destination ladder
+  (`destination.cpp:124-138`) and comma/period navigation in the picker
+  expose this. This is the sharpest piece of routing logic and the one a
+  competitor would get wrong (`docs/reviews/ceo.md:71`).
+- **Hold HUD on silent opens only.** `shouldHold()`
+  (`Controller.cpp:797-804`) runs the hold on remembered, PWA, and
+  default opens. Rule matches skip the hold (`Controller.cpp:802-804`).
+  The picker is the veto for ambiguous paths. The hold is a safety net
+  for trained paths, not a confirmation step for new ones.
+- **Absolute Exec paths in the .desktop file.** `app.lane.Lane.desktop.in`
+  uses an absolute path so the KDE app menu can find the binary without
+  PATH resolution. Required for D-Bus activation.
+- **No default-browser theft.** Lane never calls `xdg-mime` or
+  `xdg-settings` automatically. The only path to becoming the default
+  is a button in Settings (`OverviewPage.qml:23-28`,
+  `Controller.cpp:430-438`).
+- **http/https only.** `file:`, `javascript:`, `data:`, and
+  credentials-in-URL are refused. mailto and PDF are not stolen from
+  their own handlers (`DESIGN.md:23,29`).
+- **Custom handlers are argv, never a shell.** `QProcess::startDetached`
+  with a real argv array. Interpreters (`bash -c`, `python -c`, `env`)
+  are rejected by basename and by symlink-chain walk (`launcher.cpp`).
+- **Resident daemon, not cold-start.** Cold-start Qt is too slow for a
+  picker. The architecture depends on staying resident (`DESIGN.md:13`).
+- **No Lua.** Explicitly out of scope, inherited from the Browser Tamer
+  model (`DESIGN.md:52`, `proposal.md:11`).
+- **Containers shipped but Lane never registers `ext+container` itself.**
+  Lane wraps the URL as argv and hands it to the browser. Whether a
+  container link lands in the container depends on a third-party
+  protocol-handler extension with 1.9K users (`DESIGN.md:7`). The README
+  should be honest about this dependency, not advertise containers as a
+  top-line feature.

@@ -1,6 +1,6 @@
-# Design review: Tern picker, hold, and settings
+# Design review: Lane picker, hold, and settings
 
-Reviewed from `src/qml/*.qml`, `src/app/Controller.cpp`, `src/core/*.cpp`, and `docs/screenshots/{picker,hold,settings}.png`. No live overlay injection.
+Reviewed from `src/qml/**/*.qml`, `src/app/Controller.{h,cpp}`, `src/app/{PickerModel,TargetModel,RuleModel}.*`, `src/core/types.h`, `DESIGN.md`, and stale `docs/screenshots/{picker,hold,settings}.png` (pre-rename "Tern", pre-section-headers picker, pre-search Targets page). No live overlay or running daemon.
 
 ---
 
@@ -8,107 +8,101 @@ Reviewed from `src/qml/*.qml`, `src/app/Controller.cpp`, `src/core/*.cpp`, and `
 
 | Dimension | Score | What a 10 looks like |
 |-----------|------:|----------------------|
-| First 200ms | 6 | Resident daemon, rule matches open instantly with zero chrome; remembered and default opens are invisible unless you explicitly want a veto window |
-| Picker density | 5 | Forty-plus targets stay scannable: grouped sections, filter finds any row in two keystrokes, scroll position is obvious |
-| Keyboard model | 7 | Every binding is either muscle memory or labeled in the footer; path scope and Always are discoverable without reading source |
-| The Always checkbox | 6 | Label states exact scope and target; regret is one undo from the picker or tray, not a settings dig |
-| Settings IA | 4 | Targets are browsable at scale: search, collapse, or split by kind without a 2000px scroll |
-| Empty and error states | 5 | Missing browser, failed launch, and blocked URL all tell you what happened and what to do next |
-| Visual identity | 8 | Reads as native Plasma: accent, blur/tint, Kirigami card, icon; not a generic Qt dialog |
-| Accessibility | 3 | Overlay is fully navigable by keyboard and AT: labeled rows, focus order, contrast-safe tint, non-color cues for containers |
+| First 200ms | 5 | Rule matches and post-training remembered opens are invisible; hold veto exists only for people who opt in, with a sub-400ms default |
+| Picker density | 7 | Forty-plus targets stay scannable without typing: grouped sections, sane viewport math, filter finds any row in two keystrokes |
+| Keyboard model | 8 | Every binding works from the focused filter field and is labeled in the footer; path ladder keys are discoverable without reading source |
+| The Always checkbox | 6 | Label states exact scope and chosen target; regret is one action from the picker, hold HUD, or toast |
+| Settings IA | 7 | Targets are browsable at scale via search and collapsible sections; reorder cannot surprise you under a filter |
+| Empty and error states | 8 | Missing browser, failed launch, blocked URL, and broken rules/remembered entries all say what happened and what to do |
+| Visual identity | 8 | Reads as native Plasma: Kirigami card, accent selection, light tint; not a generic Qt dialog |
+| Accessibility | 6 | Overlays and settings forms expose roles/names; sidebar nav and focus order are complete for keyboard and AT |
 
 ---
 
 ## The one thing
 
-**Default `holdAutoOpen` to off, or cut `holdMs` from 1600 to ~350.**
+**Default `holdAutoOpen` to off, or cut default `holdMs` from 1600 to about 400.**
 
-The hold HUD (`Hold.qml`) runs on every remembered, PWA, and default open when `holdAutoOpen` is true (the default in `types.h`). That is the opposite of DESIGN.md line 5: "either nothing visible (correct app already opened)". A person who has trained sixteen containers will hit the hold bar dozens of times a day. Enter/esc help power users but everyone else waits 1.6 seconds staring at `QQC.ProgressBar` in `Hold.qml` with no setting to shorten the duration (`holdMs` exists in config but has no UI in `PreferencesPage.qml`).
+`holdAutoOpen` is still `true` by default (`src/core/types.h:150`). `shouldHold()` (`Controller.cpp:797-804`) runs the hold HUD on every remembered, PWA, and default open. With ~45 targets and trained memory, that is dozens of 1.6s interruptions per day. Preferences now exposes duration (`PreferencesPage.qml:54-65`), but most people never open Preferences for a daemon that "just works." DESIGN.md line 5 promises "either nothing visible"; the hold section documents the veto, but the default optimizes first-time safety over the trained path.
 
-**File:** `src/core/types.h` — change `holdAutoOpen` default to `false`, or `holdMs` to `350`. Secondary: expose `holdMs` in `PreferencesPage.qml` if the hold stays on by default.
+**Files:** `src/core/types.h:150` (`holdAutoOpen = false` or `holdMs = 400`).
 
 ---
 
 ## Blocking
 
-1. **Silent launch failure.** `launchTarget()` in `launcher.cpp` returns false when the executable is missing; `Controller::launch()` returns without notification. The link does nothing. A vanished browser or broken custom command looks like Tern is broken.
-
-2. **Hold on the trained happy path.** With `holdAutoOpen` default true, the product's core promise (invisible routing after memory) is violated on every remembered open. Esc-to-picker is a recovery path, not a primary flow.
-
-3. **No accessibility tree on overlays.** `Picker.qml` and `Hold.qml` have zero `Accessible` properties. Screen readers on Wayland get an unnamed fullscreen window with no row labels. This is blocking for anyone relying on AT.
+Nothing new blocks shipping to the owner on Plasma 6.7.4. The hold default is a daily-friction product call, not a broken surface.
 
 ---
 
 ## Should fix
 
-1. **Picker survives 44 targets only via filter; numbers die at 9.** `PickerModel` assigns shortcuts 1-9 by row index (`ShortcutRole`). Rows 10-44 need scroll plus filter. With sixteen Zen containers sharing the same `iconName` and subtitle pattern (`Zen · Banking`), visual discrimination is name-only. Add section headers (Browsers / Containers / Apps) in `Picker.qml` and `rankForPicker()`, or pin recent targets above the fold.
+1. **Picker list height over-counts section headers.** `Picker.qml:186-187` adds `controller.pickerModel.sectionCount * sectionHeaderHeight` for every section in the filtered model (up to five), not for headers visible inside the eight-row viewport. With mixed sections this can leave dead space at the bottom of the clipped list or size the card taller than the rows actually shown. Count headers among the visible row budget, or cap header allowance to what fits in `maxRows`.
 
-2. **Comma and period path scope is unlearnable from the UI.** `Picker.qml` wires `,` and `.` shortcuts (lines 42-51) but the footer only shows `‹` / `›` `ToolButton`s and `currentDestinationKey`. No hint that comma widens and period narrows. Add footer labels next to the ladder control, or tooltips on the chevrons.
+2. **Comma/period ladder still invisible.** `Picker.qml:164-174` handles `,` and `.` in the filter field, but the footer (`Picker.qml:324-348`) only shows `‹` / `›` chevrons and a 120px-elided key. Add `,` / `.` hints next to the ladder, or tooltips on the chevrons.
 
-3. **Always checkbox scope is ambiguous.** `alwaysBox` text is `"Always for " + controller.currentDestinationKey`. When the ladder is at `github.com/bitskc`, a person may think they are committing the whole host, not a path-scoped key. The checkbox should read something like "Always open this path in [target]" and show the picked row's name, not just the key.
+3. **Always checkbox omits the chosen target.** `Picker.qml:318-320` labels `"Always for " + controller.currentDestinationKey` but not the highlighted row's `name`. A path-scoped key like `github.com/bitskc/repo` does not say *where* links open. Append the current list selection: "Always open this path in Zen · Work."
 
-4. **Undo Always costs too many clicks.** Regret path: open Settings (`Settings.qml`), nav to Rules (`RulesPage.qml`), find host in "Remembered destinations", click delete (`forgetHost`). That is tray → settings → rules → scroll → delete. Offer "Undo" on the post-open toast (`Controller::toast`) or a one-click forget on the hold HUD.
+4. **Regret path for Always is still a settings dig.** `pickId()` writes remembered (`Controller.cpp:381-384`); undo is tray → Settings → Rules → find host → delete (`RulesPage.qml:117-127`). Offer "Undo" on the post-open toast (`Controller.cpp:704-712`) or a forget action on the hold HUD.
 
-5. **`TargetsPage.qml` does not scale.** Five `ListView`s (Browsers, Containers, Installed web apps, Private windows, Custom apps) each at `rowHeight: 48` with drag handle, rename field, hide switch, and sometimes Default. Sixteen containers alone are 768px before PWAs and browsers. **Proposed fix:** split "Browsers & apps" into a searchable `Kirigami.SearchField` at the top of `TargetsPage.qml`, collapse each section with `Kirigami.CollapsibleCard` (Containers expanded by default, Private windows collapsed), and move Containers to their own nav item if count exceeds ~8. Drop per-row Default buttons; one global default combo already exists at the top.
+5. **Settings sidebar has no accessibility names.** `Settings.qml:55-97` nav `ListView` delegates lack `Accessible.*`. Picker and hold are labeled; the settings shell is not. Add `Accessible.role` / `Accessible.name` on nav items and mark the active page.
 
-6. **Custom app add failures are invisible.** `addCustomTarget()` logs `qWarning` and returns. `TargetsPage.qml` `FormButtonDelegate` "Add custom app" gives no inline error on rejected commands.
+6. **`DESIGN.md` drift.** Doc still says six visible rows and blur (`DESIGN.md:14-15`); code shows eight rows (`Picker.qml:22`) and a tint without blur (`CHANGELOG.md` "Overlay tints the desktop"). Align doc or accept intentional drift explicitly.
 
-7. **Blocked URL shows picker, not explanation.** `route()` sets `reason: "blocked"` and `applyDecision` shows the picker. The person sees a normal picker for a `javascript:` link with no banner. `Controller::launch()` does notify for unsafe opens on launch path, but blocked routing never reaches that.
-
-8. **Expose `holdMs` in preferences** if hold stays default-on. `PreferencesPage.qml` has the toggle but not the duration slider.
-
-9. **Container color is stored but never shown.** `Target.color` from `containerColor()` in `discovery.cpp` is not exposed through `PickerModel` or `TargetModel::targetsByKind`. Unmapped colors (e.g. cyan) return invalid `QColor` and matter only if you add a color dot to the picker row. Today they are invisible, so the cyan gap is latent, not user-visible.
-
-10. **DESIGN.md drift.** Doc says six visible rows; `Picker.qml` `maxRows: 8`. Screenshot `picker.png` shows six. Align doc or screenshot after the density change settles.
+7. **Stale screenshots.** `docs/screenshots/*.png` still show "Tern", a six-row picker without section headers, and a flat Targets list without search/collapse. Refresh after the next visual pass so reviews do not argue against ghosts.
 
 ---
 
-## Right as-is
+## Follow-ups
 
-1. **Resident daemon + layer-shell overlay.** `Picker.qml` / `Hold.qml` use `LayerShell.Window` with exclusive keyboard. Cold-start avoided. Correct architecture for Wayland.
+1. **Per-row Default buttons on Targets.** `TargetsPage.qml:117-122` (and container rows) duplicate the global "Fallback target" combo (`TargetsPage.qml:415-420`). Fine at six targets; noisy at forty-five.
 
-2. **12% tint instead of heavy dim.** `Picker.qml` `dim` rectangle at `Qt.rgba(0,0,0,0.12)` keeps context visible. Hold uses 8%. Matches "quiet overlay" intent better than the old heavy dim in the screenshot.
+2. **Container rows without mapped color.** Neutral dot fallback is correct (`Picker.qml:254-268`); subtitle and `Accessible.description` carry kind. Consider a "Container" text badge when `colorName` is empty so shape-blind users do not rely on dot alone.
 
-3. **Rules skip hold.** `shouldHold()` only fires for `remembered`, `pwa`, `default`. Rule matches launch immediately. Respects explicit user intent.
+3. **Blocked URL is notification-only.** `applyDecision()` calls `notifyBlocked()` (`Controller.cpp:605-610`) with no in-overlay explanation. Acceptable for v0.1; a one-line banner in a future picker-empty state would help when notification permissions are off.
 
-4. **Checkbox for Always, not a switch.** Matches DESIGN.md and reads as a commitment, not a mode toggle.
+4. **Settings minimum size at scale.** `Settings.qml:9-10` (`880×560`) is tight when Containers and PWAs are both expanded with search cleared. Not broken with collapse defaults (`TargetsPage.qml:14-18`); watch on 720p laptops.
 
-5. **Filter field auto-focused on show.** `onVisibleChanged` clears filter and `forceActiveFocus()` on `filterField`. Right for type-to-filter with sixteen new container names.
-
-6. **Destination ladder with chevrons.** `currentDestinationKey` in the footer plus `‹`/`›` buttons gives path scope without opening settings. Power feature; just needs keyboard hints.
-
-7. **Two-pane settings without hamburger.** `Settings.qml` fixed 220px nav, `StackLayout` for pages. Stable IA shell; the problem is page content length, not nav count. (Nav is four items today: Overview, Browsers & apps, Rules, Preferences. No About page in tree.)
-
-8. **Container discovery gated on protocol handler.** `geckoContainers()` in `discovery.cpp` checks `extensions.json` before listing containers. Avoids offering sixteen dead targets that open blank tabs. Good product call even though it complicates the empty state.
-
-9. **Kirigami card treatment.** `ShadowedRectangle`, `highlightColor` selection in list delegate, monospace shortcut badges. Reads Plasma-native in screenshots.
-
-10. **`containerColor()` deliberate gaps.** Leaving unmapped Firefox color names as default `QColor` avoids wrong guesses. Fine until picker rows show color dots; then add cyan or fall back to a neutral ring plus container name.
+5. **Picker screenshot density at 45 targets.** Eight rows plus up to five section headers in height math means filter is the real navigation path. "Recent targets" pin above sections would reduce typing for power users.
 
 ---
 
-## Notes by surface
+## What landed since last review
 
-### Picker (`Picker.qml`)
+- Picker section headers and stable kind grouping (`PickerModel.cpp:97-147`, `Picker.qml:198-214`).
+- Dynamic `sectionCount` replaces hardcoded header guess (`PickerModel.h:14-19`, `Picker.qml:187`).
+- Container color dots with neutral fallback for unmapped colors (`Picker.qml:254-268`, `PickerModel.cpp:42-43`).
+- `holdMs` slider 0.4-5s in Preferences (`PreferencesPage.qml:54-65`).
+- Picker/hold `Accessible` roles and row labels (`Picker.qml:72-76`, `233-235`; `Hold.qml:58-60`).
+- Targets search field and collapsible sections with counts (`TargetsPage.qml:394-409`, `424-548`).
+- Drag reorder disabled while search filter is active (`TargetsPage.qml:65-73`).
+- Rules warn on missing rule targets and offer bulk clear for dangling remembered (`RulesPage.qml:39-79`, `130-137`).
+- Launch failure and blocked-link notifications (`Controller.cpp:656-662`, `715-722`).
+- Custom app add shows inline command errors (`TargetsPage.qml:654-665`).
+- Number keys 1-8, comma, period, and Ctrl+C work while filter is focused (`Picker.qml:147-175`).
+- Copy link moved to footer (`Picker.qml:350-385`); no longer steals a row or shortcut.
 
-Card is 440px wide. List height is `min(8, count) * 48` = up to 384px of rows plus filter (36px), header, footer. Total card ~500px tall with eight rows. Acceptable on 1080p; tight on 720p laptops.
+---
 
-Footer row packs `alwaysBox`, ladder chevrons, and `esc` hint into one `RowLayout`. At narrow widths `currentDestinationKey` elides at 120px fixed width, which truncates long path keys.
+## Considered and fine
 
-Number shortcuts disabled when `filterField.text.length > 0`. Typing "per" to find Personal disables 1-9. Correct tradeoff; filter becomes the only path.
+1. **Resident daemon + layer-shell overlays.** `Picker.qml` / `Hold.qml` use `LayerShell.Window` with exclusive keyboard. Correct for Wayland.
+2. **Light tint, not heavy dim.** Picker `dim` at 12% (`Picker.qml:47`); hold at 8% (`Hold.qml:32`). Matches "quiet overlay."
+3. **Rules skip hold.** `shouldHold()` excludes rule matches (`Controller.cpp:802-804`). Explicit rules launch immediately.
+4. **Checkbox for Always.** `Picker.qml:314-321` uses `QQC.CheckBox`, not a switch. Matches DESIGN.md.
+5. **Filter auto-focused on show.** `Picker.qml:26-33` clears filter and focuses the field. Right default for large target lists.
+6. **Destination ladder in footer.** `currentDestinationKey` plus chevrons gives path scope without opening settings; only needs keyboard labels.
+7. **Two-pane settings, no hamburger.** `Settings.qml` fixed 220px nav and four pages. Shell is stable; page content was the problem and is much improved.
+8. **Container discovery gated on protocol handler.** CHANGELOG and `TargetsPage.qml:489-498` explain the extension requirement. Avoids dead container rows.
+9. **Kirigami card treatment.** `ShadowedRectangle`, highlight selection, monospace shortcut badges. Plasma-native in screenshots and source.
+10. **Global fallback target combo.** Single default picker at `TargetsPage.qml:415-420` is clearer than per-row Default at scale (per-row buttons are the leftover noise).
 
-### Hold (`Hold.qml`)
+---
 
-360px card, `QQC.ProgressBar` bound to `controller.holdProgress`. Copy is clear ("Opening in …", enter now / esc pick instead). Problem is duration and default-on, not layout.
+## Method
 
-Clicking the dimmed background calls `cancelHold()` which opens the picker. Good escape hatch.
-
-### Settings (`TargetsPage.qml`)
-
-Inline rename via `QQC.TextField` with `onEditingFinished` and 1ms `Timer` debounce to `renameTarget`. Drag reorder per section via `Kirigami.ListItemDragHandle`. Works for six targets; at forty-four the page is a configuration spreadsheet.
-
-Empty container message (line 429-438) only shows when `hasGeckoBrowsers()` and count is zero. Good. No equivalent for empty PWA list or missing default browser target.
-
-### Remembered destinations (`RulesPage.qml`)
-
-`forgetHost` is one click per entry with delete icon. Clear. Just buried in settings.
+1. Ran `gstack-skill-start --skill plan-design-review` (SESSION_ID `3239336-1789189764-a24f48b0`, TEL_START `1789189764`).
+2. Read `plan-design-review/SKILL.md`; adapted plan-review dimensions to shipped QML at HEAD.
+3. Read all QML under `src/qml/`, Controller surface, models, and `DESIGN.md`.
+4. Could not see live UI. Judged layout from source plus stale `docs/screenshots/*.png` (Tern branding, old picker row count, no section headers, flat Targets page). Stated limitations here.
+5. Re-scored eight dimensions from the prior review table; verified each CHANGELOG claim in source.
