@@ -1,13 +1,10 @@
 #include "UpdateChecker.h"
 
 #include "core/repoinfo.h"
+#include "core/updatedecision.h"
 #include "core/updatemessages.h"
-#include "core/urlutil.h"
-#include "core/version.h"
 #include "lane_version.h"
 
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -83,16 +80,14 @@ void UpdateChecker::handleReply(QNetworkReply *reply, int redirectsLeft)
 
     // A redirect arrives as a 3xx status with QNetworkReply::NoError (manual
     // redirect policy leaves error() untouched); handle it before the
-    // network-error check below would otherwise mistake an ordinary
-    // redirect response for a connection failure.
+    // decision logic below would otherwise mistake an ordinary redirect
+    // response for a connection failure.
     if (httpStatus >= 300 && httpStatus < 400) {
         QUrl location = reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
         if (location.isRelative()) {
             location = reply->url().resolved(location);
         }
-        const bool safe = location.isValid() && location.scheme() == QLatin1String("https")
-            && !isPrivateOrLocalHost(location.host());
-        if (!safe || redirectsLeft <= 0) {
+        if (!isSafeUpdateRedirect(location) || redirectsLeft <= 0) {
             fail(describeUnsafeRedirect(repoSlug));
             return;
         }
@@ -100,61 +95,22 @@ void UpdateChecker::handleReply(QNetworkReply *reply, int redirectsLeft)
         return;
     }
 
-    if (reply->error() != QNetworkReply::NoError && httpStatus == 0) {
-        // No HTTP response was received at all: DNS, connection, TLS, or
-        // timeout failure rather than anything GitHub said.
-        fail(describeNetworkError(reply->error()));
+    // Everything below is pure decode of the finished, non-redirect reply
+    // into a terminal state; see core/updatedecision.h for the parts that
+    // are unit tested directly without a QNetworkReply.
+    const UpdateDecision decision = decodeUpdateReply(httpStatus,
+                                                        reply->error(),
+                                                        reply->readAll(),
+                                                        reply->rawHeader("x-ratelimit-reset"),
+                                                        m_currentVersion,
+                                                        repoSlug);
+    m_latestVersion = decision.latestVersion;
+    m_releaseUrl = decision.releaseUrl;
+    if (decision.outcome == UpdateOutcome::Failed) {
+        fail(decision.errorMessage);
         return;
     }
-
-    if (httpStatus == 403 || httpStatus == 429) {
-        const QByteArray resetHeader = reply->rawHeader("x-ratelimit-reset");
-        bool ok = false;
-        const qint64 resetEpoch = resetHeader.toLongLong(&ok);
-        fail(describeRateLimited(ok ? resetEpoch : -1));
-        return;
-    }
-
-    if (httpStatus == 404) {
-        // Ambiguous on purpose: GitHub returns 404 both for a repository
-        // that does not exist and for one with no published releases.
-        fail(describeReleasesNotFound(repoSlug));
-        return;
-    }
-
-    if (reply->error() != QNetworkReply::NoError || httpStatus != 200) {
-        fail(describeUnexpectedStatus(httpStatus, repoSlug));
-        return;
-    }
-
-    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-    if (!doc.isObject()) {
-        fail(describeMalformedResponse(repoSlug, QStringLiteral("the response body was not valid JSON")));
-        return;
-    }
-    const QJsonObject obj = doc.object();
-    const QString tag = obj.value(QStringLiteral("tag_name")).toString();
-    const QString htmlUrl = obj.value(QStringLiteral("html_url")).toString();
-    if (tag.isEmpty() || htmlUrl.isEmpty()) {
-        fail(describeMalformedResponse(repoSlug, QStringLiteral("the release was missing its version tag or URL")));
-        return;
-    }
-    if (!isSafeOpenUrl(htmlUrl) || isPrivateOrLocalHost(hostOf(htmlUrl))) {
-        fail(describeMalformedResponse(repoSlug, QStringLiteral("the release URL was not safe to open")));
-        return;
-    }
-
-    m_latestVersion = tag;
-    m_releaseUrl = htmlUrl;
-
-    const VersionOrder order = compareVersions(m_currentVersion, tag);
-    if (order == VersionOrder::Older) {
-        setStatus(Status::UpdateAvailable);
-    } else if (order == VersionOrder::Unknown) {
-        fail(describeMalformedResponse(repoSlug, QStringLiteral("the version \"%1\" could not be parsed").arg(tag)));
-    } else {
-        setStatus(Status::UpToDate);
-    }
+    setStatus(decision.outcome == UpdateOutcome::UpdateAvailable ? Status::UpdateAvailable : Status::UpToDate);
 }
 
 void UpdateChecker::setStatus(Status status)

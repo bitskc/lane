@@ -172,12 +172,17 @@ private:
     void startHold(const Target &target, const QString &reason, const QString &memoryKey);
     void hideHold();
     UnshortenFn unshortenFn() const;
+    void refreshDefaultBrowserState();
 
     Config m_config;
     QString m_configPath;
     QList<Target> m_targets;
     Click m_click;
     bool m_alwaysForHost = false;
+    // Cached result of the last xdg-settings default-browser check (see
+    // refreshDefaultBrowserState()); isDefaultBrowser() only reads this,
+    // it never spawns xdg-settings itself.
+    bool m_isDefaultBrowser = false;
     // Whatever inbound XDG_ACTIVATION_TOKEN this click's openUrl() call
     // carried (from KDBusService relaying a caller's token, or inherited at
     // process start), consumed at most once per click. Used only for a

@@ -244,6 +244,13 @@ bool launchTarget(const Target &target, const QString &url, const QString &activ
     // therefore both correct for this call shape and as narrow a window as
     // it allows. An empty activationToken leaves the environment untouched
     // and this call behaves exactly as it always has.
+    //
+    // This mutates the whole process's environment, not just this call's
+    // view of it; it is safe only because Lane's Qt event loop is
+    // single-threaded, so no other code can run (and read a stale or
+    // half-restored value of XDG_ACTIVATION_TOKEN) between the set here
+    // and the restore below. A second launchTarget() call could only
+    // interleave via re-entrancy on this same thread, and none does.
     const bool hadToken = !activationToken.isEmpty();
     const bool hadPrevious = qEnvironmentVariableIsSet("XDG_ACTIVATION_TOKEN");
     const QByteArray previous = hadPrevious ? qgetenv("XDG_ACTIVATION_TOKEN") : QByteArray();

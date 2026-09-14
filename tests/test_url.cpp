@@ -35,6 +35,15 @@ private Q_SLOTS:
                                  QStringLiteral("https://qbo.intuit.com/app/")));
         QVERIFY(!Lane::urlInScope(QStringLiteral("https://qbo.intuit.com/other"),
                                   QStringLiteral("https://qbo.intuit.com/app/")));
+        // Segment boundary, not a raw string prefix: a scope of "/bits"
+        // must not match a path that merely starts with those characters
+        // ("/bitskc/lane" is a different first segment, not a subpath).
+        QVERIFY(!Lane::urlInScope(QStringLiteral("https://example.com/bitskc/lane"),
+                                  QStringLiteral("https://example.com/bits")));
+        QVERIFY(Lane::urlInScope(QStringLiteral("https://example.com/bits/sub"),
+                                 QStringLiteral("https://example.com/bits")));
+        QVERIFY(Lane::urlInScope(QStringLiteral("https://example.com/bits"),
+                                 QStringLiteral("https://example.com/bits")));
     }
 
     void safeOpenUrl()

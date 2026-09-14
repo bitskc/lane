@@ -125,12 +125,22 @@ bool urlInScope(const QString &url, const QString &scope)
     if (u.host().compare(s.host(), Qt::CaseInsensitive) != 0) {
         return false;
     }
-    const QString sp = s.path().isEmpty() ? QStringLiteral("/") : s.path();
+    // Segment-aware: a trailing-slash-normalized scope path must match the
+    // URL path exactly or be followed by a '/', so a scope of "/bits" does
+    // not match "/bitskc/lane" (destination.cpp::destinationKeyMatches does
+    // the same kind of segment matching for remembered destinations).
+    QString sp = s.path().isEmpty() ? QStringLiteral("/") : s.path();
+    if (sp.size() > 1 && sp.endsWith(QLatin1Char('/'))) {
+        sp.chop(1);
+    }
     const QString up = u.path().isEmpty() ? QStringLiteral("/") : u.path();
     if (sp == QLatin1String("/")) {
         return true;
     }
-    return up.startsWith(sp, Qt::CaseInsensitive);
+    if (up.compare(sp, Qt::CaseInsensitive) == 0) {
+        return true;
+    }
+    return up.startsWith(sp + QLatin1Char('/'), Qt::CaseInsensitive);
 }
 
 bool isPrivateOrLocalHost(const QString &host)

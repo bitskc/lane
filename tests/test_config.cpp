@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTest>
@@ -46,6 +47,28 @@ private Q_SLOTS:
         QCOMPARE(loaded.customTargets.size(), 1);
         QCOMPARE(loaded.customTargets[0].id, QStringLiteral("custom:notes"));
         QCOMPARE(loaded.customTargets[0].exec, QStringLiteral("/usr/bin/true"));
+    }
+
+    void unknownTopLevelKeyWarnsButStaysTolerant()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("config.json"));
+        QJsonObject o;
+        o[QStringLiteral("pickerPolcy")] = QStringLiteral("always"); // typo'd key: must not be silently adopted
+        o[QStringLiteral("pickerPolicy")] = QStringLiteral("always");
+        o[QStringLiteral("toastMs")] = 1234;
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(QJsonDocument(o).toJson());
+        f.close();
+
+        QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral(".*unrecognized key.*pickerPolcy.*")));
+        const Config loaded = loadConfig(path);
+        // Tolerant: the rest of the file still loads normally, the typo'd
+        // key is simply ignored rather than rejecting the whole config or
+        // being mistaken for the real "pickerPolicy" key.
+        QCOMPARE(loaded.pickerPolicy, PickerPolicy::Always);
+        QCOMPARE(loaded.toastMs, 1234);
     }
 
     void customTargetsDropBlockedInterpreter()

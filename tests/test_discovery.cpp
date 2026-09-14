@@ -316,6 +316,35 @@ private Q_SLOTS:
         QVERIFY(displayNameUsesAlias);
     }
 
+    void applyConfigHiddenFlagIsIdempotentAcrossReapplication()
+    {
+        // Controller::hideTarget()/renameTarget()/moveTarget() reapply
+        // config onto the already-applied m_targets list instead of a
+        // freshly discovered one (to skip re-scanning everything on a
+        // purely cosmetic change), so applyConfigToTargets() must be safe
+        // to call more than once on the same list: hiding a target and
+        // then un-hiding it must actually clear the flag again, not leave
+        // it stuck true from the first call.
+        QList<Target> targets;
+        Target a;
+        a.id = QStringLiteral("browser:zen:def");
+        a.kind = Kind::BrowserProfile;
+        a.name = QStringLiteral("Default");
+        a.browserName = QStringLiteral("Zen");
+        targets = {a};
+
+        Config cfg;
+        cfg.hiddenTargetIds = {QStringLiteral("browser:zen:def")};
+        auto result = applyConfigToTargets(targets, cfg);
+        QVERIFY(result.at(0).hidden);
+
+        // Un-hide, then reapply onto the *result* of the first call, the
+        // way Controller does.
+        cfg.hiddenTargetIds.clear();
+        result = applyConfigToTargets(result, cfg);
+        QVERIFY(!result.at(0).hidden);
+    }
+
     void applyConfigEmptyOrderKeepsDiscoveryOrder()
     {
         QList<Target> targets;

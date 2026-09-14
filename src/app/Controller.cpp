@@ -158,10 +158,20 @@ void Controller::setAlwaysForHost(bool on)
 
 bool Controller::isDefaultBrowser() const
 {
+    return m_isDefaultBrowser;
+}
+
+void Controller::refreshDefaultBrowserState()
+{
+    // Spawning xdg-settings is a real process launch; cache the result
+    // instead of re-running it on every isDefaultBrowser property read
+    // (QML binds this and reads it far more often than the default
+    // browser can actually change). Re-checked only here: after reload()
+    // and right after makeDefaultBrowser() asks the desktop to change it.
     QProcess p;
     p.start(QStringLiteral("xdg-settings"), {QStringLiteral("get"), QStringLiteral("default-web-browser")});
     p.waitForFinished(1500);
-    return QString::fromUtf8(p.readAllStandardOutput()).trimmed() == QLatin1String("app.lane.Lane.desktop");
+    m_isDefaultBrowser = QString::fromUtf8(p.readAllStandardOutput()).trimmed() == QLatin1String("app.lane.Lane.desktop");
 }
 
 QString Controller::pickerPolicy() const
@@ -462,6 +472,7 @@ void Controller::makeDefaultBrowser()
                       {QStringLiteral("default"), QStringLiteral("app.lane.Lane.desktop"), QStringLiteral("x-scheme-handler/https")});
     QProcess::execute(QStringLiteral("xdg-settings"),
                       {QStringLiteral("set"), QStringLiteral("default-web-browser"), QStringLiteral("app.lane.Lane.desktop")});
+    refreshDefaultBrowserState();
     Q_EMIT defaultBrowserChanged();
 }
 
@@ -472,7 +483,10 @@ void Controller::hideTarget(const QString &id, bool hidden)
         m_config.hiddenTargetIds.append(id);
     }
     persist();
-    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    // Hiding cannot change what is installed, so reapply config onto the
+    // already-discovered list instead of re-scanning every desktop file,
+    // Gecko profile, Chromium Local State, and PWA manifest again.
+    m_targets = applyConfigToTargets(m_targets, m_config);
     m_targetModel->setTargets(m_targets);
     Q_EMIT settingsChanged();
 }
@@ -572,11 +586,24 @@ void Controller::renameTarget(const QString &id, const QString &name)
     for (auto &t : m_config.customTargets) {
         if (t.id == id) {
             t.name = trimmed.isEmpty() ? QFileInfo(t.exec).fileName() : trimmed;
+            // Custom targets have no discovered name to fall back to like
+            // browsers/PWAs do, so the live list's copy must be kept in
+            // sync directly: applyConfigToTargets() below only appends
+            // customTargets that are not already present by id, it never
+            // refreshes fields on an entry that is already there.
+            for (auto &live : m_targets) {
+                if (live.id == id) {
+                    live.name = t.name;
+                    break;
+                }
+            }
             break;
         }
     }
     persist();
-    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    // Renaming cannot change what is installed, so reapply config onto the
+    // already-discovered list instead of re-scanning everything again.
+    m_targets = applyConfigToTargets(m_targets, m_config);
     m_targetModel->setTargets(m_targets);
     Q_EMIT settingsChanged();
 }
@@ -585,7 +612,9 @@ void Controller::moveTarget(const QString &id, int newIndexInKind)
 {
     m_config.targetOrder = moveIdAmongSiblings(m_targets, id, newIndexInKind);
     persist();
-    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    // Reordering cannot change what is installed, so reapply config onto
+    // the already-discovered list instead of re-scanning everything again.
+    m_targets = applyConfigToTargets(m_targets, m_config);
     m_targetModel->setTargets(m_targets);
     Q_EMIT settingsChanged();
 }
@@ -602,6 +631,17 @@ void Controller::reload()
     }
     m_targetModel->setTargets(m_targets);
     m_ruleModel->setRules(m_config.rules);
+    // Prune remembered-host entries that point at a target no longer
+    // installed (uninstalled browser, deleted profile): reuses the exact
+    // dead-check danglingRememberedHosts()/clearDeadRemembered() already
+    // use, and clearDeadRemembered() only persists when it actually
+    // removed something, so a normal reload with nothing dead never
+    // writes the config file. Must run after m_ruleModel->setRules()
+    // above: persist() reads m_ruleModel->rules() back into m_config, so
+    // running this earlier would clobber the just-loaded rules with
+    // whatever the model held before this reload.
+    clearDeadRemembered();
+    refreshDefaultBrowserState();
     Q_EMIT settingsChanged();
     Q_EMIT defaultBrowserChanged();
 }

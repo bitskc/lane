@@ -10,6 +10,7 @@ set(lane_core_SRCS
     core/unshorten.cpp
     core/version.cpp
     core/updatemessages.cpp
+    core/updatedecision.cpp
 )
 
 add_library(lane-core STATIC ${lane_core_SRCS})

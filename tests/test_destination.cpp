@@ -210,7 +210,9 @@ private Q_SLOTS:
         Config c;
         QVERIFY(saveConfig(path, c));
         const Config loaded = loadConfig(path);
-        QCOMPARE(loaded.holdAutoOpen, true);
+        // holdAutoOpen defaults to off: DESIGN.md promises "either nothing
+        // visible" for a correct open, the pause is opt-in via Preferences.
+        QCOMPARE(loaded.holdAutoOpen, false);
         QCOMPARE(loaded.holdMs, 1600);
     }
 };

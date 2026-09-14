@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QSet>
 #include <QStandardPaths>
 #include <QUuid>
 
@@ -220,6 +221,33 @@ Config loadConfig(const QString &path)
         return c;
     }
     const QJsonObject o = doc.object();
+
+    // Tolerant on purpose: an unrecognized key (a typo like "pickerPolcy",
+    // or a key from a newer/older Lane version) is silently ignored by the
+    // field-by-field reads below rather than rejecting the whole config,
+    // but a typo that quietly becomes a default is worth surfacing once
+    // per load instead of never at all.
+    {
+        static const QSet<QString> knownKeys = {
+            QStringLiteral("version"),           QStringLiteral("pickerPolicy"),     QStringLiteral("closeOnFocusLoss"),
+            QStringLiteral("showUrl"),           QStringLiteral("toast"),            QStringLiteral("toastMs"),
+            QStringLiteral("unwrapO365"),        QStringLiteral("unshorten"),        QStringLiteral("openUnwrapped"),
+            QStringLiteral("preferPwa"),         QStringLiteral("holdAutoOpen"),     QStringLiteral("holdMs"),
+            QStringLiteral("autostart"),         QStringLiteral("defaultTargetId"),  QStringLiteral("hiddenTargetIds"),
+            QStringLiteral("recentTargetIds"),   QStringLiteral("targetOrder"),      QStringLiteral("targetAliases"),
+            QStringLiteral("remembered"),        QStringLiteral("rules"),            QStringLiteral("customTargets"),
+            QStringLiteral("substitutions"),
+        };
+        QStringList unknown;
+        for (auto it = o.begin(); it != o.end(); ++it) {
+            if (!knownKeys.contains(it.key())) {
+                unknown << it.key();
+            }
+        }
+        if (!unknown.isEmpty()) {
+            qWarning() << "Lane: config at" << path << "has unrecognized key(s), ignoring:" << unknown;
+        }
+    }
     c.version = o[QStringLiteral("version")].toInt(1);
     c.pickerPolicy = pickerPolicyFromString(o[QStringLiteral("pickerPolicy")].toString());
     c.closeOnFocusLoss = o[QStringLiteral("closeOnFocusLoss")].toBool(true);
@@ -230,7 +258,7 @@ Config loadConfig(const QString &path)
     c.unshorten = o[QStringLiteral("unshorten")].toBool(true);
     c.openUnwrapped = o[QStringLiteral("openUnwrapped")].toBool(false);
     c.preferPwa = o[QStringLiteral("preferPwa")].toBool(true);
-    c.holdAutoOpen = o[QStringLiteral("holdAutoOpen")].toBool(true);
+    c.holdAutoOpen = o[QStringLiteral("holdAutoOpen")].toBool(false);
     c.holdMs = o[QStringLiteral("holdMs")].toInt(1600);
     c.autostart = o[QStringLiteral("autostart")].toBool(false);
     c.defaultTargetId = o[QStringLiteral("defaultTargetId")].toString();

@@ -146,7 +146,7 @@ struct Config {
     bool unshorten = true;
     bool openUnwrapped = false;
     bool preferPwa = true;
-    bool holdAutoOpen = true;
+    bool holdAutoOpen = false;
     int holdMs = 1600;
     bool autostart = false;
     QString defaultTargetId;
