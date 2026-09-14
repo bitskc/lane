@@ -73,6 +73,11 @@ QQC.ApplicationWindow {
                         color: ListView.isCurrentItem
                                ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.22)
                                : "transparent"
+
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: label
+                        Accessible.selected: ListView.isCurrentItem
+
                         MouseArea {
                             anchors.fill: parent
                             onClicked: nav.currentIndex = index

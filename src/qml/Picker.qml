@@ -309,85 +309,121 @@ Window {
                 color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
             }
 
-            RowLayout {
+            ColumnLayout {
                 width: parent.width
-                QQC.CheckBox {
-                    id: alwaysBox
-                    checked: controller.alwaysForHost
-                    onToggled: controller.alwaysForHost = checked
-                    text: controller.currentDestinationKey.length > 0
-                          ? "Always for " + controller.currentDestinationKey
-                          : "Always for this site"
-                    font.pixelSize: 12
-                }
-                Item { Layout.fillWidth: true }
+                spacing: 6
+
                 RowLayout {
-                    spacing: 2
-                    QQC.ToolButton {
-                        text: "‹"
-                        enabled: controller.destinationIndex > 0
-                        onClicked: controller.destinationIndex = controller.destinationIndex - 1
-                        flat: true
-                        Layout.preferredWidth: 24
-                        Layout.preferredHeight: 24
+                    Layout.fillWidth: true
+                    spacing: 10
+                    QQC.CheckBox {
+                        id: alwaysBox
+                        checked: controller.alwaysForHost
+                        onToggled: controller.alwaysForHost = checked
+                        text: {
+                            const key = controller.currentDestinationKey
+                            const target = list.currentItem ? list.currentItem.name : ""
+                            if (key.length === 0)
+                                return "Always for this site"
+                            return target.length > 0
+                                   ? "Always for " + key + " in " + target
+                                   : "Always for " + key
+                        }
+                        font.pixelSize: 12
+                        // fillWidth lets the label elide instead of pushing
+                        // the ladder group past the card edge when the
+                        // destination key and target name are both long.
+                        Layout.fillWidth: true
                     }
-                    QQC.Label {
-                        text: controller.currentDestinationKey
-                        font.pixelSize: 10
-                        opacity: 0.5
-                        elide: Text.ElideRight
-                        Layout.preferredWidth: 120
-                    }
-                    QQC.ToolButton {
-                        text: "›"
-                        enabled: controller.destinationIndex < controller.destinationLadder.length - 1
-                        onClicked: controller.destinationIndex = controller.destinationIndex + 1
-                        flat: true
-                        Layout.preferredWidth: 24
-                        Layout.preferredHeight: 24
-                    }
-                }
-                Item {
-                    id: copyHint
-                    Layout.preferredWidth: copyRow.implicitWidth
-                    Layout.preferredHeight: 16
-
-                    Accessible.role: Accessible.Button
-                    Accessible.name: "Copy link"
-                    Accessible.description: "Copy the current link to the clipboard, shortcut Control C"
-
                     RowLayout {
-                        id: copyRow
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 4
-                        Kirigami.Icon {
-                            source: "edit-copy"
-                            Layout.preferredWidth: 12
-                            Layout.preferredHeight: 12
-                            opacity: copyHover.hovered ? 0.7 : 0.4
+                        spacing: 2
+                        QQC.ToolButton {
+                            text: "‹"
+                            enabled: controller.destinationIndex > 0
+                            onClicked: controller.destinationIndex = controller.destinationIndex - 1
+                            flat: true
+                            Layout.preferredWidth: 24
+                            Layout.preferredHeight: 24
                         }
                         QQC.Label {
-                            text: "^C"
+                            text: controller.currentDestinationKey
                             font.pixelSize: 10
-                            font.family: "monospace"
-                            opacity: copyHover.hovered ? 0.7 : 0.4
+                            opacity: 0.5
+                            elide: Text.ElideRight
+                            Layout.preferredWidth: 120
+                        }
+                        QQC.ToolButton {
+                            text: "›"
+                            enabled: controller.destinationIndex < controller.destinationLadder.length - 1
+                            onClicked: controller.destinationIndex = controller.destinationIndex + 1
+                            flat: true
+                            Layout.preferredWidth: 24
+                            Layout.preferredHeight: 24
                         }
                     }
-                    HoverHandler {
-                        id: copyHover
-                        cursorShape: Qt.PointingHandCursor
-                    }
-                    TapHandler {
-                        onTapped: controller.copyCurrent()
-                    }
-                    QQC.ToolTip.visible: copyHover.hovered
-                    QQC.ToolTip.text: "Copy link"
                 }
-                QQC.Label {
-                    text: "esc"
-                    font.pixelSize: 10
-                    font.family: "monospace"
-                    opacity: 0.4
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Item {
+                        id: copyHint
+                        Layout.preferredWidth: copyRow.implicitWidth
+                        Layout.preferredHeight: 16
+
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Copy link"
+                        Accessible.description: "Copy the current link to the clipboard, shortcut Control C"
+
+                        RowLayout {
+                            id: copyRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 4
+                            Kirigami.Icon {
+                                source: "edit-copy"
+                                Layout.preferredWidth: 12
+                                Layout.preferredHeight: 12
+                                opacity: copyHover.hovered ? 0.7 : 0.4
+                            }
+                            QQC.Label {
+                                text: "^C"
+                                font.pixelSize: 10
+                                font.family: "monospace"
+                                opacity: copyHover.hovered ? 0.7 : 0.4
+                            }
+                        }
+                        HoverHandler {
+                            id: copyHover
+                            cursorShape: Qt.PointingHandCursor
+                        }
+                        TapHandler {
+                            onTapped: controller.copyCurrent()
+                        }
+                        QQC.ToolTip.visible: copyHover.hovered
+                        QQC.ToolTip.text: "Copy link"
+                    }
+                    QQC.Label {
+                        text: "esc"
+                        font.pixelSize: 10
+                        font.family: "monospace"
+                        opacity: 0.4
+                    }
+                    Item { Layout.fillWidth: true }
+                    // Ladder keys: "," narrows the destination (adds a path
+                    // segment), "." widens it (back toward the bare host) --
+                    // see the Keys.onPressed handler above.
+                    QQC.Label {
+                        text: ". widen"
+                        font.pixelSize: 10
+                        font.family: "monospace"
+                        opacity: 0.4
+                    }
+                    QQC.Label {
+                        text: ", narrow"
+                        font.pixelSize: 10
+                        font.family: "monospace"
+                        opacity: 0.4
+                    }
                 }
             }
         }
