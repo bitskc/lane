@@ -189,7 +189,9 @@ version is 0, minor releases may still contain breaking changes.
   hid typos and stale keys. They now log a warning naming the key.
 - The settings page spawned `xdg-settings` on every read to check
   whether Lane is the default browser. The result is now cached and
-  refreshed only when it can change.
+  refreshed only when it can change, and refreshed every time Settings
+  is opened, so an external change (e.g. via System Settings) is picked
+  up without a restart.
 
 ### Security
 
