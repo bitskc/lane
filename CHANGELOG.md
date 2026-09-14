@@ -42,6 +42,9 @@ version is 0, minor releases may still contain breaking changes.
   background or on startup, and it never downloads or installs
   anything itself; at most it offers to open the release page in your
   browser.
+- Test coverage for the update checker's response handling and for the
+  unshorten gates. Each update-check failure cause is proven to map to
+  its own message, and the unshorten safety checks are exercised.
 
 ### Changed
 
@@ -62,6 +65,12 @@ version is 0, minor releases may still contain breaking changes.
   small control in the footer, next to the `esc` hint. It no longer
   consumes a row or a number shortcut; the underlying action and its
   Ctrl+C binding are unchanged.
+- The hold bar is now opt-in. `holdAutoOpen` defaults to off; turn it
+  on in Preferences if you want the pause before silent opens. The
+  `holdMs` schema minimum is 400 ms to match the Preferences slider.
+- The Always checkbox now names the target it pins to. The picker
+  footer shows `,` and `.` hints for the destination ladder, and the
+  settings sidebar navigation has accessibility labels.
 
 ### Fixed
 
@@ -151,6 +160,36 @@ version is 0, minor releases may still contain breaking changes.
   list even though it is drawn at zero height. Drag-reorder is now
   disabled while a filter is active; clearing the search box restores
   it.
+- The picker footer put the Always checkbox, the destination ladder,
+  and the key hints on one row, so a long target name pushed the
+  footer past the card edge. The footer is now two rows and nothing
+  clips (user-reported).
+- A second click while a first link was still being unshortened could
+  overwrite the in-flight click and cancel its hold. The in-flight
+  click is now protected from re-entrancy.
+- Lane segfaulted on X11 and non-wlroots compositors because the
+  layer-shell surface could be null. A null check now skips the
+  overlay instead of crashing.
+- `lane --rediscover` and `lane --configure` were documented but the
+  binary rejected them as Unknown option. Both are registered and
+  work.
+- Renaming, reordering, or hiding a target in settings triggered a
+  full browser re-scan, which could reshuffle rows and lose the
+  user's place. Cosmetic mutations now save without rediscovering.
+- Remembered destinations pointing at targets that no longer exist
+  were kept forever and could never match. They are now pruned when
+  the config loads.
+- Rules that match on window title or source process can never match
+  on Wayland, because Lane cannot see the caller's identity there.
+  They now warn once instead of silently never firing.
+- A PWA scope like `/bits` matched any path that merely started with
+  those characters, so `/bitskc` was wrongly treated as in scope.
+  Scope matching now compares path segments.
+- Unknown top-level keys in `config.json` were silently ignored, which
+  hid typos and stale keys. They now log a warning naming the key.
+- The settings page spawned `xdg-settings` on every read to check
+  whether Lane is the default browser. The result is now cached and
+  refreshed only when it can change.
 
 ### Security
 
@@ -187,6 +226,15 @@ version is 0, minor releases may still contain breaking changes.
   `config.json.corrupt-<timestamp>` with a warning instead of being
   silently replaced by defaults. Rules and remembered destinations are
   never discarded without a copy.
+
+### Docs
+
+- The `initial-tern` openspec change was repaired to match the shipped
+  v0.1.0 product and archived. The canonical spec now lives at
+  `openspec/specs/lane/spec.md`.
+- DESIGN.md, CONTRIBUTING.md, and README.md drift fixes: picker rows
+  and tint, the build dependency step, and the appstreamtest install
+  note.
 
 ## [0.1.0] - 2026-09-11
 
