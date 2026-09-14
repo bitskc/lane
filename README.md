@@ -178,6 +178,9 @@ cmake --install build
 update-desktop-database "$HOME/.local/share/applications"
 ```
 
+`appstreamtest` only runs after `cmake --install`; before that it reports
+"Not installed yet, skipping".
+
 The install prefix is baked into the desktop and service files, so the
 launcher finds the binary even when `$HOME/.local/bin` is not on PATH.
 Run `update-desktop-database` after installing so the menu picks up the

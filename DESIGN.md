@@ -11,8 +11,8 @@ Firefox/Zen containers (contextual identities) are targets too, not a separate f
 Choosy / Velja / Opener, not a settings dialog:
 
 - Resident process. Cold-start Qt is too slow for a picker.
-- Layer-shell overlay, exclusive keyboard, blur, Plasma accent.
-- Compact card (~440px). Six visible rows, then scroll. Footer never clips.
+- Layer-shell overlay, exclusive keyboard, dim tint, Plasma accent.
+- Compact card (440px). Eight visible rows, then scroll. Footer never clips.
 - Checkbox for “Always for this site”, not a switch.
 - One decision per unknown site, then memory.
 - PWAs rank above browser windows. GitHub BITS is an app, not a tab.

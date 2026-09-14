@@ -4,6 +4,9 @@ Lane is a small project. Patches welcome.
 
 ## Build
 
+Install the dependencies from the Build section of README.md first (the
+pacman line), then:
+
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX="$HOME/.local"
 cmake --build build
