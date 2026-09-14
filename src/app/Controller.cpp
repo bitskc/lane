@@ -451,6 +451,11 @@ void Controller::copyCurrent()
 
 void Controller::openSettings()
 {
+    const bool wasDefaultBrowser = m_isDefaultBrowser;
+    refreshDefaultBrowserState();
+    if (wasDefaultBrowser != m_isDefaultBrowser) {
+        Q_EMIT defaultBrowserChanged();
+    }
     ensureSettingsEngine();
     if (m_settingsWindow) {
         m_settingsWindow->show();
