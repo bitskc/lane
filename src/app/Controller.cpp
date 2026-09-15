@@ -559,7 +559,13 @@ QString Controller::addCustomTarget(const QString &name, const QString &command)
     t.icon = QStringLiteral("application-x-executable");
     m_config.customTargets.append(t);
     persist();
-    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    // Adding a custom target cannot change what is installed, so reapply
+    // config onto the already-discovered list instead of re-scanning every
+    // desktop file, Gecko profile, Chromium Local State, and PWA manifest
+    // again: the fresh id is not present in m_targets yet, so
+    // applyConfigToTargets() appends it exactly as it would onto a freshly
+    // discovered list.
+    m_targets = applyConfigToTargets(m_targets, m_config);
     m_targetModel->setTargets(m_targets);
     Q_EMIT settingsChanged();
     return {};
@@ -575,7 +581,21 @@ void Controller::removeCustomTarget(const QString &id)
     }
     m_config.customTargets = kept;
     persist();
-    m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
+    // Removing a custom target cannot change what is installed, so drop it
+    // from the already-discovered list instead of re-scanning every desktop
+    // file, Gecko profile, Chromium Local State, and PWA manifest again.
+    // applyConfigToTargets() only appends customTargets that are missing by
+    // id, it never removes, so the entry must be erased here; the reapply
+    // below then keeps hidden/alias/order consistent like the siblings.
+    QList<Target> remaining;
+    remaining.reserve(m_targets.size());
+    for (const auto &t : m_targets) {
+        if (t.id != id) {
+            remaining.append(t);
+        }
+    }
+    m_targets = remaining;
+    m_targets = applyConfigToTargets(m_targets, m_config);
     m_targetModel->setTargets(m_targets);
     Q_EMIT settingsChanged();
 }
