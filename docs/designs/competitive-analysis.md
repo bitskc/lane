@@ -43,7 +43,7 @@ to that source failed or the source has no public feature page).
 | Path-scoped memory (below domain) | **Yes, unique** | No — matchers are domain/pattern, no learned per-path memory | No | No | No | No (static config only) | No |
 | Hold / undo window before silent auto-open | **Yes, unique** | No — rule matches open immediately | No | No | N/A — always prompts | No — rule matches open immediately | N/A — always prompts |
 | Source-app rules | Stub field, doesn't fire on Wayland (documented) | Yes, mature (Command-click to create a rule from the prompt) [fetched] | Yes [inference] | Unclear | No | Only via title-based heuristics some users script | No |
-| Tracking-param stripping | No | Yes, built-in + optional custom JS pre-transform [fetched] | No | Unclear | No | Manual, via user's own `rewrite` script | No |
+| Tracking-param stripping | Manual (find/replace substitutions), no curated list | Yes, built-in + optional custom JS pre-transform [fetched] | No | Unclear | No | Manual, via user's own `rewrite` script | No |
 | Short-URL expansion | Yes (4-hop, safety-gated) | Yes, optional [fetched] | No | Unclear | No | No | No |
 | Scripting | Explicitly out of scope (DESIGN.md non-goal) | JS rewrite hooks only, not full scripting | No | **Yes — Lua** [fetched: repo description] | No | **Yes — full JS/TS config**, most powerful of the field [fetched] | No |
 | Browser extension bridge | No (containers launched via argv only) | Yes (Safari/Chrome/Firefox) for browser-clicked links [fetched] | Has an API/URL-scheme automation surface [inference] | No | No | Yes (Chrome/Firefox "open with Finicky") [fetched] | No |
@@ -74,12 +74,16 @@ the app that invoked it. This is real, proven demand, but it is not a gap
 Lane can close by writing code; it needs an upstream Wayland/portal
 capability that doesn't exist yet. Not actionable now.
 
-**Tracking-parameter stripping + URL transform scripting (Velja, and
-Finicky's `rewrite` hooks).** Genuinely missing from Lane and genuinely
-useful — every browser-picker on macOS in this matrix that has rules also
-lets you clean the URL before or as part of matching. Lane already runs a
-URL through Outlook-unwrap and unshorten; a static tracking-param strip
-slots into that same pipeline with no new UI paradigm.
+**A curated tracking-param list on top of Lane's existing substitutions
+pipeline (Velja, and Finicky's `rewrite` hooks).** Lane already has the
+capability here — `Config::substitutions` (find/replace, regex-capable,
+documented in AGENTS.md and `config.schema.json`) runs in `pipeline.cpp`
+before rule matching, the same manual URL-transform mechanism this matrix
+credits Finicky's `rewrite` script with. What Lane lacks is a *curated*
+default list of known tracking params (`utm_*`, `fbclid`, `gclid`, etc.)
+with a toggle, the way Velja ships one out of the box instead of asking
+the user to hand-write every substitution. This is a small gap, not a
+missing capability.
 
 **Full scripting (Finicky's JS/TS, Browser Tamer's Lua).** DESIGN.md
 explicitly rules this out as a non-goal, and that's the right call for a
@@ -190,21 +194,23 @@ doesn't control. Full scripting was rejected as an explicit non-goal and
 because Finicky already proves it's a maintenance-heavy feature for a
 niche of the niche.
 
-### 2. Tracking-parameter stripping
+### 2. Curated tracking-param list on top of existing substitutions
 
-**What:** A static, opt-in list of known tracking params (`utm_*`, `fbclid`,
-`gclid`, `mc_eid`, etc.) stripped from the URL as a pipeline step alongside
-the existing Outlook-unwrap and unshorten stages, before rule matching.
+**What:** A built-in, opt-in default list of known tracking params
+(`utm_*`, `fbclid`, `gclid`, `mc_eid`, etc.) applied as substitutions
+automatically, so users don't have to hand-write each one. Lane's
+`Config::substitutions` mechanism (find/replace, regex-capable, applied in
+`pipeline.cpp:41-53` before rule matching) already does the underlying
+work — this only adds a curated, toggleable default list on top of it.
 
 **Which competitor proves the demand:** Velja ships this as a built-in
 toggle plus an optional custom-JS pre-transform stage that runs before
 rules match — described in its own docs as commonly needed because "an app
 wraps the destination in a redirect or link guard."
 
-**Effort:** Low — a day or two. No network calls, no new UI paradigm; it's
-a regex/allowlist pass that fits directly into the pipeline Lane already
-has (`pipeline.cpp`/`unshorten.cpp` already do multi-stage URL
-normalization with safety gates).
+**Effort:** Low — a day or two. No network calls, no new pipeline stage,
+no new UI paradigm; it's a bundled list of default substitution entries
+plus a settings toggle, reusing the mechanism that already exists.
 
 **Why it beats the alternatives:** It's the cheapest proven-demand item on
 the list and slots into code that already exists, rather than opening a
@@ -249,9 +255,10 @@ working, it doesn't win a new use case the way Activity-aware routing does.
    model via KActivities; the one thing genuinely impossible for any
    Mac/Windows/GNOME competitor to copy without becoming Plasma-native
    first. A few days of work.
-2. Tracking-parameter stripping — cheapest proven-demand gap (Velja ships
-   it, users cite it explicitly), slots into Lane's existing unshorten/
-   unwrap pipeline with no new UI. A day or two.
+2. Curated tracking-param list on top of existing substitutions —
+   cheapest proven-demand gap (Velja ships one out of the box; Lane's
+   `Config::substitutions` pipeline already does the underlying find/
+   replace work, it just lacks a bundled default list). A day or two.
 3. Default-browser reclaim watchdog — defensive, reuses the caching/
    notification plumbing 0.2.0 already built for the update checker and
    the `xdg-settings` cache, protects against a real observed failure mode.
