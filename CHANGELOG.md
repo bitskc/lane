@@ -192,6 +192,25 @@ version is 0, minor releases may still contain breaking changes.
   refreshed only when it can change, and refreshed every time Settings
   is opened, so an external change (e.g. via System Settings) is picked
   up without a restart.
+- Every row on the Browsers & apps page (browsers, containers, web
+  apps, custom apps, private windows) showed a drag handle, a toggle,
+  and a "Default" button, but no name or icon. Each `ListView`'s
+  `delegate` was a `Loader` whose `sourceComponent` pointed at a
+  `Component` declared elsewhere in the file; objects a `Loader`
+  creates from `sourceComponent` do not inherit the row's `model`/
+  `index` context the way a `Component` used directly as `delegate`
+  does, so every `model.name`/`model.iconName`/`model.hidden` binding
+  inside the loaded delegate silently resolved to nothing. Each
+  draggable section's delegate is now a plain `Item` wrapper (assigned
+  directly as `ListView.delegate`, no `Loader`) holding the row's
+  `ItemDelegate` as an ordinary child: plain children inherit `model`/
+  `index` normally, and `Kirigami.ListItemDragHandle.listItem` still
+  points at the inner `ItemDelegate`, not the wrapper, so the wrapper
+  keeps the row's layout slot in the `ListView` while the delegate
+  handle reparents the `ItemDelegate` during a drag, matching
+  `ListItemDragHandle`'s documented contract. The private-windows
+  section has no drag handle and keeps its `ItemDelegate` as the
+  direct delegate.
 
 ### Security
 
