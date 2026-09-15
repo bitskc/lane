@@ -53,73 +53,78 @@ FormCard.FormCardPage {
 
     Component {
         id: browserDelegate
-        QQC.ItemDelegate {
-            id: listItem
+        Item {
+            id: wrapper
             width: browserList.width
             height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
             visible: height > 0
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Kirigami.ListItemDragHandle {
-                    listItem: listItem
-                    listView: browserList
-                    // Filtered-out rows stay in browserModel at their
-                    // original index (only their visual height collapses
-                    // to 0, see the ListView below), so a drag computed
-                    // against the full model while a search filter is
-                    // active can persist an order different from what was
-                    // visually dragged. Disabling the handle while
-                    // filtered avoids that ambiguity outright; clearing
-                    // the search box restores dragging.
-                    enabled: page.searchText.trim().length === 0
-                    onMoveRequested: (oldIndex, newIndex) => {
-                        if (browserList.dragId === "")
-                            browserList.dragId = browserModel.get(oldIndex).targetId
-                        browserModel.move(oldIndex, newIndex, 1)
-                    }
-                    onDropped: (oldIndex, newIndex) => {
-                        if (newIndex >= 0 && browserList.dragId !== "") {
-                            controller.moveTarget(browserList.dragId, newIndex)
-                            browserList.dragId = ""
+            QQC.ItemDelegate {
+                id: listItem
+                width: wrapper.width
+                height: wrapper.height
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    Kirigami.ListItemDragHandle {
+                        listItem: listItem
+                        listView: browserList
+                        // Filtered-out rows stay in browserModel at their
+                        // original index (only their visual height collapses
+                        // to 0, see the ListView below), so a drag computed
+                        // against the full model while a search filter is
+                        // active can persist an order different from what was
+                        // visually dragged. Disabling the handle while
+                        // filtered avoids that ambiguity outright; clearing
+                        // the search box restores dragging.
+                        enabled: page.searchText.trim().length === 0
+                        onMoveRequested: (oldIndex, newIndex) => {
+                            if (browserList.dragId === "")
+                                browserList.dragId = browserModel.get(oldIndex).targetId
+                            browserModel.move(oldIndex, newIndex, 1)
+                        }
+                        onDropped: (oldIndex, newIndex) => {
+                            if (newIndex >= 0 && browserList.dragId !== "") {
+                                controller.moveTarget(browserList.dragId, newIndex)
+                                browserList.dragId = ""
+                            }
                         }
                     }
-                }
-                Kirigami.Icon {
-                    source: model.iconName
-                    implicitWidth: 22
-                    implicitHeight: 22
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                QQC.TextField {
-                    text: model.name
-                    placeholderText: model.discoveredName
-                    Layout.fillWidth: true
-                    background: Item {}
-                    verticalAlignment: TextInput.AlignVCenter
-                    onEditingFinished: {
-                        var id = model.targetId
-                        var nm = text.trim()
-                        if (nm !== model.name) {
-                            renameTimer.targetId = id
-                            renameTimer.newName = nm
-                            renameTimer.start()
+                    Kirigami.Icon {
+                        source: model.iconName
+                        implicitWidth: 22
+                        implicitHeight: 22
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    QQC.TextField {
+                        text: model.name
+                        placeholderText: model.discoveredName
+                        Layout.fillWidth: true
+                        background: Item {}
+                        verticalAlignment: TextInput.AlignVCenter
+                        onEditingFinished: {
+                            var id = model.targetId
+                            var nm = text.trim()
+                            if (nm !== model.name) {
+                                renameTimer.targetId = id
+                                renameTimer.newName = nm
+                                renameTimer.start()
+                            }
+                        }
+                        Keys.onEscapePressed: {
+                            text = model.name
+                            focus = false
                         }
                     }
-                    Keys.onEscapePressed: {
-                        text = model.name
-                        focus = false
+                    QQC.Switch {
+                        checked: !model.hidden
+                        onToggled: controller.hideTarget(model.targetId, !checked)
+                        Layout.alignment: Qt.AlignVCenter
                     }
-                }
-                QQC.Switch {
-                    checked: !model.hidden
-                    onToggled: controller.hideTarget(model.targetId, !checked)
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                QQC.Button {
-                    text: "Default"
-                    flat: true
-                    onClicked: controller.defaultTargetId = model.targetId
-                    Layout.alignment: Qt.AlignVCenter
+                    QQC.Button {
+                        text: "Default"
+                        flat: true
+                        onClicked: controller.defaultTargetId = model.targetId
+                        Layout.alignment: Qt.AlignVCenter
+                    }
                 }
             }
         }
@@ -127,65 +132,70 @@ FormCard.FormCardPage {
 
     Component {
         id: containerDelegate
-        QQC.ItemDelegate {
-            id: listItem
+        Item {
+            id: wrapper
             width: containerList.width
             height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
             visible: height > 0
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Kirigami.ListItemDragHandle {
-                    listItem: listItem
-                    listView: containerList
-                    enabled: page.searchText.trim().length === 0
-                    onMoveRequested: (oldIndex, newIndex) => {
-                        if (containerList.dragId === "")
-                            containerList.dragId = containerModel.get(oldIndex).targetId
-                        containerModel.move(oldIndex, newIndex, 1)
-                    }
-                    onDropped: (oldIndex, newIndex) => {
-                        if (newIndex >= 0 && containerList.dragId !== "") {
-                            controller.moveTarget(containerList.dragId, newIndex)
-                            containerList.dragId = ""
+            QQC.ItemDelegate {
+                id: listItem
+                width: wrapper.width
+                height: wrapper.height
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    Kirigami.ListItemDragHandle {
+                        listItem: listItem
+                        listView: containerList
+                        enabled: page.searchText.trim().length === 0
+                        onMoveRequested: (oldIndex, newIndex) => {
+                            if (containerList.dragId === "")
+                                containerList.dragId = containerModel.get(oldIndex).targetId
+                            containerModel.move(oldIndex, newIndex, 1)
+                        }
+                        onDropped: (oldIndex, newIndex) => {
+                            if (newIndex >= 0 && containerList.dragId !== "") {
+                                controller.moveTarget(containerList.dragId, newIndex)
+                                containerList.dragId = ""
+                            }
                         }
                     }
-                }
-                Kirigami.Icon {
-                    source: model.iconName
-                    implicitWidth: 22
-                    implicitHeight: 22
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                QQC.TextField {
-                    text: model.name
-                    placeholderText: model.discoveredName
-                    Layout.fillWidth: true
-                    background: Item {}
-                    verticalAlignment: TextInput.AlignVCenter
-                    onEditingFinished: {
-                        var id = model.targetId
-                        var nm = text.trim()
-                        if (nm !== model.name) {
-                            renameTimer.targetId = id
-                            renameTimer.newName = nm
-                            renameTimer.start()
+                    Kirigami.Icon {
+                        source: model.iconName
+                        implicitWidth: 22
+                        implicitHeight: 22
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    QQC.TextField {
+                        text: model.name
+                        placeholderText: model.discoveredName
+                        Layout.fillWidth: true
+                        background: Item {}
+                        verticalAlignment: TextInput.AlignVCenter
+                        onEditingFinished: {
+                            var id = model.targetId
+                            var nm = text.trim()
+                            if (nm !== model.name) {
+                                renameTimer.targetId = id
+                                renameTimer.newName = nm
+                                renameTimer.start()
+                            }
+                        }
+                        Keys.onEscapePressed: {
+                            text = model.name
+                            focus = false
                         }
                     }
-                    Keys.onEscapePressed: {
-                        text = model.name
-                        focus = false
+                    QQC.Switch {
+                        checked: !model.hidden
+                        onToggled: controller.hideTarget(model.targetId, !checked)
+                        Layout.alignment: Qt.AlignVCenter
                     }
-                }
-                QQC.Switch {
-                    checked: !model.hidden
-                    onToggled: controller.hideTarget(model.targetId, !checked)
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                QQC.Button {
-                    text: "Default"
-                    flat: true
-                    onClicked: controller.defaultTargetId = model.targetId
-                    Layout.alignment: Qt.AlignVCenter
+                    QQC.Button {
+                        text: "Default"
+                        flat: true
+                        onClicked: controller.defaultTargetId = model.targetId
+                        Layout.alignment: Qt.AlignVCenter
+                    }
                 }
             }
         }
@@ -193,59 +203,64 @@ FormCard.FormCardPage {
 
     Component {
         id: pwaDelegate
-        QQC.ItemDelegate {
-            id: listItem
+        Item {
+            id: wrapper
             width: pwaList.width
             height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
             visible: height > 0
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Kirigami.ListItemDragHandle {
-                    listItem: listItem
-                    listView: pwaList
-                    enabled: page.searchText.trim().length === 0
-                    onMoveRequested: (oldIndex, newIndex) => {
-                        if (pwaList.dragId === "")
-                            pwaList.dragId = pwaModel.get(oldIndex).targetId
-                        pwaModel.move(oldIndex, newIndex, 1)
-                    }
-                    onDropped: (oldIndex, newIndex) => {
-                        if (newIndex >= 0 && pwaList.dragId !== "") {
-                            controller.moveTarget(pwaList.dragId, newIndex)
-                            pwaList.dragId = ""
+            QQC.ItemDelegate {
+                id: listItem
+                width: wrapper.width
+                height: wrapper.height
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    Kirigami.ListItemDragHandle {
+                        listItem: listItem
+                        listView: pwaList
+                        enabled: page.searchText.trim().length === 0
+                        onMoveRequested: (oldIndex, newIndex) => {
+                            if (pwaList.dragId === "")
+                                pwaList.dragId = pwaModel.get(oldIndex).targetId
+                            pwaModel.move(oldIndex, newIndex, 1)
+                        }
+                        onDropped: (oldIndex, newIndex) => {
+                            if (newIndex >= 0 && pwaList.dragId !== "") {
+                                controller.moveTarget(pwaList.dragId, newIndex)
+                                pwaList.dragId = ""
+                            }
                         }
                     }
-                }
-                Kirigami.Icon {
-                    source: model.iconName
-                    implicitWidth: 22
-                    implicitHeight: 22
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                QQC.TextField {
-                    text: model.name
-                    placeholderText: model.discoveredName
-                    Layout.fillWidth: true
-                    background: Item {}
-                    verticalAlignment: TextInput.AlignVCenter
-                    onEditingFinished: {
-                        var id = model.targetId
-                        var nm = text.trim()
-                        if (nm !== model.name) {
-                            renameTimer.targetId = id
-                            renameTimer.newName = nm
-                            renameTimer.start()
+                    Kirigami.Icon {
+                        source: model.iconName
+                        implicitWidth: 22
+                        implicitHeight: 22
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    QQC.TextField {
+                        text: model.name
+                        placeholderText: model.discoveredName
+                        Layout.fillWidth: true
+                        background: Item {}
+                        verticalAlignment: TextInput.AlignVCenter
+                        onEditingFinished: {
+                            var id = model.targetId
+                            var nm = text.trim()
+                            if (nm !== model.name) {
+                                renameTimer.targetId = id
+                                renameTimer.newName = nm
+                                renameTimer.start()
+                            }
+                        }
+                        Keys.onEscapePressed: {
+                            text = model.name
+                            focus = false
                         }
                     }
-                    Keys.onEscapePressed: {
-                        text = model.name
-                        focus = false
+                    QQC.Switch {
+                        checked: !model.hidden
+                        onToggled: controller.hideTarget(model.targetId, !checked)
+                        Layout.alignment: Qt.AlignVCenter
                     }
-                }
-                QQC.Switch {
-                    checked: !model.hidden
-                    onToggled: controller.hideTarget(model.targetId, !checked)
-                    Layout.alignment: Qt.AlignVCenter
                 }
             }
         }
@@ -253,60 +268,65 @@ FormCard.FormCardPage {
 
     Component {
         id: customDelegate
-        QQC.ItemDelegate {
-            id: listItem
+        Item {
+            id: wrapper
             width: customList.width
             height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
             visible: height > 0
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Kirigami.ListItemDragHandle {
-                    listItem: listItem
-                    listView: customList
-                    enabled: page.searchText.trim().length === 0
-                    onMoveRequested: (oldIndex, newIndex) => {
-                        if (customList.dragId === "")
-                            customList.dragId = customModel.get(oldIndex).targetId
-                        customModel.move(oldIndex, newIndex, 1)
-                    }
-                    onDropped: (oldIndex, newIndex) => {
-                        if (newIndex >= 0 && customList.dragId !== "") {
-                            controller.moveTarget(customList.dragId, newIndex)
-                            customList.dragId = ""
+            QQC.ItemDelegate {
+                id: listItem
+                width: wrapper.width
+                height: wrapper.height
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    Kirigami.ListItemDragHandle {
+                        listItem: listItem
+                        listView: customList
+                        enabled: page.searchText.trim().length === 0
+                        onMoveRequested: (oldIndex, newIndex) => {
+                            if (customList.dragId === "")
+                                customList.dragId = customModel.get(oldIndex).targetId
+                            customModel.move(oldIndex, newIndex, 1)
+                        }
+                        onDropped: (oldIndex, newIndex) => {
+                            if (newIndex >= 0 && customList.dragId !== "") {
+                                controller.moveTarget(customList.dragId, newIndex)
+                                customList.dragId = ""
+                            }
                         }
                     }
-                }
-                Kirigami.Icon {
-                    source: model.iconName
-                    implicitWidth: 22
-                    implicitHeight: 22
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                QQC.TextField {
-                    text: model.name
-                    placeholderText: model.discoveredName
-                    Layout.fillWidth: true
-                    background: Item {}
-                    verticalAlignment: TextInput.AlignVCenter
-                    onEditingFinished: {
-                        var id = model.targetId
-                        var nm = text.trim()
-                        if (nm !== model.name) {
-                            renameTimer.targetId = id
-                            renameTimer.newName = nm
-                            renameTimer.start()
+                    Kirigami.Icon {
+                        source: model.iconName
+                        implicitWidth: 22
+                        implicitHeight: 22
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    QQC.TextField {
+                        text: model.name
+                        placeholderText: model.discoveredName
+                        Layout.fillWidth: true
+                        background: Item {}
+                        verticalAlignment: TextInput.AlignVCenter
+                        onEditingFinished: {
+                            var id = model.targetId
+                            var nm = text.trim()
+                            if (nm !== model.name) {
+                                renameTimer.targetId = id
+                                renameTimer.newName = nm
+                                renameTimer.start()
+                            }
+                        }
+                        Keys.onEscapePressed: {
+                            text = model.name
+                            focus = false
                         }
                     }
-                    Keys.onEscapePressed: {
-                        text = model.name
-                        focus = false
+                    QQC.Button {
+                        text: "Remove"
+                        flat: true
+                        onClicked: controller.removeCustomTarget(model.targetId)
+                        Layout.alignment: Qt.AlignVCenter
                     }
-                }
-                QQC.Button {
-                    text: "Remove"
-                    flat: true
-                    onClicked: controller.removeCustomTarget(model.targetId)
-                    Layout.alignment: Qt.AlignVCenter
                 }
             }
         }

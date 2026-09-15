@@ -201,9 +201,16 @@ version is 0, minor releases may still contain breaking changes.
   `index` context the way a `Component` used directly as `delegate`
   does, so every `model.name`/`model.iconName`/`model.hidden` binding
   inside the loaded delegate silently resolved to nothing. Each
-  section's `ListView` now uses its `Component` directly as
-  `delegate`, with the search-filter height/visibility check moved
-  onto the delegate's own root item, which does have model access.
+  draggable section's delegate is now a plain `Item` wrapper (assigned
+  directly as `ListView.delegate`, no `Loader`) holding the row's
+  `ItemDelegate` as an ordinary child: plain children inherit `model`/
+  `index` normally, and `Kirigami.ListItemDragHandle.listItem` still
+  points at the inner `ItemDelegate`, not the wrapper, so the wrapper
+  keeps the row's layout slot in the `ListView` while the delegate
+  handle reparents the `ItemDelegate` during a drag, matching
+  `ListItemDragHandle`'s documented contract. The private-windows
+  section has no drag handle and keeps its `ItemDelegate` as the
+  direct delegate.
 
 ### Security
 
