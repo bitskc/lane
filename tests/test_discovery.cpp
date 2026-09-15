@@ -345,6 +345,64 @@ private Q_SLOTS:
         QVERIFY(!result.at(0).hidden);
     }
 
+    void applyConfigCustomTargetsAppendAndRemoveOnReapplication()
+    {
+        // Controller::addCustomTarget()/removeCustomTarget() reapply config
+        // onto the already-applied m_targets list instead of a freshly
+        // discovered one (to skip re-scanning everything when a custom
+        // target is added or removed), so applyConfigToTargets() must
+        // append a newly-added custom target when reapplied onto an
+        // already-applied list, and must not resurrect a custom target
+        // that was removed from config after Controller erased it from the
+        // list by id.
+        QList<Target> targets;
+        Target a;
+        a.id = QStringLiteral("browser:zen:def");
+        a.kind = Kind::BrowserProfile;
+        a.name = QStringLiteral("Default");
+        a.browserName = QStringLiteral("Zen");
+        targets = {a};
+
+        Config cfg;
+        Target c1;
+        c1.id = QStringLiteral("custom:first");
+        c1.kind = Kind::Custom;
+        c1.name = QStringLiteral("First");
+        c1.exec = QStringLiteral("/usr/bin/first");
+        cfg.customTargets = {c1};
+
+        auto result = applyConfigToTargets(targets, cfg);
+        QCOMPARE(result.size(), 2);
+        QCOMPARE(result.at(1).id, QStringLiteral("custom:first"));
+
+        // addCustomTarget: append a fresh custom target to config, reapply
+        // onto the *result* of the previous call, the way Controller does.
+        Target c2;
+        c2.id = QStringLiteral("custom:second");
+        c2.kind = Kind::Custom;
+        c2.name = QStringLiteral("Second");
+        c2.exec = QStringLiteral("/usr/bin/second");
+        cfg.customTargets.append(c2);
+        result = applyConfigToTargets(result, cfg);
+        QCOMPARE(result.size(), 3);
+        QCOMPARE(result.at(2).id, QStringLiteral("custom:second"));
+
+        // removeCustomTarget: drop the entry from config and erase it from
+        // the list by id, then reapply; the removed target must not come
+        // back and the remaining entries must be untouched.
+        cfg.customTargets = {c2};
+        QList<Target> remaining;
+        for (const auto &t : result) {
+            if (t.id != QLatin1String("custom:first")) {
+                remaining.append(t);
+            }
+        }
+        result = applyConfigToTargets(remaining, cfg);
+        QCOMPARE(result.size(), 2);
+        QCOMPARE(result.at(0).id, QStringLiteral("browser:zen:def"));
+        QCOMPARE(result.at(1).id, QStringLiteral("custom:second"));
+    }
+
     void applyConfigEmptyOrderKeepsDiscoveryOrder()
     {
         QList<Target> targets;
