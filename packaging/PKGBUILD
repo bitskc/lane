@@ -13,12 +13,8 @@ depends=(
   layer-shell-qt qqc2-desktop-style
 )
 makedepends=(cmake extra-cmake-modules ninja)
-# PENDING: the real checksum for the v0.2.0 tarball needs the tag to exist
-# on GitHub first. Once v0.2.0 is tagged and pushed, download this URL and
-# run `sha256sum` on it to fill in the real value below. Do not guess a
-# checksum here.
 source=("$pkgname-$pkgver.tar.gz::https://github.com/bitskc/lane/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP') # PENDING: regenerate after the v0.2.0 tag is pushed
+sha256sums=('b4bf96183b7bc2407266eca809d17de6024d5bcbdeaa194ec4fce1806190510c')
 
 build() {
   cmake -S "$srcdir/$pkgname-$pkgver" -B build -G Ninja \
