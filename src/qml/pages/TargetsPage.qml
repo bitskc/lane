@@ -56,7 +56,8 @@ FormCard.FormCardPage {
         QQC.ItemDelegate {
             id: listItem
             width: browserList.width
-            height: page.rowHeight
+            height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+            visible: height > 0
             contentItem: RowLayout {
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.ListItemDragHandle {
@@ -129,7 +130,8 @@ FormCard.FormCardPage {
         QQC.ItemDelegate {
             id: listItem
             width: containerList.width
-            height: page.rowHeight
+            height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+            visible: height > 0
             contentItem: RowLayout {
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.ListItemDragHandle {
@@ -194,7 +196,8 @@ FormCard.FormCardPage {
         QQC.ItemDelegate {
             id: listItem
             width: pwaList.width
-            height: page.rowHeight
+            height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+            visible: height > 0
             contentItem: RowLayout {
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.ListItemDragHandle {
@@ -253,7 +256,8 @@ FormCard.FormCardPage {
         QQC.ItemDelegate {
             id: listItem
             width: customList.width
-            height: page.rowHeight
+            height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+            visible: height > 0
             contentItem: RowLayout {
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.ListItemDragHandle {
@@ -312,7 +316,8 @@ FormCard.FormCardPage {
         id: privateDelegate
         QQC.ItemDelegate {
             width: privateList.width
-            height: page.rowHeight
+            height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
+            visible: height > 0
             contentItem: RowLayout {
                 spacing: Kirigami.Units.smallSpacing
                 Item { width: Kirigami.Units.iconSizes.smallMedium }
@@ -460,12 +465,7 @@ FormCard.FormCardPage {
                 YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
-            delegate: Loader {
-                width: browserList.width
-                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
-                visible: height > 0
-                sourceComponent: browserDelegate
-            }
+            delegate: browserDelegate
         }
     }
 
@@ -510,12 +510,7 @@ FormCard.FormCardPage {
                 YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
-            delegate: Loader {
-                width: containerList.width
-                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
-                visible: height > 0
-                sourceComponent: containerDelegate
-            }
+            delegate: containerDelegate
         }
     }
     QQC.Label {
@@ -560,12 +555,7 @@ FormCard.FormCardPage {
                 YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
-            delegate: Loader {
-                width: pwaList.width
-                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
-                visible: height > 0
-                sourceComponent: pwaDelegate
-            }
+            delegate: pwaDelegate
         }
     }
 
@@ -595,12 +585,7 @@ FormCard.FormCardPage {
             spacing: 0
             Layout.fillWidth: true
             implicitHeight: contentHeight
-            delegate: Loader {
-                width: privateList.width
-                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
-                visible: height > 0
-                sourceComponent: privateDelegate
-            }
+            delegate: privateDelegate
         }
     }
 
@@ -635,12 +620,7 @@ FormCard.FormCardPage {
                 YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
-            delegate: Loader {
-                width: customList.width
-                height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
-                visible: height > 0
-                sourceComponent: customDelegate
-            }
+            delegate: customDelegate
         }
         FormCard.FormTextFieldDelegate {
             id: customName

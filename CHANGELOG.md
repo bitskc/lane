@@ -192,6 +192,18 @@ version is 0, minor releases may still contain breaking changes.
   refreshed only when it can change, and refreshed every time Settings
   is opened, so an external change (e.g. via System Settings) is picked
   up without a restart.
+- Every row on the Browsers & apps page (browsers, containers, web
+  apps, custom apps, private windows) showed a drag handle, a toggle,
+  and a "Default" button, but no name or icon. Each `ListView`'s
+  `delegate` was a `Loader` whose `sourceComponent` pointed at a
+  `Component` declared elsewhere in the file; objects a `Loader`
+  creates from `sourceComponent` do not inherit the row's `model`/
+  `index` context the way a `Component` used directly as `delegate`
+  does, so every `model.name`/`model.iconName`/`model.hidden` binding
+  inside the loaded delegate silently resolved to nothing. Each
+  section's `ListView` now uses its `Component` directly as
+  `delegate`, with the search-filter height/visibility check moved
+  onto the delegate's own root item, which does have model access.
 
 ### Security
 
