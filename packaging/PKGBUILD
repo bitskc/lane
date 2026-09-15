@@ -1,5 +1,5 @@
 pkgname=lane
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Plasma-native link router: open the right browser, profile, or app"
 arch=('x86_64')
@@ -13,15 +13,12 @@ depends=(
   layer-shell-qt qqc2-desktop-style
 )
 makedepends=(cmake extra-cmake-modules ninja)
-# PENDING: the GitHub repo (bitskc/tern) has not been renamed to bitskc/lane
-# yet. GitHub generates a tag's source tarball from the repo's *current*
-# name, so this source URL and checksum cannot be correct until the rename
-# happens: renaming changes the tarball's top-level directory name (and
-# therefore its bytes and sha256) for this exact v0.1.0 tag. Once the repo
-# is renamed, download this URL and run `sha256sum` on it to get the real
-# value below. Do not guess a checksum here.
+# PENDING: the real checksum for the v0.2.0 tarball needs the tag to exist
+# on GitHub first. Once v0.2.0 is tagged and pushed, download this URL and
+# run `sha256sum` on it to fill in the real value below. Do not guess a
+# checksum here.
 source=("$pkgname-$pkgver.tar.gz::https://github.com/bitskc/lane/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP') # PENDING: regenerate after the GitHub repo rename (see note above)
+sha256sums=('SKIP') # PENDING: regenerate after the v0.2.0 tag is pushed
 
 build() {
   cmake -S "$srcdir/$pkgname-$pkgver" -B build -G Ninja \

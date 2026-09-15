@@ -45,6 +45,23 @@
     <binary>lane</binary>
   </provides>
   <releases>
+    <release version="0.2.0" date="2026-09-12">
+      <description>
+        <p>Containers, better picker grouping, and a long list of fixes.</p>
+        <ul>
+          <li>Firefox and Zen contextual identities (containers) show up as pickable destinations</li>
+          <li>Picker rows are grouped under section headers, and the Browsers &amp; apps page has search and collapsible sections</li>
+          <li>Hold duration is adjustable, and the hold bar is now opt-in (off by default)</li>
+          <li>"Check for updates" button in Settings, with per-cause failure messages</li>
+          <li>Picker and hold overlays load again on current Kirigami, fixing the bounce-then-nothing bug</li>
+          <li>Lane no longer segfaults on X11 and other non-wlroots compositors</li>
+          <li>Launched apps get keyboard focus via XDG activation instead of opening unfocused</li>
+          <li>Notifications work again for opened links and failed launches</li>
+          <li>Firefox-family profile launching and discovery are more reliable</li>
+          <li>Config writes are atomic, and a corrupt config is moved aside instead of silently replaced</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-09-11">
       <description>
         <p>First public release.</p>
