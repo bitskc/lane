@@ -61,8 +61,14 @@ struct ExecPrefix {
 
 bool isExecFieldCode(const QString &token)
 {
+    // Flatpak's file-forwarding wrapper emits an unpaired "@@u" opening
+    // marker (not bare "@@") alongside the field code it wraps and a
+    // trailing bare "@@" closer, e.g. "--file-forwarding app-id @@u %u @@".
+    // Matching only exact "@@" left "@@u" in the stripped output, where it
+    // corrupts flatpak run's own argv parsing (flatpak reads "@@u ... @@"
+    // as a forwarding span). Any token starting with "@@" is a marker.
     static const QRegularExpression fieldCode(QStringLiteral("^%[fFuUdDnNickvm]$"));
-    return token == QLatin1String("@@") || fieldCode.match(token).hasMatch();
+    return token.startsWith(QLatin1String("@@")) || fieldCode.match(token).hasMatch();
 }
 
 ExecPrefix execPrefix(const QString &execLine)
@@ -111,8 +117,6 @@ QString flatpakAppId(const QStringList &prefixArgs)
     }
     return QString();
 }
-
-
 
 bool skipDesktopId(const QString &id)
 {
