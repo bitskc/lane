@@ -212,6 +212,182 @@ private Q_SLOTS:
         QVERIFY(!firefoxHasContainers);
     }
 
+    void discoversFlatpakZenProfile()
+    {
+        // Regression for: a Zen install packaged as a Flatpak has a
+        // desktop entry Lane can find, but its real profile store lives
+        // under ~/.var/app/<app-id>/.zen rather than ~/.config/zen or
+        // ~/.zen, and its Exec= line runs "flatpak run ... <app-id>"
+        // rather than the browser binary directly.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        QFile desktop(root + QStringLiteral("/apps/app.zen_browser.zen.desktop"));
+        QVERIFY(desktop.open(QIODevice::WriteOnly));
+        desktop.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Zen Browser\n"
+            "Exec=/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=zen app.zen_browser.zen %u\n"
+            "Icon=app.zen_browser.zen\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n"));
+        desktop.close();
+
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/zen"),
+                  root + QStringLiteral("/home/.var/app/app.zen_browser.zen/.zen"));
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+
+        // The real profiles under .var/app were found (three, same as the
+        // native-install fixture), not the synthetic ":default" fallback
+        // discovery emits when profiles.ini can't be located at all.
+        const qsizetype zenProfileCount = std::count_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Zen") && t.kind == Kind::BrowserProfile && !t.incognito;
+        });
+        QCOMPARE(zenProfileCount, 3);
+        QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.id == QLatin1String("browser:app.zen_browser.zen:default");
+        }));
+
+        const auto zenDefault = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Zen") && t.isBrowserDefault && !t.incognito;
+        });
+        QVERIFY(zenDefault != targets.end());
+        QVERIFY(zenDefault->profileDir.contains(QLatin1String("/.var/app/app.zen_browser.zen/.zen")));
+
+        // The argv is the Flatpak wrapper's own tokens followed by Lane's
+        // profile args, not "flatpak --profile ..." (which would silently
+        // fail: flatpak has no --profile option of its own).
+        QCOMPARE(zenDefault->exec, QStringLiteral("/usr/bin/flatpak"));
+        QCOMPARE(zenDefault->args,
+                 QStringList({QStringLiteral("run"), QStringLiteral("--branch=stable"), QStringLiteral("--arch=x86_64"),
+                              QStringLiteral("--command=zen"), QStringLiteral("app.zen_browser.zen"), QStringLiteral("--profile"),
+                              zenDefault->profileDir, QStringLiteral("--new-tab"), QStringLiteral("$url")}));
+
+        // Containers still come through for the Flatpak profile store,
+        // carrying the same Flatpak argv prefix.
+        const auto work = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.browserName.contains(QLatin1String("Zen")) && t.containerName == QLatin1String("Work");
+        });
+        QVERIFY(work != targets.end());
+        QCOMPARE(work->exec, QStringLiteral("/usr/bin/flatpak"));
+        QVERIFY(work->args.contains(QStringLiteral("app.zen_browser.zen")));
+        QVERIFY(work->args.contains(QStringLiteral("--profile")));
+    }
+
+    void stripsFlatpakFileForwardingMarkersFromExecPrefix()
+    {
+        // Regression for: flatpak's exporter rewrites Exec= for apps that
+        // register as URL handlers to wrap the %u field code in a
+        // file-forwarding span, "@@u %u @@" (this is the real Exec= line
+        // flathub's app.zen_browser.zen desktop entry ships). The opening
+        // marker is "@@u", not bare "@@"; treating only exact "@@" as a
+        // field code left "@@u" in Lane's argv prefix, where it corrupts
+        // flatpak run's own argv parsing (flatpak itself reads "@@u ... @@"
+        // as a forwarding span). "--file-forwarding" and the app id are
+        // real flatpak run arguments and must survive, only the "@@u",
+        // "%u", and "@@" markers are stripped.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        QFile desktop(root + QStringLiteral("/apps/app.zen_browser.zen.desktop"));
+        QVERIFY(desktop.open(QIODevice::WriteOnly));
+        desktop.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Zen Browser\n"
+            "Exec=/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=launch-script.sh "
+            "--file-forwarding app.zen_browser.zen @@u %u @@\n"
+            "Icon=app.zen_browser.zen\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n"));
+        desktop.close();
+
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/zen"),
+                  root + QStringLiteral("/home/.var/app/app.zen_browser.zen/.zen"));
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+        const auto zenDefault = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Zen") && t.isBrowserDefault && !t.incognito;
+        });
+        QVERIFY(zenDefault != targets.end());
+
+        QVERIFY(!std::any_of(zenDefault->args.begin(), zenDefault->args.end(), [](const QString &a) {
+            return a.startsWith(QLatin1String("@@"));
+        }));
+        QCOMPARE(zenDefault->exec, QStringLiteral("/usr/bin/flatpak"));
+        QCOMPARE(zenDefault->args,
+                 QStringList({QStringLiteral("run"), QStringLiteral("--branch=stable"), QStringLiteral("--arch=x86_64"),
+                              QStringLiteral("--command=launch-script.sh"), QStringLiteral("--file-forwarding"),
+                              QStringLiteral("app.zen_browser.zen"), QStringLiteral("--profile"), zenDefault->profileDir,
+                              QStringLiteral("--new-tab"), QStringLiteral("$url")}));
+    }
+
+    void discoversFlatpakChromiumProfile()
+    {
+        // Same bug class as discoversFlatpakZenProfile() but for a
+        // Chromium-based browser: its profile store lives under
+        // ~/.var/app/<app-id>/config/... instead of ~/.config/....
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        QFile desktop(root + QStringLiteral("/apps/com.brave.Browser.desktop"));
+        QVERIFY(desktop.open(QIODevice::WriteOnly));
+        desktop.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Brave Browser\n"
+            "Exec=/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=brave com.brave.Browser %u\n"
+            "Icon=com.brave.Browser\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n"));
+        desktop.close();
+
+        const QString flatpakBraveDir =
+            root + QStringLiteral("/home/.var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser");
+        QDir().mkpath(flatpakBraveDir);
+        QFile::copy(fixtureRoot() + QStringLiteral("/chromium/BraveSoftware/Brave-Browser/Local State"),
+                    flatpakBraveDir + QStringLiteral("/Local State"));
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+
+        const auto personal = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Brave") && t.name == QLatin1String("Personal") && !t.incognito;
+        });
+        QVERIFY(personal != targets.end());
+        QVERIFY(personal->profileDir.contains(QLatin1String("/.var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser")));
+        QCOMPARE(personal->exec, QStringLiteral("/usr/bin/flatpak"));
+        QCOMPARE(personal->args,
+                 QStringList({QStringLiteral("run"), QStringLiteral("--branch=stable"), QStringLiteral("--arch=x86_64"),
+                              QStringLiteral("--command=brave"), QStringLiteral("com.brave.Browser"),
+                              QStringLiteral("--profile-directory=Default"), QStringLiteral("--new-tab"), QStringLiteral("$url")}));
+    }
+
     void fingerprintPrefersRicherGeckoDataDir()
     {
         // Regression for: when more than one Gecko data-dir candidate has a

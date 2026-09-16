@@ -7,7 +7,16 @@ version is 0, minor releases may still contain breaking changes.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Browsers installed as Flatpaks (Zen, Firefox, LibreWolf, Floorp,
+  Waterfox, Brave, Chrome, Chromium, Edge, Vivaldi, Opera, Thorium) are
+  discovered correctly. Lane now finds their real profile store under
+  `~/.var/app/<app-id>/...` instead of falling back to a fake default
+  profile with no containers, and launches them with the Flatpak
+  wrapper's own `run --branch=... --command=... <app-id>` arguments
+  kept in front of its own `--profile`/`--new-tab` flags, instead of
+  handing those flags to `flatpak` itself.
 
 ## [0.2.0] - 2026-09-12
 
