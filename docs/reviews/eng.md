@@ -38,7 +38,7 @@ blocklist. None of these block a release.
 
 ## New findings
 
-**1. [P3] Controller.cpp:768-794 — an in-flight `requestActivationAndLaunch` can launch the wrong URL into the picked target.**
+**1. [P3] Controller.cpp:768-794: an in-flight `requestActivationAndLaunch` can launch the wrong URL into the picked target.**
 
 `finish` captures `target` by value but `launch()` reads `m_click.openUrl`
 at fire time (748). Sequence: click A shows the picker, user picks a row,
@@ -53,7 +53,7 @@ second click inside it) but the failure is a wrong-destination open, which
 is the one thing a link router must not do. Fix: capture the click's URL
 (or a generation counter) in `finish` and bail if `m_click` moved on.
 
-**2. [P3] Controller.cpp:694-717 — a queued click that decides Launch leaves the picker up showing the previous click's rows.**
+**2. [P3] Controller.cpp:694-717: a queued click that decides Launch leaves the picker up showing the previous click's rows.**
 
 `applyDecision` only touches the picker on `Pick` (705-706). If the picker
 is visible for click A and queued click B decides `Launch` or `Hold`, B's
@@ -64,7 +64,7 @@ still shows A's targets, so the picker has silently retargeted. Fix:
 `hidePicker()` in `openUrl` before `applyDecision`, or in `launch()`/
 `startHold()`.
 
-**3. [P3] launcher.cpp + discovery — `flatpak run --command=` bypasses the interpreter blocklist; `Exec=env ...` desktop files produce dead targets.**
+**3. [P3] launcher.cpp + discovery: `flatpak run --command=` bypasses the interpreter blocklist; `Exec=env ...` desktop files produce dead targets.**
 
 Two sides of the same gap. The blocklist (launcher.cpp:57-75) added `env`,
 `xargs`, `sudo`, `flatpak-spawn`, etc. because a wrapper can re-exec a
@@ -84,7 +84,7 @@ discovered with `exec` = `env` (firstToken, discovery.cpp:36-45), which
 settings and the picker and silently fails every time. Discovery should
 either unwrap leading `env VAR=...` assignments or drop the entry.
 
-**4. [P3] TargetsPage.qml:79-89 (and the three sibling lists at 150, 221, 286) — `dragId` is not cleared on a cancelled drop.**
+**4. [P3] TargetsPage.qml:79-89 (and the three sibling lists at 150, 221, 286): `dragId` is not cleared on a cancelled drop.**
 
 `onDropped` only resets `dragId` inside `if (newIndex >= 0 && dragId !==
 "")`. If Kirigami emits `dropped` with `newIndex == -1` for a drop outside
@@ -95,7 +95,7 @@ drag's `onMoveRequested` skips capture because `dragId` is non-empty, so
 visual list and `targetOrder` diverge until the next sync. One-line fix:
 clear `dragId` unconditionally in `onDropped`.
 
-**5. [P4] Controller.cpp:309-338 — `handleArgs` strips argv[0] by `contains("lane")`.**
+**5. [P4] Controller.cpp:309-338: `handleArgs` strips argv[0] by `contains("lane")`.**
 
 For a D-Bus `Activate` the first arg is the caller's argv[0]. If the binary
 is invoked through a differently-named symlink or renamed copy that does
@@ -105,7 +105,7 @@ branch and is treated as a URL: `openUrl("browser")` becomes
 line 335: `rest.contains("--settings") == false && rest.isEmpty()` is dead
 code, since `rest.isEmpty()` already implies the contains check. Minor.
 
-**6. [P4] updatedecision.cpp:13-16, 60-69 — update release URL and redirects are not host-pinned to GitHub.**
+**6. [P4] updatedecision.cpp:13-16, 60-69: update release URL and redirects are not host-pinned to GitHub.**
 
 `isSafeUpdateRedirect` accepts any https non-private host, and
 `decodeUpdateReply` accepts any `html_url` passing the same check. A forged
@@ -115,7 +115,7 @@ worst case is opening a web page, but pinning to `github.com` costs one
 line. Related nit: any 403 is reported as rate limiting (34-39), including
 403s that are not.
 
-**7. [P4] discovery.cpp:724-727 — dead check in `chromiumProfiles::addProfile`.**
+**7. [P4] discovery.cpp:724-727: dead check in `chromiumProfiles::addProfile`.**
 
 `if (!QDir(...).exists() && key != "Default") { /* comment */ }` has an
 empty body; the `continue` that presumably belonged there is missing.
@@ -130,7 +130,7 @@ successful open (Controller.cpp:757-762); nothing ever reads the list.
 Both are in the published schema. Either wire them up or drop them;
 `recentTargetIds` also means every link open writes the config file.
 
-**9. [P4] discovery.cpp:74-102 — `execPrefix` splits args on spaces without honoring quotes.**
+**9. [P4] discovery.cpp:74-102: `execPrefix` splits args on spaces without honoring quotes.**
 
 A leading quoted program is handled (78-84), but the rest of the Exec line
 is split on `' '` with no quote or escape processing. `Exec=flatpak run
@@ -139,7 +139,7 @@ separate args, corrupting the argv Lane rebuilds. Rare in real flatpak
 exports (they use `--command=name` without spaces), but the parser claims
 to match `firstToken`'s quoting rules and does not.
 
-**10. [P4] Controller.cpp:360-363 — `m_pendingUrls` is unbounded.**
+**10. [P4] Controller.cpp:360-363: `m_pendingUrls` is unbounded.**
 
 Every D-Bus `openRequested` during a nested unshorten loop appends. A burst
 of opens serializes into a long queue of stale launches, each potentially
