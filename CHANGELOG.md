@@ -63,7 +63,8 @@ version is 0, minor releases may still contain breaking changes.
   sections with counts in each header. Private windows start collapsed.
 - Rules page warns when a rule's destination no longer exists, and
   offers a button to clear remembered destinations pointing at targets
-  that are gone. Nothing is removed automatically.
+  that are gone. Dead remembered entries are also pruned when config
+  reloads.
 - Hold duration is adjustable in Preferences (0.4 to 5 seconds), not
   just on or off.
 - Picker and hold overlays expose accessibility roles and names, so a
@@ -313,8 +314,10 @@ First public release.
   can go somewhere different from `github.com`. Comma narrows the
   remembered path, period widens it.
 - "Always for" now defaults to the path, not the whole host.
-- Rules engine: match by URL, window title, or source process, with
-  optional regex, scoped to any/domain/path. First match wins.
+- Rules engine: match by URL with optional regex, scoped to
+  any/domain/path. First match wins. Rule objects also accept
+  `"title"` and `"process"` locations for compatibility, but those
+  cannot match on Wayland because caller identity is not available.
 - Discovery for Gecko profiles (Firefox, Zen, LibreWolf, Floorp,
   Waterfox), Chromium-family profiles (Brave, Chrome, Edge, Vivaldi,
   Opera), and `firefoxpwa` sites.
