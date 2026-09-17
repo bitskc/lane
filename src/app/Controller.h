@@ -154,15 +154,19 @@ private:
     void applyDecision(const Decision &d);
     void showPicker();
     void hidePicker();
-    void launch(const Target &target, const QString &reason, const QString &activationToken = QString());
+    void launch(const Target &target, const QString &reason, const QString &activationToken, const Click &click);
     // Requests a fresh xdg-activation token from `window` (its most recent
     // input event authorizes the token) and launches once the compositor
     // answers, or immediately once a short deadline passes with no answer.
     // `window` is null for a launch with no Lane-owned surface involved
     // (nothing was ever shown), in which case whatever inbound activation
     // token this click arrived with (see openUrl()) is used instead.
-    void requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window);
-    void toast(const Target &target, const QString &reason);
+    // `click` is a snapshot taken at decision time: the token request is
+    // async and m_click may already belong to a newer click by the time
+    // the compositor answers, so the URL to open must never be re-read
+    // from m_click at fire time.
+    void requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window, const Click &click);
+    void toast(const Target &target, const QString &reason, const QString &host);
     void notifyBlocked();
     void ensurePickerEngine();
     void ensureSettingsEngine();
@@ -207,6 +211,10 @@ private:
     Target m_holdTarget;
     QString m_holdReason;
     QString m_holdMemoryKey;
+    // Snapshot of the click the running hold belongs to. The hold's
+    // finished/confirm paths launch asynchronously, and m_click may have
+    // moved on to a newer click by then.
+    Click m_holdClick;
     QString m_holdTargetName;
     QString m_holdDestinationKey;
     qreal m_holdProgress = 0;

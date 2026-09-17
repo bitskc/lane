@@ -230,13 +230,12 @@ Config loadConfig(const QString &path)
     {
         static const QSet<QString> knownKeys = {
             QStringLiteral("version"),           QStringLiteral("pickerPolicy"),     QStringLiteral("closeOnFocusLoss"),
-            QStringLiteral("showUrl"),           QStringLiteral("toast"),            QStringLiteral("toastMs"),
-            QStringLiteral("unwrapO365"),        QStringLiteral("unshorten"),        QStringLiteral("openUnwrapped"),
-            QStringLiteral("preferPwa"),         QStringLiteral("holdAutoOpen"),     QStringLiteral("holdMs"),
-            QStringLiteral("autostart"),         QStringLiteral("defaultTargetId"),  QStringLiteral("hiddenTargetIds"),
-            QStringLiteral("recentTargetIds"),   QStringLiteral("targetOrder"),      QStringLiteral("targetAliases"),
-            QStringLiteral("remembered"),        QStringLiteral("rules"),            QStringLiteral("customTargets"),
-            QStringLiteral("substitutions"),
+            QStringLiteral("showUrl"),           QStringLiteral("toast"),            QStringLiteral("unwrapO365"),
+            QStringLiteral("unshorten"),         QStringLiteral("openUnwrapped"),    QStringLiteral("preferPwa"),
+            QStringLiteral("holdAutoOpen"),      QStringLiteral("holdMs"),           QStringLiteral("autostart"),
+            QStringLiteral("defaultTargetId"),   QStringLiteral("hiddenTargetIds"),  QStringLiteral("targetOrder"),
+            QStringLiteral("targetAliases"),     QStringLiteral("remembered"),       QStringLiteral("rules"),
+            QStringLiteral("customTargets"),     QStringLiteral("substitutions"),
         };
         QStringList unknown;
         for (auto it = o.begin(); it != o.end(); ++it) {
@@ -253,7 +252,6 @@ Config loadConfig(const QString &path)
     c.closeOnFocusLoss = o[QStringLiteral("closeOnFocusLoss")].toBool(true);
     c.showUrl = o[QStringLiteral("showUrl")].toBool(true);
     c.toast = o[QStringLiteral("toast")].toBool(true);
-    c.toastMs = o[QStringLiteral("toastMs")].toInt(2800);
     c.unwrapO365 = o[QStringLiteral("unwrapO365")].toBool(true);
     c.unshorten = o[QStringLiteral("unshorten")].toBool(true);
     c.openUnwrapped = o[QStringLiteral("openUnwrapped")].toBool(false);
@@ -265,9 +263,6 @@ Config loadConfig(const QString &path)
 
     for (const auto &v : o[QStringLiteral("hiddenTargetIds")].toArray()) {
         c.hiddenTargetIds << v.toString();
-    }
-    for (const auto &v : o[QStringLiteral("recentTargetIds")].toArray()) {
-        c.recentTargetIds << v.toString();
     }
     for (const auto &v : o[QStringLiteral("targetOrder")].toArray()) {
         c.targetOrder << v.toString();
@@ -325,7 +320,6 @@ bool saveConfig(const QString &path, const Config &config)
     o[QStringLiteral("closeOnFocusLoss")] = config.closeOnFocusLoss;
     o[QStringLiteral("showUrl")] = config.showUrl;
     o[QStringLiteral("toast")] = config.toast;
-    o[QStringLiteral("toastMs")] = config.toastMs;
     o[QStringLiteral("unwrapO365")] = config.unwrapO365;
     o[QStringLiteral("unshorten")] = config.unshorten;
     o[QStringLiteral("openUnwrapped")] = config.openUnwrapped;
@@ -335,7 +329,6 @@ bool saveConfig(const QString &path, const Config &config)
     o[QStringLiteral("autostart")] = config.autostart;
     o[QStringLiteral("defaultTargetId")] = config.defaultTargetId;
     o[QStringLiteral("hiddenTargetIds")] = QJsonArray::fromStringList(config.hiddenTargetIds);
-    o[QStringLiteral("recentTargetIds")] = QJsonArray::fromStringList(config.recentTargetIds);
     o[QStringLiteral("targetOrder")] = QJsonArray::fromStringList(config.targetOrder);
     QJsonObject aliases;
     for (auto it = config.targetAliases.begin(); it != config.targetAliases.end(); ++it) {

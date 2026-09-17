@@ -279,7 +279,9 @@ void Controller::setHoldAutoOpen(bool on)
 
 void Controller::setHoldMs(int ms)
 {
-    ms = qBound(200, ms, 10000);
+    // One range everywhere: schema minimum/maximum, the Preferences
+    // spinbox, and this setter all agree on 400-5000 ms.
+    ms = qBound(400, ms, 5000);
     if (ms == m_config.holdMs) {
         return;
     }
@@ -309,7 +311,12 @@ QString Controller::currentDestinationKey() const
 void Controller::handleArgs(const QStringList &args)
 {
     QStringList rest = args;
-    if (!rest.isEmpty() && rest.first().contains(QLatin1String("lane"))) {
+    // Both callers pass argv verbatim (QCoreApplication::arguments() at
+    // startup, KDBusService::activateRequested's args on D-Bus Activate),
+    // so argv[0] is always the program name. Strip it unconditionally:
+    // matching on the name would treat a renamed binary's argv[0] as a
+    // URL to open.
+    if (!rest.isEmpty()) {
         rest.removeFirst();
     }
     bool daemon = false;
@@ -332,7 +339,7 @@ void Controller::handleArgs(const QStringList &args)
         openUrl(url, forcePicker);
         return;
     }
-    if (!daemon && rest.contains(QStringLiteral("--settings")) == false && rest.isEmpty()) {
+    if (!daemon && rest.isEmpty()) {
         openSettings();
     }
 }
@@ -358,7 +365,15 @@ void Controller::openUrl(const QString &url, bool forcePicker)
     // hold animation.  Queue the second call and drain it after this
     // invocation finishes applyDecision, each with its own captured token.
     if (m_inOpenUrl) {
+        // Bound the queue: a burst of opens during one nested unshorten
+        // loop would otherwise serialize into a train of stale windows
+        // minutes later. Keep the newest clicks (the ones the user most
+        // likely still means) and drop the oldest.
+        constexpr qsizetype kMaxPendingUrls = 4;
         m_pendingUrls.append({url, forcePicker, token});
+        while (m_pendingUrls.size() > kMaxPendingUrls) {
+            m_pendingUrls.removeFirst();
+        }
         return;
     }
     m_inOpenUrl = true;
@@ -431,7 +446,7 @@ void Controller::pickId(const QString &id)
     // target's window can take focus, but requesting the token needs the
     // window's still-fresh input event first.
     QWindow *window = (m_pickerWindow && m_pickerWindow->isVisible()) ? m_pickerWindow.data() : nullptr;
-    requestActivationAndLaunch(*t, QStringLiteral("picker"), window);
+    requestActivationAndLaunch(*t, QStringLiteral("picker"), window, m_click);
     hidePicker();
 }
 
@@ -699,6 +714,7 @@ void Controller::applyDecision(const Decision &d)
             // check the moment it was launched (see launch() below), so a
             // picker here would be a list of destinations that all silently
             // fail. Say why up front instead.
+            hidePicker();
             notifyBlocked();
             return;
         }
@@ -706,6 +722,10 @@ void Controller::applyDecision(const Decision &d)
         showPicker();
         return;
     }
+    // This click is not going to the picker. If the picker is still up
+    // from a previous click it would keep showing that click's rows, and
+    // a later pick() would retarget them at this click's URL.
+    hidePicker();
     if (d.target.id == QLatin1String("action:copy")) {
         copyCurrent();
         return;
@@ -714,7 +734,7 @@ void Controller::applyDecision(const Decision &d)
         startHold(d.target, d.reason, d.memoryKey);
         return;
     }
-    launch(d.target, d.reason, m_pendingActivationToken);
+    launch(d.target, d.reason, m_pendingActivationToken, m_click);
 }
 
 void Controller::showPicker()
@@ -735,55 +755,54 @@ void Controller::hidePicker()
     Q_EMIT pickerVisibleChanged(false);
 }
 
-void Controller::launch(const Target &target, const QString &reason, const QString &activationToken)
+void Controller::launch(const Target &target, const QString &reason, const QString &activationToken, const Click &click)
 {
     if (target.id.isEmpty()) {
+        m_pickerModel->reset(rankForPicker(click, m_targets, m_config));
         showPicker();
         return;
     }
-    if (!isSafeOpenUrl(m_click.openUrl)) {
+    if (!isSafeOpenUrl(click.openUrl)) {
         notifyBlocked();
         return;
     }
-    if (!launchTarget(target, m_click.openUrl, activationToken)) {
+    if (!launchTarget(target, click.openUrl, activationToken)) {
         auto *n = new KNotification(QStringLiteral("launch-failed"), KNotification::CloseOnTimeout, this);
         n->setComponentName(QStringLiteral("app.lane.Lane"));
         n->setTitle(QStringLiteral("Could not open in %1").arg(target.displayName()));
-        n->setText(m_click.host.isEmpty() ? QStringLiteral("The launch failed.") : m_click.host);
+        n->setText(click.host.isEmpty() ? QStringLiteral("The launch failed.") : click.host);
         n->setIconName(QStringLiteral("dialog-error"));
         n->sendEvent();
         return;
     }
-    m_config.recentTargetIds.removeAll(target.id);
-    m_config.recentTargetIds.prepend(target.id);
-    while (m_config.recentTargetIds.size() > 12) {
-        m_config.recentTargetIds.removeLast();
-    }
-    persist();
     if (m_config.toast) {
-        toast(target, reason);
+        toast(target, reason, click.host);
     }
 }
 
-void Controller::requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window)
+void Controller::requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window, const Click &click)
 {
     if (!window) {
         // No Lane-owned surface was involved (a silent rule/remembered/
         // default launch with no overlay ever shown): the best available
         // token is whatever this click's openUrl() call already received
         // from whoever invoked Lane, if anything.
-        launch(target, reason, m_pendingActivationToken);
+        launch(target, reason, m_pendingActivationToken, click);
         return;
     }
     auto resolved = QSharedPointer<bool>::create(false);
-    auto finish = [this, target, reason, resolved](const QString &token) {
+    // `click` is captured by value: the token request is async and
+    // m_click may already belong to a newer click by the time the
+    // compositor answers, so the URL to open must come from the
+    // snapshot, never from m_click at fire time.
+    auto finish = [this, target, reason, click, resolved](const QString &token) {
         if (*resolved) {
             // Either the compositor already answered and the fallback
             // timer fired anyway, or vice versa; only the first launches.
             return;
         }
         *resolved = true;
-        launch(target, reason, token);
+        launch(target, reason, token, click);
     };
     KWaylandExtras::xdgActivationToken(window, QString()).then(this, finish);
     // Guard against a compositor that never answers (no xdg-activation
@@ -793,12 +812,12 @@ void Controller::requestActivationAndLaunch(const Target &target, const QString 
     QTimer::singleShot(300, this, [finish]() { finish(QString()); });
 }
 
-void Controller::toast(const Target &target, const QString &reason)
+void Controller::toast(const Target &target, const QString &reason, const QString &host)
 {
     auto *n = new KNotification(QStringLiteral("opened"), KNotification::CloseOnTimeout, this);
     n->setComponentName(QStringLiteral("app.lane.Lane"));
     n->setTitle(QStringLiteral("Opened in %1").arg(target.displayName()));
-    n->setText(m_click.host.isEmpty() ? QStringLiteral("Link opened") : m_click.host);
+    n->setText(host.isEmpty() ? QStringLiteral("Link opened") : host);
     n->setIconName(target.icon.isEmpty() ? QStringLiteral("app.lane.Lane") : target.icon);
     Q_UNUSED(reason);
     n->sendEvent();
@@ -905,8 +924,9 @@ void Controller::startHold(const Target &target, const QString &reason, const QS
     m_holdTarget = target;
     m_holdReason = reason;
     m_holdMemoryKey = memoryKey;
+    m_holdClick = m_click;
     m_holdTargetName = target.displayName();
-    m_holdDestinationKey = memoryKey.isEmpty() ? displayUrl(m_click.openUrl) : memoryKey;
+    m_holdDestinationKey = memoryKey.isEmpty() ? displayUrl(m_holdClick.openUrl) : memoryKey;
     m_holdProgress = 0;
 
     Q_EMIT holdChanged();
@@ -926,7 +946,7 @@ void Controller::startHold(const Target &target, const QString &reason, const QS
         });
         connect(m_holdAnimation, &QVariantAnimation::finished, this, [this]() {
             QWindow *window = (m_holdWindow && m_holdWindow->isVisible()) ? m_holdWindow.data() : nullptr;
-            requestActivationAndLaunch(m_holdTarget, m_holdReason, window);
+            requestActivationAndLaunch(m_holdTarget, m_holdReason, window, m_holdClick);
             hideHold();
         });
     }
@@ -943,7 +963,7 @@ void Controller::confirmHold()
     }
     m_holdAnimation->stop();
     QWindow *window = (m_holdWindow && m_holdWindow->isVisible()) ? m_holdWindow.data() : nullptr;
-    requestActivationAndLaunch(m_holdTarget, m_holdReason, window);
+    requestActivationAndLaunch(m_holdTarget, m_holdReason, window, m_holdClick);
     hideHold();
 }
 
