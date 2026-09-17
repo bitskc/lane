@@ -70,12 +70,13 @@ QStringList splitExecTokens(const QString &execLine)
 // Splits a desktop Exec= line into its program (matching firstToken()'s
 // quoting rules) and the remaining tokens with freedesktop field codes
 // (%f %F %u %U %d %D %n %N %i %c %k %v %m) and Flatpak's "@@u ... @@"
-// file-forwarding markers stripped. For a native browser this prefix is
-// empty or a harmless flag; for a Flatpak entry ("flatpak run
+// file-forwarding markers stripped. For a Flatpak entry ("flatpak run
 // --branch=stable --arch=x86_64 --command=zen app.zen_browser.zen %u")
 // it is the "run ... <app-id>" tokens that must stay in front of Lane's
 // own --profile/--new-tab args, or the launched process becomes
-// "flatpak --profile ..." instead of the browser.
+// "flatpak --profile ..." instead of the browser. For a native entry the
+// prefix holds the browser's own flags, which callers must NOT prepend
+// (see flatpakPrefixArgs).
 //
 // A leading `env VAR=value ...` wrapper is unwrapped: `env` and each
 // assignment token are skipped and the first real program token becomes

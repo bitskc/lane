@@ -285,6 +285,53 @@ private Q_SLOTS:
         QVERIFY(out.open(QIODevice::ReadOnly));
         QVERIFY(out.readAll().contains("app.zen_browser.zen"));
     }
+
+    void launchTargetRejectsFlatpakNonRunSubcommands()
+    {
+        // Only `flatpak run` is a browser launch; other subcommands
+        // (enter, build, debug, ...) must not reach startDetached even
+        // when a dotted token is present.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString flatpak = writeDumpEnvScript(dir, QStringLiteral("flatpak"),
+                                                   dir.filePath(QStringLiteral("out.txt")));
+        QVERIFY(!flatpak.isEmpty());
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = flatpak;
+        for (const QString &sub : {QStringLiteral("enter"), QStringLiteral("build"),
+                                   QStringLiteral("debug"), QStringLiteral("override")}) {
+            t.args = {sub, QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
+            QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+        }
+    }
+
+    void launchTargetRejectsSymlinkToFlatpak()
+    {
+        // exec's own basename is innocuous ("browser"), but it is a
+        // symlink to flatpak. resolveExecutable() deliberately does not
+        // canonicalize, so without checking the canonical name the
+        // flatpak argv gate would be skipped entirely.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString realFlatpak = writeDumpEnvScript(dir, QStringLiteral("flatpak-real"),
+                                                       dir.filePath(QStringLiteral("out.txt")));
+        QVERIFY(!realFlatpak.isEmpty());
+        // Name the link target's file "flatpak" so canonicalFilePath's
+        // basename is flatpak.
+        const QString flatpakPath = dir.filePath(QStringLiteral("flatpak"));
+        QVERIFY(QFile::rename(realFlatpak, flatpakPath));
+        const QString linkPath = dir.filePath(QStringLiteral("browser"));
+        QVERIFY(QFile::link(flatpakPath, linkPath));
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = linkPath;
+        t.args = {QStringLiteral("run"), QStringLiteral("--command=sh"),
+                  QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+    }
 };
 
 QTEST_MAIN(LauncherTest)

@@ -83,11 +83,14 @@ const QSet<QString> &blockedInterpreters()
 // blocked interpreter via `run --command=<prog>`, which is what actually
 // executes inside the sandbox. A hand-edited target like
 // exec=flatpak args="run --command=sh app.id" would otherwise sail past
-// the exec-basename check and spawn a shell. Also require a dotted
-// reverse-DNS app id in the args: `flatpak run` without one is not a
-// browser launch at all.
+// the exec-basename check and spawn a shell. The subcommand must be
+// exactly `run` (other subcommands like `enter`, `build`, or `debug` are
+// not browser launches), and a dotted reverse-DNS app id must be present.
 bool flatpakRunArgsBlocked(const QStringList &args)
 {
+    if (args.isEmpty() || args.first() != QLatin1String("run")) {
+        return true;
+    }
     static const QRegularExpression appIdPattern(QStringLiteral("^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)+$"));
     bool hasAppId = false;
     for (qsizetype i = 0; i < args.size(); ++i) {
@@ -269,7 +272,12 @@ bool launchTarget(const Target &target, const QString &url, const QString &activ
     // own inspection: `run --command=<prog>` names the program that
     // actually executes, and it must not be a blocked interpreter, and a
     // `flatpak` invocation with no dotted app id is not a browser launch.
-    if (QFileInfo(exe).fileName() == QLatin1String("flatpak")
+    // The canonical path is checked too: resolveExecutable() deliberately
+    // does not canonicalize, so a symlink named "browser" pointing at
+    // /usr/bin/flatpak would otherwise skip this gate entirely.
+    const QString exeName = QFileInfo(exe).fileName();
+    const QString canonicalName = QFileInfo(QFileInfo(exe).canonicalFilePath()).fileName();
+    if ((exeName == QLatin1String("flatpak") || canonicalName == QLatin1String("flatpak"))
         && flatpakRunArgsBlocked(expandArgs(target, open))) {
         return false;
     }

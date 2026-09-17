@@ -30,8 +30,10 @@ version is 0, minor releases may still contain breaking changes.
   discovery instead of producing a target that silently failed every
   launch. Entries that unwrap to nothing are dropped.
 - A hand-edited custom target can no longer reach a shell through
-  `flatpak run --command=sh <app-id>`: flatpak launches now reject a
-  blocked interpreter in `--command` and require a real app id.
+  `flatpak run --command=sh <app-id>`: flatpak launches now require the
+  `run` subcommand and a real app id, reject a blocked interpreter in
+  `--command`, and apply the same checks when exec is a symlink to
+  flatpak under another name.
 - Chromium profiles still listed in Local State after their directory was
   deleted no longer appear as dead targets.
 - Quoted arguments in Exec= lines (like `--command="zen browser"`) are
