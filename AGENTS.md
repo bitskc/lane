@@ -25,8 +25,10 @@ reload:
 lane --rediscover
 ```
 
-That re-reads `config.json` from disk and rescans browser targets. To
-restart the whole process instead:
+That re-reads `config.json` from disk and rescans browser targets.
+Flatpak-packaged browsers (Zen, Firefox, Brave, and others) are discovered
+too; their profile data lives under `~/.var/app/<app-id>/` instead of the
+native paths. To restart the whole process instead:
 
 ```bash
 pkill -f "lane --daemon"
@@ -49,7 +51,7 @@ Top-level keys:
   "unshorten": true,
   "openUnwrapped": false,
   "preferPwa": true,
-  "holdAutoOpen": true,
+  "holdAutoOpen": false,
   "holdMs": 1600,
   "autostart": false,
   "defaultTargetId": "",
@@ -77,10 +79,9 @@ Controls when the picker overlay appears.
 
 Hold is a Gmail-undo style bar for convenience opens. When the routing
 decision is `remembered`, `pwa`, or `default` and `holdAutoOpen` is
-true, Lane waits `holdMs` milliseconds (default 1600) before launching.
-Enter opens immediately. Esc or Space cancels the hold and shows the
-picker. Rules skip the hold and open immediately. Set `holdAutoOpen` to
-false to launch right away with no hold bar.
+true (default false), Lane waits `holdMs` milliseconds (default 1600)
+before launching. Enter opens immediately. Esc or Space cancels the hold
+and shows the picker. Rules skip the hold and open immediately.
 
 ### rules
 

@@ -15,7 +15,7 @@ or Velja, but native to Plasma.
 *The overlay you get when Lane does not already know where to send a link.*
 
 ![Hold bar](docs/screenshots/hold.png)
-*A short pause before a silent open. Press Enter to go now, Esc or Space to pick instead.*
+*The hold bar when enabled in Preferences. Press Enter to go now, Esc or Space to pick instead.*
 
 ![Settings overview](docs/screenshots/settings.png)
 *Overview page: default browser, autostart, and discovered targets.*
@@ -30,7 +30,9 @@ What changed between versions is in [CHANGELOG.md](CHANGELOG.md). Run
 
 Lane discovers Gecko profiles (Firefox, Zen, LibreWolf, Floorp, Waterfox)
 and Chromium profiles (Brave, Chrome, Edge, Vivaldi, Opera), plus
-`firefoxpwa` sites. Desktop `Name=` wins over the PWA manifest name.
+`firefoxpwa` sites. Flatpak-installed browsers are discovered too; their
+profiles live under `~/.var/app/<app-id>/`. Desktop `Name=` wins over the
+PWA manifest name.
 
 Zen and Firefox containers (contextual identities) show up as
 destinations too, wherever `containers.json` exists and the browser
@@ -44,9 +46,9 @@ Remembered destinations are path-scoped, not just host.
 auto-open respects scope, so an origin-wide PWA scope like
 `https://github.com/` does not grab tenant paths like `github.com/bitskc`.
 
-When Lane opens from a remembered choice, a unique PWA, or the default
-target, it shows a short hold bar (about 1.6 seconds) so you can stop it.
-Explicit rules skip the hold and open immediately.
+Optional hold bar: when enabled in Preferences, Lane pauses for about 1.6
+seconds before opening from a remembered choice, a unique PWA, or the default
+target, so you can stop it. Explicit rules skip the hold and open immediately.
 
 Opt-in default browser. Lane does not take mailto or PDF. Security: http
 and https only. Lane rejects `file`, `javascript`, `data`, and URLs with
@@ -165,6 +167,11 @@ lane --rediscover                 # rescan browsers and refresh targets
 ```
 
 ## Build (CachyOS / Arch)
+
+For a system-wide install, use the PKGBUILD in `packaging/`:
+`cd packaging && makepkg -si`. An AUR package is planned.
+
+To install under `$HOME/.local` instead:
 
 ```bash
 sudo pacman -S --needed cmake extra-cmake-modules ninja qt6-base qt6-declarative qt6-svg \
