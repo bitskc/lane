@@ -33,27 +33,58 @@ struct DesktopApp {
     bool noDisplay = false;
 };
 
-QString firstToken(const QString &execLine)
+// Splits a desktop Exec= line into tokens, honoring double quotes the way
+// firstToken() already did for the program token: a quoted span is one
+// token with the quotes removed, so `--command="zen browser"` survives as
+// a single `--command=zen browser` argument instead of being split apart
+// and corrupting the rebuilt argv.
+QStringList splitExecTokens(const QString &execLine)
 {
-    QString s = execLine.trimmed();
-    if (s.startsWith(QLatin1Char('"'))) {
-        const int end = s.indexOf(QLatin1Char('"'), 1);
-        if (end > 0) {
-            return s.mid(1, end - 1);
+    QStringList out;
+    QString cur;
+    bool inQuote = false;
+    bool hasToken = false;
+    for (const QChar c : execLine) {
+        if (c == QLatin1Char('"')) {
+            inQuote = !inQuote;
+            hasToken = true;
+            continue;
         }
+        if (!inQuote && c == QLatin1Char(' ')) {
+            if (hasToken) {
+                out << cur;
+                cur.clear();
+                hasToken = false;
+            }
+            continue;
+        }
+        cur += c;
+        hasToken = true;
     }
-    return s.section(QLatin1Char(' '), 0, 0);
+    if (hasToken) {
+        out << cur;
+    }
+    return out;
 }
 
 // Splits a desktop Exec= line into its program (matching firstToken()'s
 // quoting rules) and the remaining tokens with freedesktop field codes
 // (%f %F %u %U %d %D %n %N %i %c %k %v %m) and Flatpak's "@@u ... @@"
-// file-forwarding markers stripped. For a native browser this prefix is
-// empty or a harmless flag; for a Flatpak entry ("flatpak run
+// file-forwarding markers stripped. For a Flatpak entry ("flatpak run
 // --branch=stable --arch=x86_64 --command=zen app.zen_browser.zen %u")
 // it is the "run ... <app-id>" tokens that must stay in front of Lane's
 // own --profile/--new-tab args, or the launched process becomes
-// "flatpak --profile ..." instead of the browser.
+// "flatpak --profile ..." instead of the browser. For a native entry the
+// prefix holds the browser's own flags, which callers must NOT prepend
+// (see flatpakPrefixArgs).
+//
+// A leading `env VAR=value ...` wrapper is unwrapped: `env` and each
+// assignment token are skipped and the first real program token becomes
+// the program. Without this, `Exec=env MOZ_X11=1 firefox %u` yields
+// exec=env, which the launcher's interpreter blocklist rejects, so the
+// entry would show up in settings but fail on every launch. When nothing
+// remains after the wrapper, program is left empty and the caller drops
+// the entry.
 struct ExecPrefix {
     QString program;
     QStringList args;
@@ -74,31 +105,37 @@ bool isExecFieldCode(const QString &token)
 ExecPrefix execPrefix(const QString &execLine)
 {
     ExecPrefix out;
-    QString rest = execLine.trimmed();
-    if (rest.startsWith(QLatin1Char('"'))) {
-        const int end = rest.indexOf(QLatin1Char('"'), 1);
-        if (end > 0) {
-            out.program = rest.mid(1, end - 1);
-            rest = rest.mid(end + 1);
+    QStringList tokens = splitExecTokens(execLine);
+    if (tokens.isEmpty()) {
+        return out;
+    }
+    out.program = tokens.takeFirst();
+    if (QFileInfo(out.program).fileName() == QLatin1String("env")) {
+        // `env VAR=value ... prog`: skip the assignments, keep the first
+        // real program token. A bare `env` (or only assignments) leaves
+        // program empty and the entry is dropped.
+        out.program.clear();
+        static const QRegularExpression assignment(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*=.*$"));
+        while (!tokens.isEmpty()) {
+            const QString tok = tokens.takeFirst();
+            if (assignment.match(tok).hasMatch()) {
+                continue;
+            }
+            out.program = tok;
+            break;
         }
     }
-    if (out.program.isEmpty()) {
-        const int sp = rest.indexOf(QLatin1Char(' '));
-        if (sp < 0) {
-            out.program = rest;
-            rest.clear();
-        } else {
-            out.program = rest.left(sp);
-            rest = rest.mid(sp);
-        }
-    }
-    const auto tokens = rest.split(QLatin1Char(' '), Qt::SkipEmptyParts);
     for (const auto &t : tokens) {
         if (!isExecFieldCode(t)) {
             out.args << t;
         }
     }
     return out;
+}
+
+QString firstToken(const QString &execLine)
+{
+    return execPrefix(execLine).program;
 }
 
 // Pulls a Flatpak application id (e.g. "app.zen_browser.zen") out of the
@@ -129,6 +166,20 @@ bool skipDesktopId(const QString &id)
         || lower.contains(QLatin1String("browsertamer"))
         || lower == QLatin1String("bt")
         || lower.contains(QLatin1String("junction"));
+}
+
+// The Exec= prefix tokens only belong in front of Lane's own args when
+// the entry actually launches through `flatpak run` (they are flatpak's
+// "run ... <app-id>" arguments). For a native entry like
+// "Exec=/usr/bin/firefox --new-window %u" they are the browser's own
+// flags, and prepending them would put "--new-window" in front of
+// "--profile <dir>", where the browser reads <dir> as the URL to open.
+QStringList flatpakPrefixArgs(const ExecPrefix &prefix)
+{
+    if (QFileInfo(prefix.program).fileName() == QLatin1String("flatpak")) {
+        return prefix.args;
+    }
+    return {};
 }
 
 QList<DesktopApp> scanDesktopFiles(const QStringList &dirs)
@@ -190,6 +241,12 @@ QList<DesktopApp> scanDesktopFiles(const QStringList &dirs)
             const bool browser = app.categories.contains(QLatin1String("WebBrowser"))
                 || app.mime.contains(QLatin1String("x-scheme-handler/http"));
             if (!browser) {
+                continue;
+            }
+            // An Exec= line that unwraps to no real program (e.g. a bare
+            // `env VAR=...` with nothing after it) can never launch;
+            // drop the entry rather than listing a dead target.
+            if (execPrefix(app.execLine).program.isEmpty()) {
                 continue;
             }
             seen.insert(id);
@@ -580,6 +637,7 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
 {
     QList<Target> out;
     const auto prefix = execPrefix(app.execLine);
+    const QStringList argPrefix = flatpakPrefixArgs(prefix);
     const QString iniPath = fp.dataDir + QStringLiteral("/profiles.ini");
     if (!QFile::exists(iniPath)) {
         Target t;
@@ -590,7 +648,7 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
         t.browserName = fp.brand.isEmpty() ? app.name : fp.brand;
         t.subtitle = t.browserName;
         t.exec = prefix.program;
-        t.args = prefix.args + QStringList{QStringLiteral("--new-tab"), QStringLiteral("$url")};
+        t.args = argPrefix + QStringList{QStringLiteral("--new-tab"), QStringLiteral("$url")};
         t.icon = app.icon;
         t.isBrowserDefault = true;
         out.append(t);
@@ -671,20 +729,20 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
         t.browserName = fp.brand.isEmpty() ? app.name : fp.brand;
         t.subtitle = t.browserName + QStringLiteral(" · ") + t.name;
         t.exec = prefix.program;
-        t.args = prefix.args
+        t.args = argPrefix
             + QStringList{QStringLiteral("--profile"), r.path, QStringLiteral("--new-tab"), QStringLiteral("$url")};
         t.icon = app.icon;
         t.profileKey = r.name;
         t.profileDir = r.path;
         t.isBrowserDefault = isInstallDefault;
         out.append(t);
-        out.append(geckoContainers(t, prefix.args));
+        out.append(geckoContainers(t, argPrefix));
 
         Target priv = t;
         priv.id += QStringLiteral(":private");
         priv.name = t.name + QStringLiteral(" (Private)");
         priv.subtitle = t.browserName + QStringLiteral(" · Private");
-        priv.args = prefix.args
+        priv.args = argPrefix
             + QStringList{QStringLiteral("--profile"), r.path, QStringLiteral("--private-window"), QStringLiteral("$url")};
         priv.incognito = true;
         out.append(priv);
@@ -711,6 +769,7 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
 {
     QList<Target> out;
     const auto prefix = execPrefix(app.execLine);
+    const QStringList argPrefix = flatpakPrefixArgs(prefix);
     const QString localState = fp.dataDir + QStringLiteral("/Local State");
     QJsonObject cache;
     if (QFile::exists(localState)) {
@@ -724,6 +783,7 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
     auto addProfile = [&](const QString &key, const QString &name, bool isDefault) {
         if (!QDir(fp.dataDir + QLatin1Char('/') + key).exists() && key != QLatin1String("Default")) {
             // Still allow Default even if the folder is missing; chromium creates it.
+            return;
         }
         Target t;
         t.id = QStringLiteral("browser:") + app.id + QLatin1Char(':') + key;
@@ -733,7 +793,7 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
         t.browserName = fp.brand.isEmpty() ? app.name : fp.brand;
         t.subtitle = t.browserName + QStringLiteral(" · ") + t.name;
         t.exec = prefix.program;
-        t.args = prefix.args
+        t.args = argPrefix
             + QStringList{QStringLiteral("--profile-directory=") + key, QStringLiteral("--new-tab"), QStringLiteral("$url")};
         const QString pic = chromiumProfileIcon(fp.dataDir, key);
         t.icon = pic.isEmpty() ? app.icon : pic;
@@ -746,7 +806,7 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
         inc.id += QStringLiteral(":incognito");
         inc.name = t.name + QStringLiteral(" (Incognito)");
         inc.subtitle = t.browserName + QStringLiteral(" · Incognito");
-        inc.args = prefix.args
+        inc.args = argPrefix
             + QStringList{QStringLiteral("--profile-directory=") + key, QStringLiteral("--incognito"), QStringLiteral("$url")};
         inc.incognito = true;
         inc.isBrowserDefault = false;
@@ -771,7 +831,7 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
         tor.browserName = QStringLiteral("Brave");
         tor.subtitle = QStringLiteral("Brave · Tor");
         tor.exec = prefix.program;
-        tor.args = prefix.args + QStringList{QStringLiteral("--tor"), QStringLiteral("$url")};
+        tor.args = argPrefix + QStringList{QStringLiteral("--tor"), QStringLiteral("$url")};
         tor.icon = app.icon;
         tor.incognito = true;
         out.append(tor);
@@ -782,6 +842,7 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
 QList<Target> genericBrowser(const DesktopApp &app, const Fingerprint &fp)
 {
     const auto prefix = execPrefix(app.execLine);
+    const QStringList argPrefix = flatpakPrefixArgs(prefix);
     Target t;
     t.id = QStringLiteral("browser:") + app.id + QStringLiteral(":default");
     t.kind = Kind::BrowserProfile;
@@ -790,7 +851,7 @@ QList<Target> genericBrowser(const DesktopApp &app, const Fingerprint &fp)
     t.browserName = fp.brand.isEmpty() ? app.name : fp.brand;
     t.subtitle = t.browserName;
     t.exec = prefix.program;
-    t.args = prefix.args + QStringList{QStringLiteral("$url")};
+    t.args = argPrefix + QStringList{QStringLiteral("$url")};
     t.icon = app.icon;
     t.isBrowserDefault = true;
     return {t};

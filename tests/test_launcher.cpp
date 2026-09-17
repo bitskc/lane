@@ -221,6 +221,117 @@ private Q_SLOTS:
         QVERIFY(f.open(QIODevice::ReadOnly));
         QVERIFY(!f.readAll().contains("XDG_ACTIVATION_TOKEN"));
     }
+
+    // A fake `flatpak` executable: basename "flatpak" is legitimately not
+    // in blockedInterpreters() (real browser desktop entries launch
+    // through `flatpak run`), so its argv needs its own inspection.
+    void launchTargetRejectsFlatpakCommandShell()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString flatpak = writeDumpEnvScript(dir, QStringLiteral("flatpak"),
+                                                   dir.filePath(QStringLiteral("out.txt")));
+        QVERIFY(!flatpak.isEmpty());
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = flatpak;
+        t.args = {QStringLiteral("run"), QStringLiteral("--command=sh"),
+                  QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+
+        // Same bypass with --command as a separate token.
+        t.args = {QStringLiteral("run"), QStringLiteral("--command"), QStringLiteral("bash"),
+                  QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+    }
+
+    void launchTargetRejectsFlatpakRunWithoutAppId()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString flatpak = writeDumpEnvScript(dir, QStringLiteral("flatpak"),
+                                                   dir.filePath(QStringLiteral("out.txt")));
+        QVERIFY(!flatpak.isEmpty());
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = flatpak;
+        t.args = {QStringLiteral("run"), QStringLiteral("--command=zen"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+    }
+
+    void launchTargetAllowsLegitFlatpakRun()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString outPath = dir.filePath(QStringLiteral("flatpak-args.txt"));
+        const QString script = dir.filePath(QStringLiteral("flatpak"));
+        QFile f(script);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+        f.write(QStringLiteral("#!/bin/sh\nprintf '%s\\n' \"$@\" > '%1'\n").arg(outPath).toUtf8());
+        f.close();
+        QFile::setPermissions(script, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = script;
+        t.args = {QStringLiteral("run"), QStringLiteral("--branch=stable"), QStringLiteral("--command=zen"),
+                  QStringLiteral("app.zen_browser.zen"), QStringLiteral("--new-tab"), QStringLiteral("$url")};
+        QVERIFY(launchTarget(t, QStringLiteral("https://example.com")));
+
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(outPath), 2000);
+        QFile out(outPath);
+        QVERIFY(out.open(QIODevice::ReadOnly));
+        QVERIFY(out.readAll().contains("app.zen_browser.zen"));
+    }
+
+    void launchTargetRejectsFlatpakNonRunSubcommands()
+    {
+        // Only `flatpak run` is a browser launch; other subcommands
+        // (enter, build, debug, ...) must not reach startDetached even
+        // when a dotted token is present.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString flatpak = writeDumpEnvScript(dir, QStringLiteral("flatpak"),
+                                                   dir.filePath(QStringLiteral("out.txt")));
+        QVERIFY(!flatpak.isEmpty());
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = flatpak;
+        for (const QString &sub : {QStringLiteral("enter"), QStringLiteral("build"),
+                                   QStringLiteral("debug"), QStringLiteral("override")}) {
+            t.args = {sub, QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
+            QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+        }
+    }
+
+    void launchTargetRejectsSymlinkToFlatpak()
+    {
+        // exec's own basename is innocuous ("browser"), but it is a
+        // symlink to flatpak. resolveExecutable() deliberately does not
+        // canonicalize, so without checking the canonical name the
+        // flatpak argv gate would be skipped entirely.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString realFlatpak = writeDumpEnvScript(dir, QStringLiteral("flatpak-real"),
+                                                       dir.filePath(QStringLiteral("out.txt")));
+        QVERIFY(!realFlatpak.isEmpty());
+        // Name the link target's file "flatpak" so canonicalFilePath's
+        // basename is flatpak.
+        const QString flatpakPath = dir.filePath(QStringLiteral("flatpak"));
+        QVERIFY(QFile::rename(realFlatpak, flatpakPath));
+        const QString linkPath = dir.filePath(QStringLiteral("browser"));
+        QVERIFY(QFile::link(flatpakPath, linkPath));
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = linkPath;
+        t.args = {QStringLiteral("run"), QStringLiteral("--command=sh"),
+                  QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+    }
 };
 
 QTEST_MAIN(LauncherTest)

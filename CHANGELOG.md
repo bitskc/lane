@@ -18,6 +18,27 @@ version is 0, minor releases may still contain breaking changes.
   kept in front of its own `--profile`/`--new-tab` flags, instead of
   handing those flags to `flatpak` itself.
 
+### Fixed
+
+- Native browser desktop entries no longer leak their own Exec= flags
+  into launch arguments. An entry like `Exec=/usr/bin/firefox
+  --new-window %u` used to put `--new-window` in front of Lane's
+  `--profile` flag, so the browser opened the profile directory as a URL.
+  Only Flatpak entries keep their `flatpak run ... <app-id>` prefix now.
+- Desktop entries whose Exec= line starts with `env VAR=...` (for example
+  `Exec=env MOZ_X11=1 firefox %u`) are unwrapped to the real program at
+  discovery instead of producing a target that silently failed every
+  launch. Entries that unwrap to nothing are dropped.
+- A hand-edited custom target can no longer reach a shell through
+  `flatpak run --command=sh <app-id>`: flatpak launches now require the
+  `run` subcommand and a real app id, reject a blocked interpreter in
+  `--command`, and apply the same checks when exec is a symlink to
+  flatpak under another name.
+- Chromium profiles still listed in Local State after their directory was
+  deleted no longer appear as dead targets.
+- Quoted arguments in Exec= lines (like `--command="zen browser"`) are
+  kept as a single argument instead of being split apart.
+
 ## [0.2.0] - 2026-09-12
 
 ### Added
