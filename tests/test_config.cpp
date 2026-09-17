@@ -56,7 +56,7 @@ private Q_SLOTS:
         QJsonObject o;
         o[QStringLiteral("pickerPolcy")] = QStringLiteral("always"); // typo'd key: must not be silently adopted
         o[QStringLiteral("pickerPolicy")] = QStringLiteral("always");
-        o[QStringLiteral("toastMs")] = 1234;
+        o[QStringLiteral("holdMs")] = 1234;
         QFile f(path);
         QVERIFY(f.open(QIODevice::WriteOnly));
         f.write(QJsonDocument(o).toJson());
@@ -68,7 +68,7 @@ private Q_SLOTS:
         // key is simply ignored rather than rejecting the whole config or
         // being mistaken for the real "pickerPolicy" key.
         QCOMPARE(loaded.pickerPolicy, PickerPolicy::Always);
-        QCOMPARE(loaded.toastMs, 1234);
+        QCOMPARE(loaded.holdMs, 1234);
     }
 
     void customTargetsDropBlockedInterpreter()

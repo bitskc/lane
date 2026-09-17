@@ -18,6 +18,30 @@ version is 0, minor releases may still contain breaking changes.
   kept in front of its own `--profile`/`--new-tab` flags, instead of
   handing those flags to `flatpak` itself.
 
+### Fixed
+
+- A second link clicked while Lane was still asking the compositor for
+  an activation token could open in the right browser but with the
+  wrong URL (the newer click's). The URL is now captured when the
+  routing decision is made and carried through the async launch, so
+  target and URL can no longer be mixed between clicks.
+- A queued click that decided to launch or hold left the picker
+  showing the previous click's rows; picking one would then open the
+  new URL in a stale destination. The picker now closes whenever a
+  click's decision is not to pick.
+- Removed the `recentTargetIds` and `toastMs` config keys. Both were
+  written and loaded but never read, and `recentTargetIds` meant every
+  link open rewrote the config file.
+- `lane` invoked over D-Bus no longer guesses at argv[0] by matching
+  the name "lane"; the program name is always stripped, so a renamed
+  binary can no longer be mistaken for a URL.
+- A burst of links arriving while Lane was busy expanding a short URL
+  queued without bound and could open a train of stale windows later.
+  The queue now keeps only the four most recent clicks.
+- The hold duration range is now 400-5000 ms in all three places that
+  define it: the config schema, the Preferences spinbox, and the
+  settings setter (previously 400+, 400-5000, and 200-10000).
+
 ## [0.2.0] - 2026-09-12
 
 ### Added

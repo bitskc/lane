@@ -37,11 +37,6 @@
             "default": true,
             "description": "Show a notification after opening"
         },
-        "toastMs": {
-            "type": "integer",
-            "default": 2800,
-            "description": "Notification duration in milliseconds"
-        },
         "unwrapO365": {
             "type": "boolean",
             "default": true,
@@ -71,6 +66,7 @@
             "type": "integer",
             "default": 1600,
             "minimum": 400,
+            "maximum": 5000,
             "description": "Hold duration in milliseconds before a silent open launches"
         },
         "autostart": {
@@ -89,13 +85,6 @@
                 "type": "string"
             },
             "description": "Target IDs hidden from the picker"
-        },
-        "recentTargetIds": {
-            "type": "array",
-            "items": {
-                "type": "string"
-            },
-            "description": "Recently used target IDs, most recent first"
         },
         "remembered": {
             "type": "object",

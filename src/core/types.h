@@ -141,7 +141,6 @@ struct Config {
     bool closeOnFocusLoss = true;
     bool showUrl = true;
     bool toast = true;
-    int toastMs = 2800;
     bool unwrapO365 = true;
     bool unshorten = true;
     bool openUnwrapped = false;
@@ -155,7 +154,6 @@ struct Config {
     QStringList targetOrder;
     QMap<QString, QString> targetAliases;
     QMap<QString, QString> remembered;
-    QStringList recentTargetIds;
     QList<Target> customTargets;
     QList<Substitution> substitutions;
 };
