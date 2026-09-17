@@ -23,6 +23,24 @@ Window {
     readonly property int rowHeight: 48
     readonly property int sectionHeaderHeight: 26
 
+    function visibleSectionCount() {
+        var m = controller.pickerModel
+        var c = m.count
+        if (c === 0)
+            return 0
+        var limit = Math.min(root.maxRows, c)
+        var seen = {}
+        var n = 0
+        for (var i = 0; i < limit; i++) {
+            var section = m.data(m.index(i, 0), 262)
+            if (!seen[section]) {
+                seen[section] = true
+                n++
+            }
+        }
+        return n
+    }
+
     onVisibleChanged: {
         if (visible) {
             width = Screen.width
@@ -34,8 +52,8 @@ Window {
     }
 
     Shortcut { sequence: "Escape"; onActivated: controller.cancelPicker() }
-    Shortcut { sequence: "Return"; onActivated: controller.pick(list.currentIndex) }
-    Shortcut { sequence: "Enter"; onActivated: controller.pick(list.currentIndex) }
+    Shortcut { sequence: "Return"; onActivated: if (list.count > 0) controller.pick(list.currentIndex) }
+    Shortcut { sequence: "Enter"; onActivated: if (list.count > 0) controller.pick(list.currentIndex) }
     Shortcut { sequence: "Down"; onActivated: list.incrementCurrentIndex() }
     Shortcut { sequence: "Up"; onActivated: list.decrementCurrentIndex() }
     Shortcut { sequence: "Alt+A"; onActivated: controller.alwaysForHost = !controller.alwaysForHost }
@@ -180,12 +198,30 @@ Window {
                 }
             }
 
-            ListView {
-                id: list
+            Item {
                 width: parent.width
-                height: Math.min(root.maxRows, Math.max(1, count)) * root.rowHeight
-                        + (count > 0 ? controller.pickerModel.sectionCount : 0) * root.sectionHeaderHeight
-                model: controller.pickerModel
+                height: list.count === 0 ? root.rowHeight
+                                         : Math.min(root.maxRows, list.count) * root.rowHeight
+                                           + root.visibleSectionCount() * root.sectionHeaderHeight
+
+                QQC.Label {
+                    anchors.centerIn: parent
+                    visible: list.count === 0
+                    text: "No matching destinations"
+                    opacity: 0.5
+                    font.pixelSize: 13
+                    horizontalAlignment: Text.AlignHCenter
+                    width: parent.width
+
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: "No matching destinations"
+                }
+
+                ListView {
+                    id: list
+                    anchors.fill: parent
+                    visible: count > 0
+                    model: controller.pickerModel
                 clip: true
                 spacing: 0
                 currentIndex: 0
@@ -210,7 +246,11 @@ Window {
                         font.pixelSize: 10
                         font.weight: Font.DemiBold
                         opacity: 0.5
-                    }
+    
+
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: section
+                }
                 }
 
                 delegate: Rectangle {
@@ -301,6 +341,7 @@ Window {
                         }
                     }
                 }
+                }
             }
 
             Rectangle {
@@ -344,6 +385,9 @@ Window {
                             flat: true
                             Layout.preferredWidth: 24
                             Layout.preferredHeight: 24
+
+                            Accessible.role: Accessible.Button
+                            Accessible.name: "Widen destination"
                         }
                         QQC.Label {
                             text: controller.currentDestinationKey
@@ -359,6 +403,9 @@ Window {
                             flat: true
                             Layout.preferredWidth: 24
                             Layout.preferredHeight: 24
+
+                            Accessible.role: Accessible.Button
+                            Accessible.name: "Narrow destination"
                         }
                     }
                 }

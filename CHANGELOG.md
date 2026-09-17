@@ -38,6 +38,17 @@ version is 0, minor releases may still contain breaking changes.
   deleted no longer appear as dead targets.
 - Quoted arguments in Exec= lines (like `--command="zen browser"`) are
   kept as a single argument instead of being split apart.
+- Picker filter with no matches shows a "No matching destinations"
+  message instead of an empty row, and Enter no longer tries to pick
+  from an empty list.
+- Picker card height counts only section headers visible in the eight-row
+  viewport, not every section in the filtered model.
+- Drag reorder on Browsers & apps clears its pending move id when a drop
+  is cancelled, so the next drag does not move the wrong target.
+- Browsers & apps search shows "No matches" when the filter hides every
+  row. Section collapse controls, picker section headers, and destination
+  ladder buttons now have accessibility names. Rename fields show a hover
+  underline so they read as editable.
 
 ## [0.2.0] - 2026-09-12
 
@@ -284,69 +295,30 @@ version is 0, minor releases may still contain breaking changes.
   never discarded without a copy.
 
 ### Docs
+⚠ 1 unresolved conflict detected
+- ours = HEAD
+- theirs = 5e22e75 (Fix QML polish from round-2 gstack review.)
+NOTICE: Inspect a block by reading `conflict://<N>` (add `/ours` / `/theirs` / `/base` to render a single side). Resolve with `write({ path: "conflict://<N>", content })`, or bulk-resolve every registered conflict with `write({ path: "conflict://*", content })`. Writes replace ONLY the marker block (markers + all sides) — never repeat the lines before/after it; they stay in place.
+`content` shorthand: a line that is exactly `@ours` / `@theirs` / `@base` / `@both` expands to that recorded section. `@both` is ours-then-theirs with no separator — only for additive conflicts where each side adds something different; NEVER for competing edits of the same lines (pick a side or write the combined text). Lines that are not a token pass through verbatim, so `"// keep both\n@ours\n@theirs"` literally writes the comment, then ours, then theirs.
+Per-id bulk: `write({ path: "conflict://*", content: "1: @ours\n2: @theirs\n…" })` resolves each listed id with that side in ONE call — the cheapest way through many pick-one conflicts; unlisted ids stay registered.
+Resolve each block faithfully: keep one side (`@ours`/`@theirs`), or combine them when both intents apply — never invent content beyond the recorded sides, and never stack both sides of competing edits. Resolve several conflicts in a single turn by issuing multiple `write` calls at once; ids stay valid as earlier blocks are resolved.
 
-- The `initial-tern` openspec change was repaired to match the shipped
-  v0.1.0 product and archived. The canonical spec now lives at
-  `openspec/specs/lane/spec.md`.
-- DESIGN.md, CONTRIBUTING.md, and README.md drift fixes: picker rows
-  and tint, the build dependency step, and the appstreamtest install
-  note.
+──── #1  L23-54 ────
+<<< ours
+- Native browser desktop entries no longer leak their own Exec= flags
+  into launch arguments. An entry like `Exec=/usr/bin/firefox
+  --new-window %u` used to put `--new-window` in front of Lane's
+  `--profile` flag, so the browser opened the profile directory as a URL.
+  Only Flatpak entries keep their `flatpak run ... <app-id>` prefix now.
+- Desktop entries whose Exec= line starts with `env VAR=...` (for example
+… (12 more lines)
+>>> theirs
+- Picker filter with no matches shows a "No matching destinations"
+  message instead of an empty row, and Enter no longer tries to pick
+  from an empty list.
+- Picker card height counts only section headers visible in the eight-row
+  viewport, not every section in the filtered model.
+- Drag reorder on Browsers & apps clears its pending move id when a drop
+… (5 more lines)
 
-## [0.1.0] - 2026-09-11
-
-First public release.
-
-### Added
-
-- Picker overlay: pick a target by number, filter by typing, or press
-  Alt+A to remember a destination.
-- Hold bar: a short pause (about 1.6 seconds) before a silent open, so
-  you can stop it with Esc or Space. Explicit rules skip the hold.
-- Two-pane settings window with Overview, Browsers & apps, Rules, and
-  Preferences pages.
-- Drag-reorder and rename for browsers and apps on the Browsers & apps
-  page. Private/incognito windows are excluded from the drag order for
-  their parent browser.
-- Path-scoped memory for remembered destinations. `github.com/bitskc`
-  can go somewhere different from `github.com`. Comma narrows the
-  remembered path, period widens it.
-- "Always for" now defaults to the path, not the whole host.
-- Rules engine: match by URL with optional regex, scoped to
-  any/domain/path. First match wins. Rule objects also accept
-  `"title"` and `"process"` locations for compatibility, but those
-  cannot match on Wayland because caller identity is not available.
-- Discovery for Gecko profiles (Firefox, Zen, LibreWolf, Floorp,
-  Waterfox), Chromium-family profiles (Brave, Chrome, Edge, Vivaldi,
-  Opera), and `firefoxpwa` sites.
-- Outlook safe-link unwrapping and optional link unshortening.
-- Agent-friendly `~/.config/lane/config.json` with a published JSON
-  schema (`docs/config.schema.json`), plus `lane --list`,
-  `lane --explain URL`, and `lane --config-path` for inspecting
-  config without the GUI. See `AGENTS.md`.
-- `KStatusNotifierItem` tray icon with Settings and Rediscover actions.
-- systemd user unit for autostart, installed to the systemd user unit
-  search path.
-
-### Changed
-
-- Desktop entry, D-Bus service, and autostart files now use absolute
-  paths to the installed binary, so Plasma's app menu and D-Bus
-  activation find `lane` even when `~/.local/bin` is not on `PATH`.
-- Lane claims a real D-Bus name, `app.lane.Lane`, instead of a
-  placeholder, so the app menu can start it and duplicate launches
-  hand off to the running instance.
-- Project license switched to the PolyForm Noncommercial License 1.0.0.
-  Personal and hobby use is free; commercial use needs a separate
-  license. See `COMMERCIAL.md`.
-
-### Security
-
-- Lane only ever opens `http` and `https` URLs. It rejects `file`,
-  `javascript`, `data`, and URLs with embedded credentials. Custom
-  handlers run as argv, never through a shell.
-
-[Unreleased]: https://github.com/bitskc/lane/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/bitskc/lane/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/bitskc/lane/releases/tag/v0.1.0
-
-[Showing lines 1-300 of 354. Use :301 to continue]
+[Showing lines 1-300 of 366. Use :301 to continue]
