@@ -42,10 +42,11 @@ Rules beat convenience. A work GitHub rule will beat the GitHub PWA.
 ### Hold on silent opens
 
 Remembered, PWA, and default opens are *silent convenience* opens. When
-`holdAutoOpen` is on (default), Lane shows a compact hold HUD for `holdMs`
-(default 1600 ms) before launching. Enter launches now; Esc or Space cancels
-the hold and shows the picker. A new URL arriving during the hold cancels
-the previous hold. Rule matches are never held — the user wrote the rule.
+`holdAutoOpen` is enabled (off by default; turn it on in Preferences), Lane
+shows a compact hold HUD for `holdMs` (default 1600 ms) before launching.
+Enter launches now; Esc or Space cancels the hold and shows the picker. A
+new URL arriving during the hold cancels the previous hold. Rule matches are
+never held — the user wrote the rule.
 
 ## Non-goals (v1)
 
