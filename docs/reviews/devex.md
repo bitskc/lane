@@ -1,149 +1,121 @@
 # Developer experience review
 
-Review date: 2026-09-12. Repo: `bitskc/tern` (product name Lane) v0.1.0. Method: follow `README.md` literally on a scratch build at `/tmp/lane-devex-build` (no `cmake --install`), read source for drift checks, run safe CLI flags only.
+Review date: 2026-09-17. Repo: `bitskc/lane` v0.2.0 (tagged and released). Method: read README, CONTRIBUTING, AGENTS.md, schema, CI/release workflows, PKGBUILD, and source for drift; verify round-1 claims against current files; `curl -sI` on GitHub URLs; `gh api` for CI/release run status. No builds, installs, or Lane execution (per review constraints). TTHW timings are carried forward from round 1 (2026-09-12 scratch build) because this round could not re-measure.
+
+**Verdict: Good enough for an Arch/KDE contributor who already has deps; docs still drift on hold-bar defaults and Flatpak discovery, and local `ctest` is a weaker gate than CI.**
 
 ## TTHW
 
-Measured on a cloned tree with all README-listed Arch packages already installed (`pacman -Q` checked each; none missing). Did not re-run `pacman -S`.
-
 | Step | Wall time | Notes |
 |------|-----------|-------|
-| `cmake -S . -B /tmp/lane-devex-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/.local` | **4.2 s** | Configure succeeds. **25** CMake QML-plugin warnings ("link target does not exist"); **4x** `Could NOT find WrapVulkanHeaders` (harmless on this box). |
-| `cmake --build /tmp/lane-devex-build` | **46 s** | 91 Ninja steps, Ryzen 5 5500U. No compiler warnings in build log. |
-| `QT_QPA_PLATFORM=offscreen ctest --test-dir /tmp/lane-devex-build --output-on-failure` | **0.55 s** | 10/10 reported pass (9 C++ tests + `appstreamtest`). |
-| **Build + test subtotal (deps present)** | **~51 s** | |
+| `git clone` | not measured | One-time |
+| README `pacman -S` on a clean Arch/CachyOS box | **~2-5 min** | Round 1 estimate; 20 packages, network-bound |
+| `cmake` + `ninja` + `ctest` (deps present) | **~51 s** | Round 1 measured on Ryzen 5 5500U: configure 4.2 s, build 46 s, ctest 0.55 s (11 tests today vs 10 in round 1) |
+| `cmake --install` + `update-desktop-database` | not measured | README steps 177-179; required for a working menu entry and for honest `appstreamtest` |
 
-Not measured here: `git clone`, README `pacman -S` on a fresh box (typically **2-5 min**), `cmake --install` + `update-desktop-database` (README steps 177-179; skipped per review constraints).
+**Cold stranger on Arch/CachyOS (clone + pacman + build + test, deps absent): ~5-10 min.** **Warm repeat build with deps: under a minute.** README build instructions are accurate for CachyOS/Arch: one `pacman` line, Ninja, `$HOME/.local` prefix, and `update-desktop-database` call (`README.md:170-187`).
 
-**`appstreamtest` on the README path is a false green.** Without `cmake --install`, the test logs `Not installed yet, skipping` and still passes (`LastTest.log` in `/tmp/lane-devex-build`). CI avoids this by installing to `build/throwaway-install` before `ctest` (`.github/workflows/ci.yml:32-42`). A contributor who follows README literally never validates metainfo.
+## Round-1 fix verification
 
-Scratch-built `lane --version` prints `Lane 0.1.0` (matches `CMakeLists.txt:2`).
+| # | Round-1 finding | Status | Evidence |
+|---|-----------------|--------|----------|
+| 1 | `lane --rediscover` / `--configure` documented but unregistered (exit 1) | **Fixed** | `src/app/main.cpp:98-106` registers both in `QCommandLineParser` (`settings`+`configure` alias, `rediscover`). `Controller::handleArgs` still handles them at `src/app/Controller.cpp:323-326`. Landed in `fc57e99` per `docs/reviews/retro-main.md:27`. |
+| 2 | User-facing URLs pointed at nonexistent `bitskc/lane` | **Fixed** | `git remote` is `bitskc/lane`. `curl -sI` returns 200 for `https://github.com/bitskc/lane` and `/releases`. README (`README.md:25`), CHANGELOG links (`CHANGELOG.md:324-326`), metainfo (`data/app.lane.Lane.metainfo.xml:8-10,33`), PKGBUILD (`packaging/PKGBUILD:6,16`), and `tests/test_version.cpp:88-101` all use `bitskc/lane`. Old `bitskc/tern` 301-redirects. |
+| 3 | `config.schema.json` `holdMs` minimum 0 vs UI clamp 400-5000 | **Fixed** | Schema `minimum: 400` at `docs/config.schema.json:73`. UI `from: 400` / `to: 5000` at `src/qml/pages/PreferencesPage.qml:59-60`. Minor residual drift: `Controller::setHoldMs` clamps 200-10000 at `src/app/Controller.cpp:282`, wider than UI/schema. |
+| 4 | CONTRIBUTING.md lacks dep install instructions | **Fixed** | `CONTRIBUTING.md:7-8` sends readers to the README `pacman` line before the cmake block. |
+| 5 | `appstreamtest` false green without `cmake --install` | **Never fixed** | README still documents the skip (`README.md:181-182`). CI installs first (`/.github/workflows/ci.yml:32-42`). `docs/RELEASING.md:82-85` and `packaging/PKGBUILD:26-28` run `ctest` without install, so packagers and releasers hit the same gap. |
+| 6 | AGENTS.md documents `location: "title"` / `"process"` as if they work | **Fixed (docs)** | `AGENTS.md:103-105` says they are parsed but cannot match on Wayland. `src/app/SourceInfo.cpp:8-10` is still a stub returning `{}`. `src/core/matcher.cpp:37-45` warns once and non-`url` locations never match when caller identity is empty. |
 
-## Dependency check
+**Regressions from round 1:** none. Items 1-4 and 6 stayed fixed. Item 5 was acknowledged in round 1 and is still open.
 
-| Source | Verdict |
-|--------|---------|
-| `README.md:170-173` `pacman` line | **Complete.** Includes `kcrash` and `kcolorscheme` (fixed since 2026-09-11 review). Matches `CMakeLists.txt:43-54` (`KF6::Crash`, `KF6::ColorScheme`). |
-| `CMakeLists.txt` `find_package` / `ecm_find_qmlmodule` | All satisfied by README list on this machine. Nothing listed in README is unused. |
-| `packaging/PKGBUILD:8-14` runtime `depends` | Matches README minus build-only tools (`cmake`, `ninja`, `extra-cmake-modules`). Includes `kcrash` / `kcolorscheme`. |
-| Installed on review host (`pacman -Q`) | **20/20** README packages present. |
+## Findings (ranked by severity)
 
-**Verdict:** README dependency list is accurate today. Last round's missing `kcrash` / `kcolorscheme` finding is **fixed**.
+### 1. README still describes the hold bar as default-on (v0.2.0 made it opt-in)
 
-## Doc errors
+`holdAutoOpen` defaults to `false` in code (`src/core/config.cpp:261`, `src/core/types.h:149`) and schema (`docs/config.schema.json:65-68`). v0.2.0 metainfo calls this out (`data/app.lane.Lane.metainfo.xml:54`). README still tells strangers they will see a hold bar on every remembered/PWA/default open:
 
-### Last-round spot-check (2026-09-11 `devex.md`)
+- `README.md:47-49` ("shows a short hold bar (about 1.6 seconds)")
+- `README.md:92-94` (same, tutorial section)
+- `README.md:101-102` ("Turn the hold off" implies it is on by default)
 
-| Prior finding | Status |
-|---------------|--------|
-| README `pacman` missing `kcrash`, `kcolorscheme` | **Fixed** (`README.md:172`). |
-| README picker "1 through 9" | **Fixed** (`README.md:79` says 1-8; `src/qml/Picker.qml:22` `maxRows: 8`). |
-| README CLI block incomplete | **Partially fixed.** Block now lists `--version`, `--settings`, `--configure`, `--rediscover` (`README.md:151-164`), but two of those flags do not work from the shell (see below). |
-| `AGENTS.md` CLI block incomplete | **Partially fixed** (`AGENTS.md:198-209`). Same broken flags. |
-| `AGENTS.md` sample missing `hiddenTargetIds` | **Fixed** (`AGENTS.md:56`). |
-| `AGENTS.md` `kind` field wrong | **Fixed** (`AGENTS.md:142-148` documents write-on-save, ignore-on-load accurately). |
-| `docs/RELEASING.md` step 5 missing reconfigure | **Fixed** (`docs/RELEASING.md:77-86`). |
-| `docs/config.schema.json` missing `kind`, `browserName` | **Fixed** (`docs/config.schema.json:183-197`). |
-| `CLAUDE.md` "restart daemon" vs `AGENTS.md` `--rediscover` | **Aligned in prose** (`CLAUDE.md:22`, `AGENTS.md:20-26`). Both recommend `lane --rediscover`. The flag itself is broken at the CLI (see below), so the alignment is misleading. |
+A fresh install opens silently unless the user enables "Pause before opening" in Preferences. Tutorial and "What it does" sections need a lead-in that hold is opt-in.
 
-### New / remaining errors
+### 2. `appstreamtest` honesty gap persists outside CI
 
-| File | Wrong line (quoted) | Correct replacement |
-|------|---------------------|---------------------|
-| `README.md` | `4. Run `lane --rediscover` so the running daemon reloads the file.` (`README.md:128`) and CLI block `lane --rediscover` (`README.md:164`) | Register `--rediscover` (and `--configure`) in `QCommandLineParser` in `src/app/main.cpp:90-105`, or change docs to the working path: restart via `pkill -f "lane --daemon"; lane --daemon &`, or D-Bus activation. Today `lane --rediscover` exits 1: `Lane: Unknown option 'rediscover'.` Handler exists only in `Controller::handleArgs` (`src/app/Controller.cpp:315-316`), which runs after `parser.process()` and never sees unknown flags. |
-| `README.md` | `lane --configure` (`README.md:163`) | Same as above. `lane --configure` exits 1: `Unknown option 'configure'.` Alias is parsed only inside `Controller::handleArgs` (`Controller.cpp:313`). |
-| `CHANGELOG.md` | `CLI docs in README and AGENTS.md list every option the binary accepts, including ... --rediscover.` (`CHANGELOG.md:56-58`) | False claim until `main.cpp` registers those options. `lane --help` (`main.cpp:90-105`) omits `--rediscover` and `--configure`. |
-| `README.md` | `[GitHub Releases](https://github.com/bitskc/lane/releases)` (`README.md:25`) | `https://github.com/bitskc/tern/releases` until the GitHub repo is renamed. `bitskc/lane` returns HTTP 404 (verified 2026-09-12). `git remote` is still `bitskc/tern`. |
-| `CHANGELOG.md` | `[Unreleased]: https://github.com/bitskc/lane/compare/...` and `[0.1.0]: https://github.com/bitskc/lane/releases/tag/v0.1.0` (`CHANGELOG.md:242-243`) | Use `bitskc/tern` URLs until rename. |
-| `data/app.lane.Lane.metainfo.xml` | `<url type="homepage">https://github.com/bitskc/lane</url>` (`metainfo.xml:8-9`) | `https://github.com/bitskc/tern` (or rename the GitHub repo). |
-| `packaging/PKGBUILD` | `source=("$pkgname-$pkgver.tar.gz::https://github.com/bitskc/lane/archive/...")` and `sha256sums=('SKIP')` (`PKGBUILD:16-24`) | Point at `bitskc/tern` tarball URL and pin a real checksum, or finish the GitHub rename and regenerate. Comment still says rename is pending. |
-| `openspec/changes/initial-tern/proposal.md` | `No Lua, no containers, no PDF/mailto.` (`proposal.md:11`) and out-of-scope `Firefox Multi-Account Containers` (`proposal.md:26`) | Containers shipped (`CHANGELOG.md:12-21`, `AGENTS.md:151-163`). Mark spec stale or update scope so a new contributor is not told containers do not exist. |
-| `openspec/changes/initial-tern/design.md` | `1-9 when the filter is empty` (`design.md:19`) | `1-8` to match `src/qml/Picker.qml:22` (`maxRows: 8`). |
-| `CONTRIBUTING.md` | Build block (`CONTRIBUTING.md:7-11`) has only `cmake` commands | Add "install deps from README" or repeat the `pacman` one-liner. A stranger who reads CONTRIBUTING first hits configure failure on a clean box. |
+ECM registers `appstreamtest` when `appstream` is installed. Without `cmake --install` to a real prefix, the test logs "Not installed yet, skipping" and passes. Three contributor-facing paths still skip install:
 
-**Verified non-errors**
+| Path | Lines | Gap |
+|------|-------|-----|
+| README build section | `README.md:176-182` | Documents the skip but does not add install to the happy path |
+| Release checklist | `docs/RELEASING.md:82-85` | `ctest` only; contradicts CI |
+| AUR PKGBUILD `check()` | `packaging/PKGBUILD:26-28` | `ctest` before `package()`'s `cmake --install` |
 
-- `lane --version`, `--help`, `--list`, `--explain`, `--config-path` work without the daemon (tested; `--list` printed 44 targets, `--explain` printed routing for `https://github.com/bitskc/lane`).
-- `CLAUDE.md` and `AGENTS.md` agree on config reload semantics (both mention `--rediscover`); the problem is implementation, not doc contradiction.
+CI is honest (`/.github/workflows/ci.yml:32-44`). Local contributors and `makepkg` do not get the same gate.
 
-## Schema drift
+### 3. Flatpak browser discovery is shipped on `main` but invisible in user/contributor docs
 
-Top-level `Config` fields: **no drift**. All 22 keys in `src/core/types.h:138-161` appear in `docs/config.schema.json` and `loadConfig` / `saveConfig` (`src/core/config.cpp:222-352`).
+`CHANGELOG.md:12-19` (`[Unreleased]`) documents Flatpak profile discovery and launch wrapping. No mention in `README.md`, `CONTRIBUTING.md`, or `AGENTS.md`. A contributor adding a browser family or debugging discovery will not know to test under `~/.var/app/<app-id>/` or to read the Flatpak branches in `src/core/discovery.cpp`. This is the biggest functional doc hole since v0.2.0.
 
-`customTargets` items: **aligned** with code and AGENTS after last round. Schema documents `browserName` and `kind` with the ignore-on-load note (`docs/config.schema.json:183-197`; loader hardcodes `Kind::Custom` at `config.cpp:118`).
+### 4. AGENTS.md JSON sample misstates `holdAutoOpen` default
 
-Minor type bound drift:
+`AGENTS.md:52` shows `"holdAutoOpen": true` in the sample config. Actual default is `false` (`src/core/config.cpp:261`, `docs/config.schema.json:67`). Agents hand-editing config from the sample will enable hold when they meant defaults.
 
-| Field | Schema | Code / UI |
-|-------|--------|-----------|
-| `holdMs` | `minimum: 0` (`docs/config.schema.json:73`) | Settings UI clamps **400-5000** (`src/qml/pages/PreferencesPage.qml:59-60`). Hand-edited `100` loads but UI will not expose it. Consider `minimum: 400` in schema or document UI-only clamp. |
+### 5. `holdMs` clamp triple mismatch (low)
 
-`rules`, `substitutions`, `targetOrder`, `targetAliases`, `hiddenTargetIds`, `remembered` match code and AGENTS.
+| Layer | Range | Location |
+|-------|-------|----------|
+| Schema | min 400, no max | `docs/config.schema.json:73` |
+| Settings UI | 400-5000 | `src/qml/pages/PreferencesPage.qml:59-60` |
+| Controller setter | 200-10000 | `src/app/Controller.cpp:282` |
 
-## CI/release
+Hand-edited values between 200-399 or above 5000 load but the UI cannot set them; above 5000 is silently clamped on save through the UI path only.
 
-**CI (`.github/workflows/ci.yml`)**
+### 6. CI vs README build type mismatch (low)
 
-- Runs on `ubuntu-latest` with `archlinux:latest` container. Good match for README's Arch/CachyOS audience; not a generic Ubuntu build.
-- Installs full dep set including `kcrash`, `kcolorscheme`, `appstream` (README omits `appstream`; only needed for optional local `appstreamcli validate`, not configure).
-- Builds **Debug** (`ci.yml:29`) while README says **Release** (`README.md:174`). Both work; Release is what packagers and end users expect.
-- Runs `cmake --install build --prefix build/throwaway-install` before tests so `appstreamtest` actually checks metainfo. README workflow skips this.
-- `QT_QPA_PLATFORM=offscreen` set. Sensible for headless CI.
-- Does **not** load QML modules (`Picker.qml`, `Hold.qml`). Kirigami API drift (the `borderColor` regression in `CHANGELOG.md:68-69`) still would not fail CI.
-- Latest runs on `bitskc/tern` (2026-09-11): CI **success** on merge of rename/review-fixes PR; prior offscreen fix landed same day.
+CI configures **Debug** (`/.github/workflows/ci.yml:29`). README and RELEASING use **Release** (`README.md:174`, `docs/RELEASING.md:83`). Both work; Release is what packagers and end users expect. Not a blocker, but a green CI run is not the same profile strangers build locally.
 
-**Release (`.github/workflows/release.yml`)**
+### 7. `lane --rediscover` is heavier than the docs imply (low)
 
-- Tag-triggered only (`v*`). Does not build binaries; creates GitHub Release with notes from `CHANGELOG.md`.
-- Awk extractor verified locally against `CHANGELOG.md` for `0.1.0`: pulls the right section body (matches `release.yml:19-32` logic).
-- Manual fallback `sed` in `docs/RELEASING.md:142-143` uses a different parser than `release.yml`; fine for emergencies, easy to diverge on edge-case headers.
-- `docs/RELEASING.md` three-file lockstep (`CMakeLists.txt`, `CHANGELOG.md`, `metainfo`) is accurate and executable. Step 5 now correctly requires reconfigure after version bump.
-- Release workflow runs on `ubuntu-latest` **without** a container and does not run tests. Doc says build/test happen in CI on `main` (`RELEASING.md:134-136`). Tag pusher must trust CI was green on the release commit; doc does not say "wait for CI on the tag."
+`main.cpp:99` describes reloading "in the running daemon." Implementation: `Controller::rediscover()` just calls `reload()` (`src/app/Controller.cpp:467-470`). With no daemon, `lane --rediscover` still constructs the full `Controller` (tray icon, D-Bus service) and enters `app.exec()` (`src/app/main.cpp:142-155`). Works, but it is not a lightweight one-shot CLI like `--list` or `--explain`.
 
-**Repo rename gap:** User-facing URLs (`README.md`, `CHANGELOG.md`, `metainfo.xml`, `PKGBUILD`, `test_version.cpp:88-101`) say `bitskc/lane`. Git remote and releases live at `bitskc/tern`. Broken links and `PKGBUILD` `SKIP` checksum until rename or URL rollback.
+### 8. Contribution scaffolding still minimal (low)
 
-## Contribution path
+`.github/` contains only `workflows/` (no issue template, PR template, or CODEOWNERS). Fine for a solo project today; strangers get no PR shape beyond `CONTRIBUTING.md:46-48`.
 
-- `CONTRIBUTING.md` exists with build commands, browser-family guide (`CONTRIBUTING.md:13-39`), changelog rule, and license note. **Improvement since last review.**
-- No `.github/ISSUE_TEMPLATE/`, no PR template, no `CODEOWNERS`.
-- First PR shape: focused diff, `## [Unreleased]` bullet in `CHANGELOG.md`, no version bump in feature PRs (`CONTRIBUTING.md:43-48`), follow `docs/RELEASING.md` only on release commits.
-- `docs/RELEASING.md:47` references `CONTRIBUTING.md` correctly.
+## CI, release, and packaging
 
-## Verdict
+**CI (`/.github/workflows/ci.yml`)** runs on `ubuntu-latest` inside `archlinux:latest`, installs the full KDE/Qt dep set (including `appstream`), builds Debug, installs to `build/throwaway-install`, then runs `ctest` with `QT_QPA_PLATFORM=offscreen`. Latest `main` run: success (2026-09-17, `gh api`).
 
-**Shippable for a solo Arch/KDE developer who already has deps**, but not doc-honest for three workflows the project advertises: (1) `lane --rediscover` after hand-editing config, (2) GitHub links in README/changelog/metainfo, (3) README-only build+test as a full validation gate (`appstreamtest` skips).
+**Release (`/.github/workflows/release.yml`)** triggers on `v*` tags, extracts the matching `CHANGELOG.md` section via awk, and creates a GitHub Release with `softprops/action-gh-release@v2`. v0.2.0 release workflow: success (2026-09-15). `docs/RELEASING.md:126-136` accurately describes this (no binary artifacts; source tarballs attached by GitHub).
 
-**Score (getting started, Arch clone):** 7/10 with deps installed (fast ~51 s build); 5/10 on a clean box if CONTRIBUTING is the entry (no `pacman` line); 4/10 if the contributor trusts `lane --rediscover` or `bitskc/lane` URLs.
+**PKGBUILD (`packaging/PKGBUILD`)** looks structurally sound: `pkgver=0.2.0`, tag tarball URL (`:16`), pinned `sha256sums` (`:17`), runtime `depends` match README minus build tools, `build()` uses Release + `/usr` prefix, `package()` runs `cmake --install` and installs LICENSE. `check()` gap noted above. Not published to AUR from this repo (no packaging automation found).
 
-### Ranked fix list
+**RELEASING.md** three-file lockstep (`CMakeLists.txt`, `CHANGELOG.md`, metainfo) matches practice. Step 5 should add the same `cmake --install` CI uses before calling `ctest` honest.
 
-1. Register `--rediscover` and `--configure` in `src/app/main.cpp` `QCommandLineParser` (or remove them from README/AGENTS/CHANGELOG and document restart-only reload). This is the biggest doc/code lie left.
-2. Fix GitHub URLs to `bitskc/tern` everywhere, or complete the GitHub repo rename to `bitskc/lane` and regenerate `PKGBUILD` checksum.
-3. Add `cmake --install` (or document that `appstreamtest` needs it) to README build section so local `ctest` matches CI honesty.
-4. Update `openspec/changes/initial-tern/` (containers in scope, picker keys 1-8) so OpenSpec does not mislead new contributors.
-5. Point `CONTRIBUTING.md` build section at README `pacman` deps (or inline the list).
-6. Align `holdMs` schema `minimum` with `PreferencesPage.qml` (400) or document hand-edit vs UI range.
-7. Add a headless QML smoke test under `QT_QPA_PLATFORM=offscreen` so Kirigami API drift fails CI.
-8. Add GitHub issue/PR templates when external contributors show up.
+## Schema vs code
+
+Top-level config keys: **no drift**. All 22 keys in `src/core/types.h:138-161` are loaded/saved in `src/core/config.cpp:231-379` and present in `docs/config.schema.json`.
+
+`customTargets` `kind` / `browserName`: aligned with AGENTS ignore-on-load note (`docs/config.schema.json:183-197`).
+
+`rules.location` enum includes `title` and `process`; code cannot populate them on Wayland. Schema and AGENTS are honest; UI does not expose these fields.
 
 ## Considered and fine
 
-- README `pacman` dependency list matches `CMakeLists.txt` and CI after `kcrash` / `kcolorscheme` addition.
-- `AGENTS.md` JSON sample, `hiddenTargetIds`, and `customTargets` `kind` behavior match code.
-- `docs/RELEASING.md` reconfigure-after-bump step is correct.
-- `docs/config.schema.json` top-level and `customTargets` fields match `config.cpp` load/save.
-- CI Arch container choice fits the stated audience better than plain Ubuntu.
-- `lane --list` / `--explain` / `--config-path` / `--version` work without daemon; good agent ergonomics for read-only inspection.
-- `CONTRIBUTING.md` "Adding a browser family" section closes last round's gap.
-- `CLAUDE.md` and `AGENTS.md` reload guidance is consistent (implementation gap is separate).
-- Release changelog extraction awk matches Keep a Changelog `## [0.1.0]` headers.
-- PolyForm license called out honestly in `RELEASING.md` AppStream validator section.
+- README `pacman` dependency list matches `CMakeLists.txt:31-58` and CI (`/.github/workflows/ci.yml:21-27`). `kcrash` and `kcolorscheme` present.
+- CLI surface in README and AGENTS matches `src/app/main.cpp:90-108` for all documented flags.
+- `lane --list`, `--explain`, `--config-path`, `--version` exit before starting the daemon (`src/app/main.cpp:111-140`). Good agent ergonomics.
+- GitHub URLs, screenshot raw links, and release page resolve (HTTP 200).
+- `docs/RELEASING.md` tag-triggered release flow matches `release.yml`; manual `gh release create` fallback is documented.
+- PolyForm license called out honestly in RELEASING AppStream validator section (`docs/RELEASING.md:95-104`).
+- CONTRIBUTING browser-family guide (`CONTRIBUTING.md:16-42`) is concrete and points at the right files.
+- Test count grew to 11 C++ tests (`tests/CMakeLists.txt:10-20`); CI still passes.
+- Repo rename completed; update checker test strings use `bitskc/lane` (`tests/test_version.cpp:88-101`).
+- `gstack-full-analysis.md` is stale (still quotes round-1 devex verdicts) but is a synthesis artifact, not contributor-facing onboarding.
 
 ## Method
 
-1. `gstack-skill-start --skill plan-devex-review` -> `SESSION_ID: 3239336-1789189764-00808fad`, `TEL_START: 1789189764`.
-2. Read `~/.claude/skills/gstack/plan-devex-review/SKILL.md`; adapted shipped-repo review (no AskUserQuestion; write-only deliverable).
-3. Scratch build per `README.md` at `/tmp/lane-devex-build` (Release, no install). Timed configure/build/test. `pacman -Q` for each README package (read-only).
-4. Ran `lane --version`, `--help`, `--list`, `--explain`, `--config-path`, and probed `--rediscover` / `--configure` (failed as documented). Did not run `--daemon`, `--pick`, `--settings`, `lane <url>`, or touch `~/.config/lane/`.
-5. Compared `docs/config.schema.json`, `src/core/config.cpp`, CI/release workflows, `docs/RELEASING.md`, `CONTRIBUTING.md`, `openspec/changes/initial-tern/`, and prior `docs/reviews/devex.md` findings.
-6. `gstack-skill-end` with outcome success.
+1. `gstack-skill-start --skill plan-devex-review` -> `SESSION_ID: 777869-1789660303-e2984661`, `TEL_START: 1789660303`.
+2. Read grounding files and prior `docs/reviews/devex.md`.
+3. Verified round-1 claims in source; checked URLs with `curl -sI`; CI/release status via `gh api`.
+4. Write-only deliverable; no builds or Lane execution.
