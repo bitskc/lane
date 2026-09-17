@@ -675,6 +675,192 @@ private Q_SLOTS:
         const auto result = moveIdAmongSiblings(targets, QStringLiteral("zen"), 99);
         QCOMPARE(result, QStringList({QStringLiteral("brave"), QStringLiteral("firefox"), QStringLiteral("zen")}));
     }
+
+    void nativeExecFlagsDoNotLeakIntoArgv()
+    {
+        // Regression for issue #12: a native Exec= line's own flags must
+        // not be prepended to Lane's argv. For
+        // "Exec=/usr/bin/firefox --new-window %u" the rebuilt argv used to
+        // start with "--new-window", which then ate "--profile" as the
+        // URL to open. Only Flatpak entries keep their Exec= prefix.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        QFile desktop(root + QStringLiteral("/apps/firefox.desktop"));
+        QVERIFY(desktop.open(QIODevice::WriteOnly));
+        desktop.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Firefox\n"
+            "Exec=/usr/bin/firefox --new-window %u\n"
+            "Icon=firefox\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n"));
+        desktop.close();
+
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/firefox"),
+                  root + QStringLiteral("/config/mozilla/firefox"));
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+        const auto def = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Firefox") && t.kind == Kind::BrowserProfile && !t.incognito;
+        });
+        QVERIFY(def != targets.end());
+        QCOMPARE(def->exec, QStringLiteral("/usr/bin/firefox"));
+        QVERIFY(!def->args.contains(QStringLiteral("--new-window")));
+        QVERIFY(def->args.contains(QStringLiteral("--new-tab")));
+    }
+
+    void envWrappedExecUnwrapsToRealProgram()
+    {
+        // "Exec=env MOZ_X11=1 firefox %u" must discover as firefox, not as
+        // exec=env (which the launcher's interpreter blocklist rejects, so
+        // the target would appear in settings but fail on every launch).
+        // An Exec= that unwraps to no program at all is dropped entirely.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        QFile desktop(root + QStringLiteral("/apps/firefox.desktop"));
+        QVERIFY(desktop.open(QIODevice::WriteOnly));
+        desktop.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Firefox\n"
+            "Exec=env MOZ_X11=1 firefox %u\n"
+            "Icon=firefox\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n"));
+        desktop.close();
+
+        QFile dead(root + QStringLiteral("/apps/dead.desktop"));
+        QVERIFY(dead.open(QIODevice::WriteOnly));
+        dead.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Dead\n"
+            "Exec=env MOZ_X11=1\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;\n"));
+        dead.close();
+
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/firefox"),
+                  root + QStringLiteral("/config/mozilla/firefox"));
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+        const auto def = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Firefox") && t.kind == Kind::BrowserProfile && !t.incognito;
+        });
+        QVERIFY(def != targets.end());
+        QCOMPARE(def->exec, QStringLiteral("firefox"));
+        QVERIFY(!def->args.contains(QStringLiteral("MOZ_X11=1")));
+        QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.id.contains(QLatin1String("dead"));
+        }));
+    }
+
+    void execPrefixHonorsQuotedArgs()
+    {
+        // A quoted argument in Exec= must survive as one argv token:
+        // --command="zen browser" is a single flatpak argument, not two.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        QFile desktop(root + QStringLiteral("/apps/app.zen_browser.zen.desktop"));
+        QVERIFY(desktop.open(QIODevice::WriteOnly));
+        desktop.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Zen Browser\n"
+            "Exec=/usr/bin/flatpak run --command=\"zen browser\" app.zen_browser.zen %u\n"
+            "Icon=app.zen_browser.zen\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n"));
+        desktop.close();
+
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/zen"),
+                  root + QStringLiteral("/home/.var/app/app.zen_browser.zen/.zen"));
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+        const auto zenDefault = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Zen") && t.isBrowserDefault && !t.incognito;
+        });
+        QVERIFY(zenDefault != targets.end());
+        QVERIFY(zenDefault->args.contains(QStringLiteral("--command=zen browser")));
+        QVERIFY(!zenDefault->args.contains(QStringLiteral("browser\"")));
+        QVERIFY(zenDefault->args.contains(QStringLiteral("app.zen_browser.zen")));
+    }
+
+    void chromiumSkipsMissingProfileDirs()
+    {
+        // Regression: info_cache entries whose profile directory no longer
+        // exists must not become dead targets. "Default" is exempt because
+        // chromium creates it on first launch.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        QFile desktop(root + QStringLiteral("/apps/brave-browser.desktop"));
+        QVERIFY(desktop.open(QIODevice::WriteOnly));
+        desktop.write(QByteArrayLiteral(
+            "[Desktop Entry]\n"
+            "Name=Brave Browser\n"
+            "Exec=/usr/bin/brave %u\n"
+            "Icon=brave\n"
+            "Type=Application\n"
+            "Categories=Network;WebBrowser;\n"
+            "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n"));
+        desktop.close();
+
+        const QString dataDir = root + QStringLiteral("/config/BraveSoftware/Brave-Browser");
+        QDir().mkpath(dataDir);
+        QFile localState(dataDir + QStringLiteral("/Local State"));
+        QVERIFY(localState.open(QIODevice::WriteOnly));
+        localState.write(QByteArrayLiteral(
+            "{\"profile\":{\"info_cache\":{"
+            "\"Default\":{\"name\":\"Person 1\"},"
+            "\"Profile 9\":{\"name\":\"Ghost\"}"
+            "}}}"));
+        localState.close();
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+        QVERIFY(std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.browserName == QLatin1String("Brave") && t.profileKey == QLatin1String("Default");
+        }));
+        QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.profileKey == QLatin1String("Profile 9") || t.name == QLatin1String("Ghost");
+        }));
+    }
 };
 
 QTEST_MAIN(DiscoveryTest)
