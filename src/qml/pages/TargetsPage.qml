@@ -37,6 +37,11 @@ FormCard.FormCardPage {
         return n
     }
 
+    function totalMatchCount() {
+        return matchCount(browserModel) + matchCount(containerModel)
+            + matchCount(pwaModel) + matchCount(privateModel) + matchCount(customModel)
+    }
+
     Timer {
         id: renameTimer
         property string targetId
@@ -84,8 +89,8 @@ FormCard.FormCardPage {
                         onDropped: (oldIndex, newIndex) => {
                             if (newIndex >= 0 && browserList.dragId !== "") {
                                 controller.moveTarget(browserList.dragId, newIndex)
-                                browserList.dragId = ""
                             }
+                            browserList.dragId = ""
                         }
                     }
                     Kirigami.Icon {
@@ -95,6 +100,7 @@ FormCard.FormCardPage {
                         Layout.alignment: Qt.AlignVCenter
                     }
                     QQC.TextField {
+                        id: renameField
                         text: model.name
                         placeholderText: model.discoveredName
                         Layout.fillWidth: true
@@ -113,6 +119,15 @@ FormCard.FormCardPage {
                             text = model.name
                             focus = false
                         }
+                        HoverHandler { id: renameHover }
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 1
+                            visible: renameHover.hovered && !renameField.activeFocus
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
+                        }
                     }
                     QQC.Switch {
                         checked: !model.hidden
@@ -121,7 +136,8 @@ FormCard.FormCardPage {
                     }
                     QQC.Button {
                         text: "Default"
-                        flat: true
+                        flat: model.targetId !== controller.defaultTargetId
+                        highlighted: model.targetId === controller.defaultTargetId
                         onClicked: controller.defaultTargetId = model.targetId
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -155,8 +171,8 @@ FormCard.FormCardPage {
                         onDropped: (oldIndex, newIndex) => {
                             if (newIndex >= 0 && containerList.dragId !== "") {
                                 controller.moveTarget(containerList.dragId, newIndex)
-                                containerList.dragId = ""
                             }
+                            containerList.dragId = ""
                         }
                     }
                     Kirigami.Icon {
@@ -166,6 +182,7 @@ FormCard.FormCardPage {
                         Layout.alignment: Qt.AlignVCenter
                     }
                     QQC.TextField {
+                        id: renameField
                         text: model.name
                         placeholderText: model.discoveredName
                         Layout.fillWidth: true
@@ -184,6 +201,15 @@ FormCard.FormCardPage {
                             text = model.name
                             focus = false
                         }
+                        HoverHandler { id: renameHover }
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 1
+                            visible: renameHover.hovered && !renameField.activeFocus
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
+                        }
                     }
                     QQC.Switch {
                         checked: !model.hidden
@@ -192,7 +218,8 @@ FormCard.FormCardPage {
                     }
                     QQC.Button {
                         text: "Default"
-                        flat: true
+                        flat: model.targetId !== controller.defaultTargetId
+                        highlighted: model.targetId === controller.defaultTargetId
                         onClicked: controller.defaultTargetId = model.targetId
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -226,8 +253,8 @@ FormCard.FormCardPage {
                         onDropped: (oldIndex, newIndex) => {
                             if (newIndex >= 0 && pwaList.dragId !== "") {
                                 controller.moveTarget(pwaList.dragId, newIndex)
-                                pwaList.dragId = ""
                             }
+                            pwaList.dragId = ""
                         }
                     }
                     Kirigami.Icon {
@@ -237,6 +264,7 @@ FormCard.FormCardPage {
                         Layout.alignment: Qt.AlignVCenter
                     }
                     QQC.TextField {
+                        id: renameField
                         text: model.name
                         placeholderText: model.discoveredName
                         Layout.fillWidth: true
@@ -254,6 +282,15 @@ FormCard.FormCardPage {
                         Keys.onEscapePressed: {
                             text = model.name
                             focus = false
+                        }
+                        HoverHandler { id: renameHover }
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 1
+                            visible: renameHover.hovered && !renameField.activeFocus
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
                         }
                     }
                     QQC.Switch {
@@ -291,8 +328,8 @@ FormCard.FormCardPage {
                         onDropped: (oldIndex, newIndex) => {
                             if (newIndex >= 0 && customList.dragId !== "") {
                                 controller.moveTarget(customList.dragId, newIndex)
-                                customList.dragId = ""
                             }
+                            customList.dragId = ""
                         }
                     }
                     Kirigami.Icon {
@@ -302,6 +339,7 @@ FormCard.FormCardPage {
                         Layout.alignment: Qt.AlignVCenter
                     }
                     QQC.TextField {
+                        id: renameField
                         text: model.name
                         placeholderText: model.discoveredName
                         Layout.fillWidth: true
@@ -319,6 +357,15 @@ FormCard.FormCardPage {
                         Keys.onEscapePressed: {
                             text = model.name
                             focus = false
+                        }
+                        HoverHandler { id: renameHover }
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 1
+                            visible: renameHover.hovered && !renameField.activeFocus
+                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
                         }
                     }
                     QQC.Button {
@@ -348,6 +395,7 @@ FormCard.FormCardPage {
                     Layout.alignment: Qt.AlignVCenter
                 }
                 QQC.TextField {
+                    id: renameField
                     text: model.name
                     placeholderText: model.discoveredName
                     Layout.fillWidth: true
@@ -365,6 +413,15 @@ FormCard.FormCardPage {
                     Keys.onEscapePressed: {
                         text = model.name
                         focus = false
+                    }
+                    HoverHandler { id: renameHover }
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: 1
+                        visible: renameHover.hovered && !renameField.activeFocus
+                        color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
                     }
                 }
                 QQC.Switch {
@@ -433,6 +490,19 @@ FormCard.FormCardPage {
         }
     }
 
+    QQC.Label {
+        visible: page.searchText.trim().length > 0 && page.totalMatchCount() === 0
+        text: "No matches"
+        font: Kirigami.Theme.smallFont
+        color: Kirigami.Theme.disabledTextColor
+        Layout.leftMargin: Kirigami.Units.largeSpacing
+        Layout.rightMargin: Kirigami.Units.largeSpacing
+        Layout.bottomMargin: Kirigami.Units.smallSpacing
+
+        Accessible.role: Accessible.StaticText
+        Accessible.name: "No matches"
+    }
+
     FormCard.FormHeader {
         title: "Default"
     }
@@ -456,6 +526,9 @@ FormCard.FormCardPage {
             icon.name: page.browsersExpanded ? "arrow-down" : "arrow-right"
             flat: true
             onClicked: page.browsersExpanded = !page.browsersExpanded
+
+            Accessible.role: Accessible.Button
+            Accessible.name: page.browsersExpanded ? "Collapse browsers section" : "Expand browsers section"
         }
         Kirigami.Heading {
             level: 4
@@ -499,6 +572,9 @@ FormCard.FormCardPage {
             icon.name: page.containersExpanded ? "arrow-down" : "arrow-right"
             flat: true
             onClicked: page.containersExpanded = !page.containersExpanded
+
+            Accessible.role: Accessible.Button
+            Accessible.name: page.containersExpanded ? "Collapse containers section" : "Expand containers section"
         }
         Kirigami.Heading {
             level: 4
@@ -555,6 +631,9 @@ FormCard.FormCardPage {
             icon.name: page.pwasExpanded ? "arrow-down" : "arrow-right"
             flat: true
             onClicked: page.pwasExpanded = !page.pwasExpanded
+
+            Accessible.role: Accessible.Button
+            Accessible.name: page.pwasExpanded ? "Collapse web apps section" : "Expand web apps section"
         }
         Kirigami.Heading {
             level: 4
@@ -589,6 +668,9 @@ FormCard.FormCardPage {
             icon.name: page.privateExpanded ? "arrow-down" : "arrow-right"
             flat: true
             onClicked: page.privateExpanded = !page.privateExpanded
+
+            Accessible.role: Accessible.Button
+            Accessible.name: page.privateExpanded ? "Collapse private windows section" : "Expand private windows section"
         }
         Kirigami.Heading {
             level: 4
@@ -619,6 +701,9 @@ FormCard.FormCardPage {
             icon.name: page.customsExpanded ? "arrow-down" : "arrow-right"
             flat: true
             onClicked: page.customsExpanded = !page.customsExpanded
+
+            Accessible.role: Accessible.Button
+            Accessible.name: page.customsExpanded ? "Collapse custom apps section" : "Expand custom apps section"
         }
         Kirigami.Heading {
             level: 4
