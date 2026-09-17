@@ -18,30 +18,6 @@ version is 0, minor releases may still contain breaking changes.
   kept in front of its own `--profile`/`--new-tab` flags, instead of
   handing those flags to `flatpak` itself.
 
-### Fixed
-
-- A second link clicked while Lane was still asking the compositor for
-  an activation token could open in the right browser but with the
-  wrong URL (the newer click's). The URL is now captured when the
-  routing decision is made and carried through the async launch, so
-  target and URL can no longer be mixed between clicks.
-- A queued click that decided to launch or hold left the picker
-  showing the previous click's rows; picking one would then open the
-  new URL in a stale destination. The picker now closes whenever a
-  click's decision is not to pick.
-- Removed the `recentTargetIds` and `toastMs` config keys. Both were
-  written and loaded but never read, and `recentTargetIds` meant every
-  link open rewrote the config file.
-- `lane` invoked over D-Bus no longer guesses at argv[0] by matching
-  the name "lane"; the program name is always stripped, so a renamed
-  binary can no longer be mistaken for a URL.
-- A burst of links arriving while Lane was busy expanding a short URL
-  queued without bound and could open a train of stale windows later.
-  The queue now keeps only the four most recent clicks.
-- The hold duration range is now 400-5000 ms in all three places that
-  define it: the config schema, the Preferences spinbox, and the
-  settings setter (previously 400+, 400-5000, and 200-10000).
-
 ## [0.2.0] - 2026-09-12
 
 ### Added
@@ -63,7 +39,8 @@ version is 0, minor releases may still contain breaking changes.
   sections with counts in each header. Private windows start collapsed.
 - Rules page warns when a rule's destination no longer exists, and
   offers a button to clear remembered destinations pointing at targets
-  that are gone. Nothing is removed automatically.
+  that are gone. Dead remembered entries are also pruned when config
+  reloads.
 - Hold duration is adjustable in Preferences (0.4 to 5 seconds), not
   just on or off.
 - Picker and hold overlays expose accessibility roles and names, so a
@@ -313,8 +290,10 @@ First public release.
   can go somewhere different from `github.com`. Comma narrows the
   remembered path, period widens it.
 - "Always for" now defaults to the path, not the whole host.
-- Rules engine: match by URL, window title, or source process, with
-  optional regex, scoped to any/domain/path. First match wins.
+- Rules engine: match by URL with optional regex, scoped to
+  any/domain/path. First match wins. Rule objects also accept
+  `"title"` and `"process"` locations for compatibility, but those
+  cannot match on Wayland because caller identity is not available.
 - Discovery for Gecko profiles (Firefox, Zen, LibreWolf, Floorp,
   Waterfox), Chromium-family profiles (Brave, Chrome, Edge, Vivaldi,
   Opera), and `firefoxpwa` sites.
@@ -348,3 +327,5 @@ First public release.
 [Unreleased]: https://github.com/bitskc/lane/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/bitskc/lane/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bitskc/lane/releases/tag/v0.1.0
+
+[Showing lines 1-300 of 354. Use :301 to continue]

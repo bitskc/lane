@@ -26,7 +26,7 @@ jobs:
             kstatusnotifieritem kcrash layer-shell-qt qqc2-desktop-style \
             appstream
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build
       - name: Install to a throwaway prefix

@@ -10,9 +10,16 @@
 namespace Lane
 {
 
+bool isAllowedGitHubUpdateHost(const QString &host)
+{
+    const QString h = host.toLower();
+    return h == QLatin1String("github.com") || h == QLatin1String("api.github.com");
+}
+
 bool isSafeUpdateRedirect(const QUrl &target)
 {
-    return target.isValid() && target.scheme() == QLatin1String("https") && !isPrivateOrLocalHost(target.host());
+    return target.isValid() && target.scheme() == QLatin1String("https") && isAllowedGitHubUpdateHost(target.host())
+        && !isPrivateOrLocalHost(target.host());
 }
 
 UpdateDecision decodeUpdateReply(int httpStatus,
@@ -31,10 +38,21 @@ UpdateDecision decodeUpdateReply(int httpStatus,
         return result;
     }
 
-    if (httpStatus == 403 || httpStatus == 429) {
+    if (httpStatus == 429) {
         bool ok = false;
         const qint64 resetEpoch = rateLimitResetHeader.toLongLong(&ok);
         result.errorMessage = describeRateLimited(ok ? resetEpoch : -1);
+        return result;
+    }
+
+    if (httpStatus == 403) {
+        bool ok = false;
+        const qint64 resetEpoch = rateLimitResetHeader.toLongLong(&ok);
+        if (ok && resetEpoch > 0) {
+            result.errorMessage = describeRateLimited(resetEpoch);
+            return result;
+        }
+        result.errorMessage = describeUnexpectedStatus(httpStatus, repoSlug);
         return result;
     }
 
@@ -63,7 +81,7 @@ UpdateDecision decodeUpdateReply(int httpStatus,
             describeMalformedResponse(repoSlug, QStringLiteral("the release was missing its version tag or URL"));
         return result;
     }
-    if (!isSafeOpenUrl(htmlUrl) || isPrivateOrLocalHost(hostOf(htmlUrl))) {
+    if (!isSafeOpenUrl(htmlUrl) || isPrivateOrLocalHost(hostOf(htmlUrl)) || !isAllowedGitHubUpdateHost(hostOf(htmlUrl))) {
         result.errorMessage = describeMalformedResponse(repoSlug, QStringLiteral("the release URL was not safe to open"));
         return result;
     }

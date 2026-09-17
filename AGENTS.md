@@ -25,7 +25,11 @@ reload:
 lane --rediscover
 ```
 
-That re-reads `config.json` from disk and rescans browser targets.
+That contacts the running daemon over D-Bus when one is already up (the
+new process hands off and exits). If no daemon is running, it starts the
+full background process: reloads `config.json`, rescans browser targets,
+and stays resident. It is not a lightweight one-shot CLI that exits after
+the reload.
 Flatpak-packaged browsers (Zen, Firefox, Brave, and others) are discovered
 too; their profile data lives under `~/.var/app/<app-id>/` instead of the
 native paths. To restart the whole process instead:
@@ -46,6 +50,7 @@ Top-level keys:
   "closeOnFocusLoss": true,
   "showUrl": true,
   "toast": true,
+  "toastMs": 2800,
   "unwrapO365": true,
   "unshorten": true,
   "openUnwrapped": false,
@@ -58,6 +63,7 @@ Top-level keys:
   "targetOrder": [],
   "targetAliases": {},
   "remembered": {},
+  "recentTargetIds": [],
   "rules": [],
   "customTargets": [],
   "substitutions": []
@@ -203,7 +209,7 @@ lane --list                    # print all discovered targets with IDs
 lane --explain https://example.com   # print the routing decision for a URL
 lane --settings                # open settings
 lane --configure               # alias for --settings
-lane --rediscover              # rescan browsers and refresh targets
+lane --rediscover              # reload config/rescan via running daemon (starts full process if none)
 lane --daemon                  # run in the background without opening settings
 lane -p https://example.com    # route a URL and force the picker
 ```
@@ -217,5 +223,7 @@ remembered destination. Use it to verify rules before committing them.
 Lane runs as a resident daemon with a unique D-Bus name
 (`app.lane.Lane`). Only one instance runs at a time. The settings window
 writes config while the daemon runs. If you edit config.json directly,
-run `lane --rediscover` so the running process reloads the file and
-refreshes targets. Restart the daemon if you prefer a full process reset.
+run `lane --rediscover` to reload the file and refresh targets. That
+contacts the running daemon over D-Bus when one is already up; if none
+is running, it starts the full background process and stays resident.
+Restart the daemon if you prefer a full process reset.

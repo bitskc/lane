@@ -44,11 +44,14 @@ UpdateDecision decodeUpdateReply(int httpStatus,
                                   const QString &currentVersion,
                                   const QString &repoSlug);
 
+// Whether a host is one Lane will follow or open for update checks.
+// Release metadata and redirect targets must stay on GitHub itself, not
+// an arbitrary https mirror that could point elsewhere.
+bool isAllowedGitHubUpdateHost(const QString &host);
+
 // Whether a 3xx redirect target is one the update checker will follow:
-// valid, https, and not a private/local host. Mirrors the same safety
-// policy Lane applies to any URL it might open (see
-// core/urlutil.h::isPrivateOrLocalHost), applied here to where the
-// update check itself is allowed to go.
+// valid, https, pinned to github.com or api.github.com, and not a
+// private/local host.
 bool isSafeUpdateRedirect(const QUrl &target);
 
 } // namespace Lane
