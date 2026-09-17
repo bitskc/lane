@@ -1,286 +1,268 @@
-# Lane engineering review
+# Lane engineering review, round 2
 
-Scope: `src/core`, `src/app`, `src/qml` (behavior paths), `tests`, `data`,
-build/CI, and docs that make claims about behavior. Read at HEAD `fe77477`
-(branch `lane-screenshots`, same commit as `origin/main`). `ctest --test-dir
-build --output-on-failure`: 10/10 pass (1.37s). Read-only CLI run: `lane
---version` (0.1.0), `lane --config-path`, `lane --list` (44 targets), `lane
---explain https://github.com/bitskc/lane`. No windows, overlays, or daemon
-restarts were triggered.
+Scope: `src/core`, `src/app`, `src/qml`, `tests`, `data`, `CMakeLists.txt`,
+CI workflows, and docs that make claims about behavior. Read at HEAD
+`94602cf` (main, 16 commits past v0.2.0). Source read only; no builds, no
+daemon interaction, no config writes. `git log v0.1.0..HEAD` reviewed for
+the flatpak discovery, drag-reorder, rename, and blank-name changes.
 
 ## Verdict
 
-**SHIP WITH FIXES.** The routing core (`router.cpp`, `destination.cpp`,
-`matcher.cpp`, `pipeline.cpp`) is small, well-factored, and backed by real
-behavioral tests. All five round-1 fixes held. The interpreter blocklist,
-QSaveFile write path, config migration, and picker sizing are all correct
-at HEAD. What remains is quality debt, not breakage: two network code paths
-(`UpdateChecker`, `unshorten`) have zero direct test coverage, every settings
-mutation re-runs full browser discovery, and `openUrl()` has a re-entrancy
-window through `unshortenSync`'s nested event loop that the prior review
-already flagged and is still open. None of these block 0.1.0, but the
-re-entrancy and the test gaps should close before 0.2.
-
-## Blocking
-
-None.
-
-## Should fix
-
-**1. [P2] (confidence: 9/10) `src/app/Controller.cpp:330-364`,
-`src/core/unshorten.cpp:31-37` — `openUrl()` has no re-entrancy guard; a
-second click during unshorten corrupts in-flight state.**
-
-`openUrl()` calls `runPipeline(url, m_config, unshortenFn())` which calls
-`unshortenSync(url, 1800)` which blocks on a `QEventLoop` for up to 1800ms
-on any URL whose host is one of the 23 known shorteners. The nested loop
-keeps Qt's event dispatcher running, so a second D-Bus `Open`/`Activate`
-arriving mid-unshorten re-enters `openUrl` while `m_click`,
-`m_holdAnimation`, and `m_pendingActivationToken` are mid-update from the
-first call. The second call overwrites `m_click` (line 350); the first call
-resumes with the wrong `m_click` and routes/launches against it. Two links
-clicked in quick succession, one a `t.co`/`bit.ly` link, is a plausible
-everyday trigger. Fix: add an in-flight guard (a bool or a deferred queue)
-at the top of `openUrl`, or move unshorten off the synchronous-nested-loop
-pattern (async `QNetworkAccessManager` with a callback, like
-`UpdateChecker` already does).
-
-**2. [P2] (confidence: 9/10) `src/app/Controller.cpp:448,516,532,552,561`
-— every settings mutation re-runs full `discoverTargets()`.**
-
-`hideTarget`, `addCustomTarget`, `removeCustomTarget`, `renameTarget`, and
-`moveTarget` each call `discoverTargets(defaultDiscoveryPaths())`, which
-re-scans all desktop files, Gecko profile directories, Chromium `Local
-State` files, and PWA manifests. On this machine (44 targets), that is a
-noticeable pause on every toggle, drag, rename, or add. Discovery is not
-on the click path (confirmed: `openUrl()` never calls `discoverTargets()`),
-but it makes the settings UI feel sluggish. `renameTarget` and `moveTarget`
-do not change what is installed; they only reorder or relabel existing
-targets. `hideTarget` only flips a config flag. None of these need a full
-rescan. Fix: for mutations that do not change the installed set (rename,
-reorder, hide), call `applyConfigToTargets(m_targets, m_config)` on the
-existing target list instead of rediscovering. Reserve full
-`discoverTargets()` for `addCustomTarget`, `removeCustomTarget`, and
-`rediscover()`.
-
-**3. [P2] (confidence: 9/10) `src/app/UpdateChecker.cpp:71-158` —
-`handleReply()` has zero test coverage.**
-
-`UpdateChecker` is 172 lines of real network logic: manual redirect vetting
-(https-only, private-host-checked, 3-hop cap), HTTP status branching (403/429
-rate-limit with `x-ratelimit-reset` parsing, 404, 200), JSON parsing,
-`tag_name`/`html_url` extraction, release-URL safety re-check, and version
-comparison via `compareVersions`. The `describe*` message functions are
-tested in `test_version.cpp`, but the actual `handleReply()` control flow
-is not. A stale-reply guard (line 74: `reply != m_reply`) is untested. The
-redirect safety check (line 93-94: `location.scheme() == "https" &&
-!isPrivateOrLocalHost(location.host())`) is untested. The class is testable
-without a real network: `handleReply()` takes a `QNetworkReply *`, and Qt's
-`QNetworkAccessManager` can be driven by a local `QHttpServer` or by
-injecting a fake reply. Known issue #2.
-
-**4. [P2] (confidence: 9/10) `src/core/unshorten.cpp:15-63` —
-`unshortenSync()` has zero direct test coverage.**
-
-63 lines of real HTTP/redirect logic: HEAD request with manual redirect
-policy, `QEventLoop` with timeout, three-tier `Location` header extraction
-(`RedirectionTargetAttribute`, `LocationHeader`, raw header with
-null/length checks), relative-URL resolution, and redirect-target safety
-(`isSafeOpenUrl` + `isPrivateOrLocalHost`). Only the pipeline's
-injected-function seam is exercised (`test_pipeline.cpp::unshortenHook`),
-never the real network code. The raw-header fallback (line 46-49:
-`!raw.isEmpty() && !raw.contains('\0') && raw.size() < 4096`) is the kind
-of defensive code that should have a test proving it works. Same testability
-as UpdateChecker: local `QHttpServer` or mock `QNetworkReply`.
-
-**5. [P3] (confidence: 7/10) `src/app/Controller.cpp:770-781` —
-`LayerShellQt::Window::get()` dereferenced with no null check or platform
-guard.**
-
-`configureLayerShell()` calls `LayerShellQt::Window::get(window)` and
-immediately calls `ls->setLayer(...)` on the result. `CMakeLists.txt` makes
-`LayerShellQt` a hard `REQUIRED` build dependency, so the app is
-Wayland-layer-shell-only by construction, but nothing at runtime checks
-`QGuiApplication::platformName()` or branches on a compositor lacking
-`wrl-layer-shell`. If the picker window ever fails to get placed as an
-overlay (X11 session, XWayland fallback, a non-wlroots Wayland compositor),
-this is a null-pointer crash for a default-browser handler: no picker, no
-error, just a segfault. I run Wayland and could not exercise this path
-without killing the live daemon. Fix: add an explicit
-`platformName() != "wayland"` guard at startup that refuses to run with a
-clear stderr message, or null-check `ls` and fall back to a normal window.
-
-## Follow-ups
-
-**[P3] `remembered` map has no garbage collection.** `config.cpp:252-255`
-loads `remembered` verbatim; `saveConfig` writes it verbatim. Dead entries
-(browser uninstalled, profile deleted) accumulate forever.
-`Controller::clearDeadRemembered()` (line 488-499) exists but is manual-only
-(settings page button). `danglingRememberedKeys()` is computed and exposed
-but never called automatically. Consider pruning on `reload()` or on target
-disappearance.
-
-**[P4] `src/core/launcher.cpp:250-260` — `qputenv`/`qunsetenv` around
-`startDetached` is process-wide mutation.** Still single-threaded on the
-Qt GUI event loop. No background thread touches environment variables. Safe
-today. The prior review's note stands: worth a comment if the app ever grows
-a worker thread that calls `getenv`.
-
-**[P4] `src/app/Controller.cpp:159-165` — `isDefaultBrowser()` spawns
-`xdg-settings` on every property read.** `Q_PROPERTY(bool isDefaultBrowser
-READ isDefaultBrowser NOTIFY defaultBrowserChanged)`. The signal fires from
-`reload()` (line 579), which runs on startup and on `rediscover()`. Each
-read starts a `QProcess` with a 1500ms timeout. Not a hot path, but caching
-the result and only re-checking on `makeDefaultBrowser()` would be cheaper.
-
-**[P3] `src/app/SourceInfo.cpp:6-11` — `activeSource()` is a stub.** Always
-returns empty. `m_click.processName` and `m_click.windowTitle` are always
-empty. Rules with `location: "title"` or `location: "process"` can never
-match. `AGENTS.md:103-104` documents these as working features, and the
-settings UI exposes them. Either implement them or remove them from the
-UI and docs. The in-code comment is honest about the limitation; the docs
-are not.
-
-**[P4] Config schema not validated at runtime.** `docs/config.schema.json`
-has `additionalProperties: false` and lists all 22 fields, matching
-`config.cpp` exactly. But `loadConfig()` silently ignores unknown keys (Qt
-JSON reader just does not read them). A hand-edited config with a typo
-(`"pickerPolcy"`) is silently treated as default with no warning. A
-`qWarning()` on unrecognized top-level keys would catch typos that
-`AGENTS.md:19` explicitly invites.
-
-**[P4] `src/core/urlutil.cpp:133` — `urlInScope` uses prefix match, not
-path-segment match.** `up.startsWith(sp, Qt::CaseInsensitive)` matches
-`/bitskc/lane` against scope `/bits`, which is probably not intended.
-`destinationKeyMatches` (destination.cpp:159) does proper segment-aware
-matching (`urlPath.startsWith(keyPath + '/')`). The inconsistency is
-unlikely to bite in practice (PWA scopes are typically origin-wide or exact
-paths), but it is a latent correctness gap if someone sets a mid-segment
-PWA scope.
+**SHIP.** Every round-1 fix verified in source and held. The flatpak
+discovery work is careful: `execPrefix` keeps `flatpak run ... <app-id>`
+in front of Lane's own flags, `@@u` forwarding markers are stripped, and
+the profile-store lookup prefers `~/.var/app/<app-id>` only when the Exec
+line actually invokes flatpak. The drag/rename rework reuses `m_targets`
+correctly and `applyConfigToTargets` is idempotent under reapplication.
+What remains is a short list of real but narrow bugs: an async launch
+that can pair a stale target with a newer click's URL, a picker that
+stays up showing the previous click's rows after a queued click already
+launched, and a `flatpak run --command=` hole in the interpreter
+blocklist. None of these block a release.
 
 ## Round-1 fix verification
 
-| Finding | Status | Evidence |
-|---------|--------|----------|
-| Interpreter blocklist bypassed by absolute-path symlink | **Held** | `isBlockedInterpreterChain()` (launcher.cpp:112-142) walks `QFileInfo::symLinkTarget()` hop-by-hop, called in `launchTarget()` (line 235) and `targetFromJson()` (config.cpp:146). Tests: `launchTargetRejectsSymlinkToBlockedInterpreter` (test_launcher.cpp:144), `customTargetsDropSymlinkToBlockedInterpreter` (test_config.cpp:80). Both create a real symlink to `/bin/sh` and assert rejection. |
-| Blocklist never inspected `target.args`; `/usr/bin/env bash -c` bypass | **Held** | `env` and 17 other re-exec wrappers added to `blockedInterpreters()` (launcher.cpp:57-75). Tests: `launchTargetRejectsEnvReExecWrapper` (test_launcher.cpp:162), `customTargetsDropEnvReExecWrapper` (test_config.cpp:119). Both set `exec="/usr/bin/env"`, `args=["bash","-c",...]` and assert rejection. |
-| `Controller::persist()` discarded `saveConfig()`'s QSaveFile result | **Held** | `persist()` (Controller.cpp:582-600) checks `saveConfig()` return value; on failure fires `KNotification("save-failed")` with `setComponentName("app.lane.Lane")`. `data/app.lane.Lane.notifyrc` has matching `[Event/save-failed]` section. |
-| No test for `migrateLegacyConfig()` | **Held** | Four tests in test_config.cpp: `migrateLegacyConfigFreshCopy` (line 193), `migrateLegacyConfigIdempotentOnSecondRun` (line 220), `migrateLegacyConfigDestinationExistsWins` (line 249), `migrateLegacyConfigFailureLeavesSourceIntact` (line 278). All call the two-arg overload directly. |
-| Picker height hardcoded "2 section headers" | **Held** | `PickerModel::applyFilter()` (PickerModel.cpp:147) sets `m_sectionCount = sectionOrder.size()`. Exposed as `Q_PROPERTY(int sectionCount READ sectionCount NOTIFY countChanged)` (PickerModel.h:19). `Picker.qml:187` uses `controller.pickerModel.sectionCount` in the height formula. |
+| # | Round-1 finding | Status | Evidence |
+|---|---|---|---|
+| 1 | `openUrl()` re-entrancy via `unshortenSync` nested QEventLoop | **Held** | `m_inOpenUrl` guard at Controller.cpp:360-364 queues the second call into `m_pendingUrls` with its own captured activation token; the queue drains after `applyDecision` at 389-400. `m_click` can no longer be overwritten mid-pipeline. |
+| 2 | `configureLayerShell()` null deref on non-wlroots | **Held** | Null check at Controller.cpp:862-866: `if (!ls) { qWarning(...); return; }` with a comment noting X11/non-wlroots falls back to a normal window. |
+| 3 | Rediscovery on every mutation | **Held** | All five mutators (`hideTarget` 484, `addCustomTarget` 547, `removeCustomTarget` 574, `renameTarget` 603, `moveTarget` 636) call `applyConfigToTargets(m_targets, m_config)` on the live list. `discoverTargets` only runs in `reload()` (651). `removeCustomTarget` correctly erases the id from `m_targets` first since reapply only appends (590-598). |
+| 4 | UpdateChecker network logic untested | **Held, partially** | `tests/test_updatechecker.cpp` (121 lines, 10 cases) covers `decodeUpdateReply`: 200 new/same/older, 404, pure network error, 403/429 rate-limit with and without `x-ratelimit-reset`, malformed JSON, missing fields, unsafe release URL, unparsable tag, and `isSafeUpdateRedirect` scheme/host checks. Still untested: the `handleReply` shell itself (redirect-following loop, stale-reply guard at UpdateChecker.cpp:71, hop cap). The decode half, which is where the bugs would live, is covered. |
+| 5 | unshorten untested | **Held, partially** | `tests/test_unshorten.cpp` covers the two pre-network gates (non-shortener passthrough, unsafe-URL passthrough, empty URL) with a comment honestly stating the live HEAD-request path is unreachable without a mock endpoint. The redirect-resolution body (unshorten.cpp:39-62) remains untested. |
+| 6 | `remembered` map no GC | **Fixed** | `reload()` calls `clearDeadRemembered()` at Controller.cpp:668, after `m_ruleModel->setRules()` so `persist()` can't clobber the just-loaded rules (comment at 659-667 documents the ordering constraint). Dead-target entries are pruned on every reload; entries whose target still exists but whose host is gone stay, which is correct. |
+| 7 | `isDefaultBrowser()` spawns xdg-settings per read | **Held** | `m_isDefaultBrowser` cache at Controller.cpp:159-175; `refreshDefaultBrowserState()` runs only from `reload()`, `makeDefaultBrowser()`, and `openSettings()` (455), so an external change is picked up when Settings opens. |
+| 8 | Config silently ignores unknown keys | **Fixed** | `knownKeys` set at config.cpp:231-248 logs `qWarning` naming each unrecognized top-level key. The comment at config.cpp:225-227 still says unrecognized keys are "silently ignored"; stale, harmless. |
+| 9 | `urlInScope` prefix match not segment-aware | **Fixed** | urlutil.cpp:113-144 now normalizes trailing slashes and requires exact match or `scope + '/'` boundary; comment cites `destinationKeyMatches` doing the same. Tested at test_url.cpp:38-45. |
+| 10 | qputenv/qunsetenv around startDetached | **Addressed** | launcher.cpp:238-253 documents why the env mutation is safe (single-threaded event loop, no re-entrant `launchTarget`) and why `setProcessEnvironment` can't be used with the detached overload. Correct as written. |
+| 11 | SourceInfo stub; title/process rules can never fire | **Partially fixed** | `activeSource()` still returns `{}` (SourceInfo.cpp:6-11). Mitigations landed: `ruleMatches` warns once per process that title/process rules cannot match (matcher.cpp:37-45), the Rules page no longer offers those locations (RulesPage.qml:11-12 scopes are domain/path/any only), and AGENTS.md:103-104 documents them as parsed-but-dead. Still true that a hand-edited config with `location: "title"` silently never matches; the schema (config.schema.json:132-137) still lists both values. |
+
+## New findings
+
+**1. [P3] Controller.cpp:768-794: an in-flight `requestActivationAndLaunch` can launch the wrong URL into the picked target.**
+
+`finish` captures `target` by value but `launch()` reads `m_click.openUrl`
+at fire time (748). Sequence: click A shows the picker, user picks a row,
+`xdgActivationToken` is in flight; click B arrives, runs its pipeline, and
+updates `m_click`. When A's token resolves (or the 300ms fallback fires),
+`launch(A's target, ...)` opens **B's URL** in A's target. If B's own
+decision also launched, the user gets B's URL twice in two different
+browsers, and A's URL silently never opens. Same shape via `confirmHold`
+(939-948): hold finishes, token request pending, new click lands, stale
+`finish` pairs old target with new URL. Narrow window (sub-second, needs a
+second click inside it) but the failure is a wrong-destination open, which
+is the one thing a link router must not do. Fix: capture the click's URL
+(or a generation counter) in `finish` and bail if `m_click` moved on.
+
+**2. [P3] Controller.cpp:694-717: a queued click that decides Launch leaves the picker up showing the previous click's rows.**
+
+`applyDecision` only touches the picker on `Pick` (705-706). If the picker
+is visible for click A and queued click B decides `Launch` or `Hold`, B's
+URL opens (or the hold bar appears) while the picker stays up with A's
+rows. A subsequent `pick()` then launches B's URL into whatever row the
+user selects, since `pickId` reads `m_click` which is now B's. The model
+still shows A's targets, so the picker has silently retargeted. Fix:
+`hidePicker()` in `openUrl` before `applyDecision`, or in `launch()`/
+`startHold()`.
+
+**3. [P3] launcher.cpp + discovery: `flatpak run --command=` bypasses the interpreter blocklist; `Exec=env ...` desktop files produce dead targets.**
+
+Two sides of the same gap. The blocklist (launcher.cpp:57-75) added `env`,
+`xargs`, `sudo`, `flatpak-spawn`, etc. because a wrapper can re-exec a
+blocked interpreter through its args. `flatpak` itself is not blocked (it
+must not be; discovered flatpak browsers need it), and nothing inspects
+args, so a hand-edited `customTargets` entry `flatpak run --command=sh
+some.app -c '...'` sails through `parseCustomCommand` and `launchTarget`.
+That is exactly the `env bash -c` shape round 1 closed, one level down in
+argv. Sandboxed to the app's permissions, and it needs config write access,
+so defense-in-depth only, but the asymmetry with `flatpak-spawn` being
+blocked is worth closing (scan args for `--command`/`--talk-name` style
+escapes, or reject `flatpak run` custom targets without a dotted app id).
+
+The flip side: a real desktop file with `Exec=env FOO=1 firefox %u` is
+discovered with `exec` = `env` (firstToken, discovery.cpp:36-45), which
+`isBlockedInterpreterChain` then rejects at launch. The target shows in
+settings and the picker and silently fails every time. Discovery should
+either unwrap leading `env VAR=...` assignments or drop the entry.
+
+**4. [P3] TargetsPage.qml:79-89 (and the three sibling lists at 150, 221, 286): `dragId` is not cleared on a cancelled drop.**
+
+`onDropped` only resets `dragId` inside `if (newIndex >= 0 && dragId !==
+"")`. If Kirigami emits `dropped` with `newIndex == -1` for a drop outside
+the list (its documented cancel signal), `dragId` stays set. The next
+drag's `onMoveRequested` skips capture because `dragId` is non-empty, so
+`browserModel.move` moves the row the user grabbed while
+`controller.moveTarget` persists a move for the *previous* row's id. The
+visual list and `targetOrder` diverge until the next sync. One-line fix:
+clear `dragId` unconditionally in `onDropped`.
+
+**5. [P4] Controller.cpp:309-338: `handleArgs` strips argv[0] by `contains("lane")`.**
+
+For a D-Bus `Activate` the first arg is the caller's argv[0]. If the binary
+is invoked through a differently-named symlink or renamed copy that does
+not contain "lane", argv[0] falls through to the `!a.startsWith('-')`
+branch and is treated as a URL: `openUrl("browser")` becomes
+`http://browser` and opens or shows a picker for a nonsense host. Also
+line 335: `rest.contains("--settings") == false && rest.isEmpty()` is dead
+code, since `rest.isEmpty()` already implies the contains check. Minor.
+
+**6. [P4] updatedecision.cpp:13-16, 60-69: update release URL and redirects are not host-pinned to GitHub.**
+
+`isSafeUpdateRedirect` accepts any https non-private host, and
+`decodeUpdateReply` accepts any `html_url` passing the same check. A forged
+API response (compromised CA, enterprise TLS proxy) could point "a newer
+version is out" at an arbitrary phishing page. Low likelihood, and the
+worst case is opening a web page, but pinning to `github.com` costs one
+line. Related nit: any 403 is reported as rate limiting (34-39), including
+403s that are not.
+
+**7. [P4] discovery.cpp:724-727: dead check in `chromiumProfiles::addProfile`.**
+
+`if (!QDir(...).exists() && key != "Default") { /* comment */ }` has an
+empty body; the `continue` that presumably belonged there is missing.
+Stale `info_cache` entries for deleted profile dirs become targets that
+fail on launch. Gecko profiles do check existence (651).
+
+**8. [P4] Dead config fields: `recentTargetIds` and `toastMs`.**
+
+`launch()` prepends to `m_config.recentTargetIds` and persists on every
+successful open (Controller.cpp:757-762); nothing ever reads the list.
+`toastMs` is loaded (config.cpp:256) and saved (328) but never consumed.
+Both are in the published schema. Either wire them up or drop them;
+`recentTargetIds` also means every link open writes the config file.
+
+**9. [P4] discovery.cpp:74-102: `execPrefix` splits args on spaces without honoring quotes.**
+
+A leading quoted program is handled (78-84), but the rest of the Exec line
+is split on `' '` with no quote or escape processing. `Exec=flatpak run
+--command="zen browser" app.id` yields `--command="zen` and `browser"` as
+separate args, corrupting the argv Lane rebuilds. Rare in real flatpak
+exports (they use `--command=name` without spaces), but the parser claims
+to match `firstToken`'s quoting rules and does not.
+
+**10. [P4] Controller.cpp:360-363: `m_pendingUrls` is unbounded.**
+
+Every D-Bus `openRequested` during a nested unshorten loop appends. A burst
+of opens serializes into a long queue of stale launches, each potentially
+opening a browser window minutes after the click. A small cap (drop or
+coalesce beyond N) would bound it. Local-only, low severity.
+
+**11. [P4] Changelog/docs drift.**
+
+CHANGELOG 0.2.0 says of remembered destinations "Nothing is removed
+automatically"; `reload()` now auto-prunes dead-target entries
+(Controller.cpp:668). CHANGELOG 0.1.0 still advertises rules matching "by
+URL, window title, or source process"; title/process can never match
+(SourceInfo.cpp). AGENTS.md is honest about it; the changelog is not.
 
 ## Considered and fine
 
-**Unshorten is not an SSRF proxy.** `urlutil.cpp`'s `kShorteners` is a
-fixed 23-entry allowlist. `pipeline.cpp:25` only invokes the network call
-when `isShortener(working)` is true. `unshorten.cpp:17` double-gates on
-`isSafeOpenUrl`. The `QNetworkAccessManager` never connects to an
-attacker-chosen host, only to one of the 23 literal domains. The
-`Location`-header safety check is string-based, not resolved-IP-based, so a
-compromised shortener could redirect to a hostname that resolves to a
-private IP without the literal matching `isPrivateOrLocalHost`. But Lane
-never connects to that redirect target; it only proposes it as the URL to
-hand to the browser, exactly as if the user pasted the link. This matches
-`DESIGN.md`'s stated scope.
+**Flatpak app-id extraction is sound for real exports.**
+`flatpakAppId` (discovery.cpp:110-119) takes the first non-`--` token
+matching the reverse-DNS pattern. `flatpak run` puts the app id after all
+options, and every option that takes a separate-token value
+(`--command`, `--runtime`, `-d`) either uses `=` form or its value does
+not match the dotted pattern. A bare `1.2`-looking token could
+theoretically shadow the real id, but no real export emits one.
 
-**UpdateChecker redirect handling is correct.** `UpdateChecker.cpp:88-101`
-handles redirects manually: each hop is checked for `https` scheme and
-non-private host before being followed, capped at 3 hops, and fails closed
-with `describeUnsafeRedirect` on an unsafe target or hop exhaustion. The
-release URL itself is re-checked with `isSafeOpenUrl` and
-`isPrivateOrLocalHost` before being accepted (line 142). No cookies
-persisted (`setCookieJar(nullptr)`, line 37).
+**`@@u` marker stripping is correct.** `isExecFieldCode`
+(discovery.cpp:62-72) treats any `@@`-prefixed token as a marker, which
+covers the unpaired `@@u` opener and the `@@` closer; the comment explains
+why exact-match was wrong. Tested at test_discovery.cpp:287.
 
-**Config schema and `config.cpp` are in sync.** `docs/config.schema.json`
-lists 22 properties with `additionalProperties: false`. All 22 match fields
-read/written by `loadConfig`/`saveConfig`. No drift.
+**`expandArgs` sequential replacement is safe in practice.** The `$url`
+then `%u` passes could re-substitute if the URL itself contained a literal
+`%u`, but `QUrl::fromUserInput` normalizes a bare `%` to `%25` before the
+URL reaches `expandArgs` (verified against Qt 6: `a%ub` becomes `a%25ub`).
+Unreachable.
 
-**D-Bus surface is standard KDBusService.** No custom adaptor; just
-`org.freedesktop.Application` (`Activate`, `Open`, `ActivateAction`) and
-`org.kde.KDBusService.CommandLine`. `Open()` runs the same `isSafeOpenUrl`-
-gated pipeline a real click would. Any local process calling it has no
-more power than running `lane <url>` on the CLI.
+**The nested-loop config swap is not UB.** `runPipeline` takes `const
+Config &` bound to `m_config`; a `reload()` re-entered through
+`unshortenSync`'s event loop assigns `m_config` in place, so the reference
+stays valid and the pipeline finishes on the new config. `pickId` during
+the same window still acts on the previous `m_click`, which is the click
+whose picker is actually showing. Consistent.
 
-**Custom handler argv, never a shell, holds up.** `launcher.cpp:253` calls
-`QProcess::startDetached(exe, expandArgs(target, open))` with a real argv
-array. `expandArgs` (line 82-105) substitutes `$url`/`$urlEncoded` into
-individual argv tokens. `isSafeOpenUrl` gates every URL before it reaches
-`expandArgs`, so a URL cannot begin with `-`. Verified by
-`test_launcher.cpp`'s `urlEncodedPlaceholderNeverInjectsNewline` and
-`refusesFileUrlLaunch`.
+**`m_pendingActivationToken` lifecycle is correct.** `openUrl` captures and
+unsets the env token up front (349-352), stores it per-invocation (366),
+and the queue drain restores each queued call's own token into the
+environment so it is captured identically (394-399). A stale token cannot
+leak across clicks.
 
-**Router first-match and conflict-under-Never fix is correct and tested.**
-`router.cpp:146-174`: multiple matching rules with the same target launch
-without a picker; genuine conflicts under `Never` policy honor the first
-rule (line 170-174) instead of falling through. Test:
-`conflictHonorsFirstRuleWhenPickerNever` (test_router.cpp:154).
+**`moveIdAmongSiblings` matches the QML contract.** Sibling set is
+`(kind, incognito)` (discovery.cpp:1011-1021), which is exactly what each
+settings ListModel contains; `newIndex` from `onDropped` is an index into
+that same set. Hidden rows are in the model and in the sibling set on both
+sides, so indices agree. Clamping and unknown-id paths tested
+(test_discovery.cpp:625-675).
 
-**QSaveFile write path is correct.** `config.cpp:355-363`: writes to a
-temp file, checks byte count, calls `cancelWriting()` on short write, only
-`commit()`s on full success. `corruptConfigMovedAsideNotDiscarded`
-(test_config.cpp:151) proves the quarantine path preserves exact bytes.
+**Rename path cannot inject.** `renameTarget` (603-634) writes
+`targetAliases` keyed by an existing target id and re-syncs custom target
+names; aliases for dead ids are inert. The 1ms `renameTimer` deferral
+(TargetsPage.qml:40-46) avoids mutating the model inside
+`editingFinished`; a second edit inside 1ms would overwrite the pending
+rename, but that requires two focus-loss events inside a millisecond.
 
-**`version` field with no migration code is fine pre-1.0.** `config.cpp`
-round-trips `version` but nothing branches on it. `CHANGELOG.md` states
-"while the major version is 0, minor releases may still contain breaking
-changes." Every field load falls back to a sensible default.
+**UpdateChecker shell is correct.** Manual redirect policy, per-hop
+https+non-private vetting, 3-hop cap, `deleteLater` before the stale-reply
+check, `check()` refuses to re-enter while `Checking`. The stale-reply
+guard (71) is defensive but unreachable today since `check()` early-returns.
 
-**Discovery cost is not on the click path.** `openUrl()` (Controller.cpp:330)
-never calls `discoverTargets()`. Discovery runs from the constructor, from
-`rediscover()`, and from settings mutations (see Should-fix #2). The seeded
-suspicion that "rediscovery runs on every settings open" is not confirmed:
-`openSettings()` (line 415) calls `ensureSettingsEngine()` and shows the
-window; it does not call `reload()` or `discoverTargets()`. The QML pages
-do not call `rediscover()` on load (verified by grep). The OverviewPage has
-a manual "Rediscover browsers" button.
+**`isSafeOpenUrl` placement is right.** Private-host blocking applies to
+unshorten redirects, update redirects, release URLs, `openExternalUrl`,
+and `remembered` writes (pickId:419), but not to direct launches, so LAN
+links still open. Userinfo is stripped by `sanitizedOpenUrl` before launch.
 
-**`destinationKeyMatches` is segment-aware.** `destination.cpp:159`:
-`urlPath == keyPath || urlPath.startsWith(keyPath + '/')`. A key
-`github.com/bitskc` does not match `https://github.com/other`. Test:
-`lookupRememberedDoesNotStealSibling` (test_destination.cpp:61).
-`suggestedLadderIndex` cannot write a broader key than the user saw: the
-key written is `currentDestinationKey()` which is
-`m_destinationLadder.value(m_destinationIndex)`, and the user controls
-`m_destinationIndex` via comma/period keys and the ‹ › buttons.
+**Picker/hold QML load failure is loud enough.** `ensurePickerEngine`
+logs a warning and leaves `m_pickerWindow` null; `showPicker` then emits
+`pickerVisibleChanged(true)` with no window, so a click falls silent, but
+only in a broken-install scenario where the QML module itself is missing.
+
+**`isO365Wrapper` host check.** `endsWith(".safelinks.protection.outlook.com")`
+misses the bare apex, but Microsoft only issues regional subdomains; the
+apex does not serve safelinks.
+
+**Incognito targets excluded from the picker is deliberate.**
+`rankForPicker` drops `t.incognito` (router.cpp:95); private windows are
+reachable via rules, remembered destinations, and the settings list. The
+changelog documents the exclusion from drag ordering; the picker exclusion
+keeps the row count sane.
+
+**`route()` computes `rankForPicker` on every click** including
+direct-launch decisions (router.cpp:124). Wasted work per click, but it is
+a few dozen list appends; not worth restructuring the Decision shape.
+
+**`version.cpp` prerelease compare** can overflow `toLongLong` on a
+>19-digit numeric identifier and compare equal; semver-conformant but
+absurd input. Not worth fixing.
+
+**Autostart Exec line is unquoted** (Autostart.cpp:41-48). Breaks only if
+`applicationFilePath()` contains spaces, which no packaged or normal
+`~/.local` install produces. Cosmetic spec violation.
+
+**`data/app.lane.Lane.desktop.in` registers `text/html`** so Lane is
+offered for local .html files it then blocks as non-http(s). Minor UX
+wart, pre-existing.
 
 ## Method
 
-Read in full: `src/core/launcher.cpp` (262 lines), `launcher.h`, `config.cpp`
-(365 lines), `config.h`, `unshorten.cpp` (63 lines), `pipeline.cpp` (66
-lines), `urlutil.cpp` (235 lines), `urlutil.h`, `router.cpp` (223 lines),
-`router.h`, `destination.cpp` (230 lines), `destination.h`, `discovery.cpp`
-(925 lines, structural read), `discovery.h`, `matcher.cpp` (52 lines),
-`matcher.h`, `version.cpp` (168 lines), `version.h`, `updatemessages.cpp`
-(71 lines), `updatemessages.h`, `repoinfo.h`, `types.h` (195 lines),
-`src/app/Controller.cpp` (895 lines), `Controller.h` (211 lines),
-`UpdateChecker.cpp` (172 lines), `UpdateChecker.h`, `main.cpp` (154 lines),
-`PickerModel.cpp` (152 lines), `PickerModel.h`, `SourceInfo.cpp`,
-`SourceInfo.h`.
+Read in full: `Controller.cpp` (991), `Controller.h`, `main.cpp`,
+`UpdateChecker.cpp/.h`, `PickerModel`, `RuleModel`, `SourceInfo`,
+`Autostart`, `TargetModel`; `config.cpp`, `discovery.cpp` (1037),
+`launcher.cpp`, `router.cpp`, `pipeline.cpp`, `matcher.cpp`,
+`destination.cpp`, `urlutil.cpp`, `unshorten.cpp`, `updatedecision.cpp`,
+`updatemessages.cpp`, `version.cpp`, `types.h`, `repoinfo.h`;
+`Picker.qml`, `Hold.qml`, `Settings.qml`, `TargetsPage.qml`,
+`RulesPage.qml`, `OverviewPage.qml` (behavior paths); all 11 test files;
+`data/` desktop/service/notifyrc/metainfo; `.github/workflows/ci.yml` and
+`release.yml`; `CHANGELOG.md`, `AGENTS.md`, `docs/config.schema.json`,
+`docs/designs/gstack-full-analysis.md`, prior `docs/reviews/eng.md`.
 
-QML read for behavior: `Picker.qml` (395 lines), `Hold.qml` (142 lines).
-Settings pages checked for discovery triggers via grep (none found on
-load).
+Verified empirically where cheap: `QUrl::fromUserInput` percent and
+bare-word behavior via PyQt6 (the `%u` re-substitution path is
+unreachable; bare `browser` becomes `http://browser`). Not run per
+constraints: builds, ctest, the daemon, `lane <url>`, settings window.
 
-Tests read in full: all 10 ctest suites (`test_url.cpp`, `test_matcher.cpp`,
-`test_pipeline.cpp`, `test_discovery.cpp`, `test_router.cpp`,
-`test_config.cpp`, `test_launcher.cpp`, `test_destination.cpp`,
-`test_version.cpp`).
-
-Docs read: `docs/config.schema.json`, `AGENTS.md`, `CLAUDE.md`, prior
-reviews (`pr-1.md`, `pr-1-round2.md`, `eng.md` being replaced).
-
-Run: `ctest --test-dir build --output-on-failure` (10/10 pass, 1.37s).
-`lane --version` (0.1.0), `lane --config-path`
-(`/home/andy/.config/lane/config.json`), `lane --list` (44 targets),
-`lane --explain https://github.com/bitskc/lane` (pick, reason: picker).
-
-Not run (per constraints): `lane <url>`, `lane --pick`, `lane --settings`,
-`lane --daemon`, `xdg-settings`, `xdg-mime`, no daemon kill/restart, no
-screenshots. LayerShellQt null-deref (Should-fix #5) is a source read, not
-a reproduction; I run Wayland and could not exercise the failure path
-without killing the live daemon.
-
-Inferred vs verified: all file:line references are verified by reading the
-source. The re-entrancy finding (Should-fix #1) is inferred from the code
-structure (nested `QEventLoop` + no guard) and the prior review's analysis,
-not reproduced at runtime. The LayerShellQt null-deref (Should-fix #5) is
-inferred from the absence of a null check, not reproduced.
+Inferred vs verified: all file:line references verified by reading source.
+Finding 1 (stale-target/wrong-URL launch) and finding 4 (dragId on
+cancelled drop) are code-structure inferences; the Kirigami `dropped(-1)`
+contract is per its documentation, not reproduced at runtime.

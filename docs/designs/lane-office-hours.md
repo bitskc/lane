@@ -1,134 +1,96 @@
-# Lane: office hours
+# Lane: office hours, round 2
 
-Synthesis of the 2026-09-12 gstack review round (`docs/reviews/eng.md`,
-`docs/reviews/ceo.md`, `docs/reviews/design.md`, `docs/reviews/devex.md`,
-`docs/reviews/openspec.md`), framed as the questions a YC-style
-office-hours session would ask before talking about roadmap. See
-`docs/designs/gstack-full-analysis.md` for the fix list and the
-contradictions between reviews.
+Synthesis of the 2026-09-17 gstack review round (`docs/reviews/eng.md`,
+`docs/reviews/ceo.md`, `docs/reviews/design.md`,
+`docs/reviews/devex.md`), five days after v0.2.0 shipped, framed as the
+questions a YC-style office-hours session would ask before talking
+about roadmap. See `docs/designs/gstack-full-analysis.md` for the fix
+list and the contradictions between reviews. The round-1 version of
+this file is in git history.
 
 ## The idea
 
 Lane is a resident Qt 6 / Kirigami daemon that becomes the KDE Plasma
-default `http`/`https` handler and routes each click to the right browser
-profile, Firefox/Zen container, `firefoxpwa` web app, or custom handler,
-based on rules, remembered per-path choices, and a picker overlay for
-anything new. It exists because one machine, Andy's, runs Zen for personal
-use, Firefox for work, and thirteen `firefoxpwa` apps for separate client
-GitHub orgs, and KDE only lets you register one default browser. The bet
-is that "which app should this link open in" is a solved problem on Mac
-(Velja, $8, ~130K users) and an unsolved one on Plasma.
+default `http`/`https` handler and routes each click to the right
+browser profile, Firefox/Zen container, `firefoxpwa` web app, flatpak
+browser, or custom handler, based on rules, remembered per-path
+choices, and a picker overlay for anything new. It exists because one
+machine, Andy's, runs Zen for personal use, Firefox for work, and
+thirteen `firefoxpwa` apps for separate client GitHub orgs, and KDE
+only lets you register one default browser. The bet is that "which app
+should this link open in" is a solved problem on Mac (Velja, $8, ~130K
+users) and an unsolved one on Plasma.
 
 ## Six questions
 
-**Is the demand real, or assumed?** Validated for the category, still
-unvalidated for Lane. Junction (`sonnyp/Junction`, GPLv3, on Flathub) has
-614 stars, 39 forks, and 45 open issues, proving that "pick which app
-opens this link" is a category people want on Linux
-(`docs/reviews/ceo.md:15`). Velja, the Mac equivalent, reports almost
-130K users and charges $8, confirming the category supports a paid
-native app (`docs/reviews/ceo.md:18`). Lane itself has 0 stars, 0 forks,
-0 issues, 30 commits from one author, and has never been shown to anyone
-outside Andy (`docs/reviews/ceo.md:3`). The wedge is narrower than last
-round believed: Velja already does Firefox/Zen profiles, Chromium
-profiles, containers via the same bridge extension Lane depends on,
-custom rules with source-app matching, short-URL expansion, and
-tracking-parameter removal. The category is not just validated, it is
-competitive. Lane's wedge is "no native entry on Plasma," not "this
-category is unproven."
+**Is the demand real, or assumed?** Same answer as round 1, sharper.
+The category is validated: Junction has hundreds of stars and Velja
+reports ~130K paid users on Mac. Lane itself still has 0 stars, 0
+forks, 0 watchers, and zero installs by anyone who is not Andy
+(`docs/reviews/ceo.md:3`). What changed is that the last excuse is
+gone: the repo is renamed, v0.2.0 is tagged and released, the update
+checker works, and the PKGBUILD builds clean with a real checksum. The
+only thing between Lane and its first stranger is an AUR account that
+does not exist yet. Demand is still assumed, but it is now one
+ten-minute human action away from being testable.
 
-**What is the status quo without Lane?** Three bad options, all manual:
-set one default browser and eat the risk of a personal link opening in a
-work window (or the reverse), keep every profile pinned to the taskbar
-and middle-click the right icon by memory every time, or hand-roll a
-`.desktop`-file redirect hack. New evidence since last round: Junction
-issue #9, the four-year-old profile-routing request, is closed, not
-reopened as the prior review claimed. But a user on Fedora 43 commented
-on 2025-10-30 that the `.desktop` workaround does not work
-(`docs/reviews/ceo.md:16`). The status quo is actively degrading, not
-just inconvenient. None of the three options are automatic, and none
-scale past "I remember which icon is which."
+**What is the status quo without Lane?** Unchanged: one default browser
+and eat the misrouted clicks, taskbar icons by memory, or a hand-rolled
+`.desktop` hack that a Fedora 43 user reported broken in October 2025.
+Junction issue #9, the four-year-old profile-routing request, is still
+closed-unimplemented and still the best single piece of evidence that a
+Plasma user wants exactly this. The status quo is degrading, not just
+inconvenient.
 
-**Who is the most desperate user, concretely?** Andy himself, and by
-extension any solo consultant or small IT shop running several client
-tenants on one Plasma machine. He runs personal Zen, work Firefox, and
-thirteen `firefoxpwa` apps for different client GitHub orgs. A misrouted
-click there is not an annoyance; it is pushing to the wrong org,
-answering a ticket from the wrong identity, or leaking one client's
-session into another client's profile (`docs/reviews/ceo.md:25`).
-Junction issue #9 is independent evidence: a user running 4 Firefox
-profiles asked for exactly this in 2021, got a manual workaround, and
-four years later a different user reports it broken on Fedora 43
-(`docs/reviews/ceo.md:27`). The desperate user is narrower than the
-container numbers suggest: the bridge extension Lane's container feature
-depends on has 1.9K users out of 409K who have Multi-Account Containers
-(`docs/reviews/ceo.md:19`). The core desperate user runs multiple
-browser profiles, not necessarily containers.
+**Who is the most desperate user, concretely?** Still Andy, and by
+extension any solo consultant running several client tenants on one
+Plasma machine. Round 2 added a second concrete instance: Andy's
+beelink, which runs flatpak browsers and is why flatpak discovery
+shipped. That is the correct kind of user to build for right now: real,
+present, and representative of the AUR audience. The desperate user
+runs multiple browser profiles; containers remain a narrower niche
+behind a 1.9K-user bridge extension.
 
-**What is the narrowest wedge worth paying for?** Not "choose an app for
-a link" in general. Velja proved that is a paid category with 130K users
-on Mac (`docs/reviews/ceo.md:18`). Not "profile routing" specifically;
-Velja does Firefox/Zen profiles and containers. The wedge is native
-Plasma integration: Wayland layer-shell overlays with exclusive keyboard
-grab, path-scoped memory (`github.com/bitskc` can go somewhere different
-from `github.com`), hold-to-veto on silent opens, and a resident daemon
-for sub-200ms picker response. That is the part no competitor has on
-Linux (`docs/reviews/ceo.md:71`). Containers are a convergent
-scope-creep flag, not the wedge: both the CEO and the openspec auditor
-independently flagged that containers shipped before a single outside
-user and reach 1.9K bridge-extension users (`docs/reviews/ceo.md:47-49`,
-`docs/reviews/openspec.md:24`). The wedge is the Plasma-native routing
-core, not the feature count.
+**What is the narrowest wedge worth paying for?** Confirmed by the new
+competitive analysis (`docs/designs/competitive-analysis.md`): the moat
+is Plasma-native integration plus the features nobody can copy without
+becoming a KDE app. Path-scoped memory and the hold HUD are verified
+unique across six competitors. The wedge is not feature count; it is
+several weeks of Wayland paper cuts already absorbed. The analysis's
+top recommendation, KActivities-scoped routing, is the right next
+feature and should still wait for a stranger.
 
 **What can be observed today versus what is still assumed?** Observed:
-real engineering quality. All five round-1 fixes held
-(`docs/reviews/eng.md:162-169`). 10/10 tests pass in 1.37s
-(`docs/reviews/eng.md:6-9`). Build with deps present takes ~51s
-(`docs/reviews/devex.md:14`). 44 targets discovered on this machine
-(`docs/reviews/eng.md:8`). Observed: docs describe features that do not
-exist. `lane --rediscover` and `lane --configure` are in README,
-AGENTS.md, and CHANGELOG but rejected by `QCommandLineParser` with
-"Unknown option" (`docs/reviews/devex.md:53-55`). `location: "title"`
-and `location: "process"` rule conditions are documented in AGENTS.md
-but `SourceInfo.cpp:6-11` is a stub returning empty
-(`docs/reviews/eng.md:136-142`). The openspec proposal says "no
-containers" but containers shipped (`docs/reviews/openspec.md:24`).
-Observed: the GitHub repo rename blocks everything. The remote is still
-`bitskc/tern`; the app, PKGBUILD, README, CHANGELOG, metainfo, and
-update checker all say `bitskc/lane`, which does not exist. The update
-checker 404s on every press. The PKGBUILD cannot get a real checksum
-(`docs/reviews/ceo.md:35`, `docs/reviews/devex.md:56-59`). Assumed: that
-a KDE user who is not Andy would install this. That containers are
-wanted by Lane's users (1.9K bridge users, not 409K). That a business
-would pay for a commercial license (`COMMERCIAL.md` pricing is unset, no
-inquiries, `docs/reviews/ceo.md:21`).
+all round-1 fixes held across four independent re-verifications; 11
+tests green in CI on an Arch container; the release workflow produced
+v0.2.0 correctly; the update checker returns v0.2.0; the PKGBUILD
+package contents are correct. Observed: doc drift is a pattern, not an
+accident. `holdAutoOpen` flipped to opt-in in code, schema, tests,
+changelog, and metainfo, but DESIGN.md, README, and AGENTS.md still
+describe the old default. Flatpak discovery shipped undocumented. The
+screenshots still show Tern. Observed: the remaining bugs are narrow,
+not structural (a sub-second launch race, a stale picker, a flatpak
+`--command=` blocklist hole). Assumed: that a KDE user who is not Andy
+would install this. That assumption is still untested because the AUR
+package still does not exist.
 
-**Does this survive two to three years?** Conditionally. Platform risk
-is real, not hypothetical. `LayerShellQt` is a hard `REQUIRED` build
-dependency (`CMakeLists.txt:53-54`), so the app is Wayland-layer-shell-only
-by construction. KF6 dependency churn already tripped this release:
-`kcrash` and `kcolorscheme` were missing from README and PKGBUILD, now
-fixed (`docs/reviews/devex.md:26-31`). A compositor or KF6 API change is
-a plausible future break. Competitive risk is higher than last round:
-Velja has 130K users and already does profiles and containers on Mac. If
-Velja or a similar app ports to Linux, Lane's wedge narrows to
-Plasma-native integration alone. Bus factor is one maintainer
-(`docs/reviews/ceo.md:3`), a real risk for "the thing that decides where
-every link goes." Against that: the core routing logic is small,
-well-tested, and depends on nothing exotic (`docs/reviews/eng.md:13-18`).
-KDE Plasma on Wayland is a growing surface. This survives if Andy keeps
-maintaining it or if adoption grows enough that someone else would step
-in. It does not survive neglect the way a declarative config file would.
+**Does this survive two to three years?** Same conditional answer.
+Platform risk is real (LayerShellQt is a hard dependency; KF6 churn
+already tripped one release), bus factor is one, and Velja porting to
+Linux would narrow the wedge to Plasma-native alone. What improved: the
+repo now has a canonical openspec, an honest changelog, a working
+release pipeline, and a competitive analysis that names the moat
+precisely. What did not: there is still no distribution channel, so
+none of it matters yet.
 
 ## The assignment
 
-One thing: get a stranger to install it. The prerequisite is the repo
-rename, because the update checker 404s and the PKGBUILD cannot produce a
-checksum until `bitskc/lane` exists. Land the two crash-class fixes
-(re-entrancy guard in `openUrl`, null check in `configureLayerShell`)
-before the tag, because a segfault in a default-browser handler is the
-worst possible first impression. Fix the docs that lie (register the CLI
-flags or remove them, remove or implement the dead rule locations, align
-the schema minimum) in the same commit. Tag 0.2.0, publish the PKGBUILD
-to AUR, and post to r/kde pointing at Junction issue #9. Everything else
-is a guess until a stranger says something.
+One thing, and it is smaller than last round: Andy creates an AUR
+account and SSH key and pushes the PKGBUILD to `aur.archlinux.org/
+lane.git`. Ten minutes of human action that no agent can do. Then post
+to r/kde and KDE Discourse leading with the two verified-unique
+features (path-scoped memory, hold HUD) and pointing at Junction issue
+#9. Then ship 0.2.1 with flatpak discovery, the issue #12 argv fix, the
+picker empty state, and the doc-drift sweep. Then stop building until a
+stranger says something. If a stranger responds, KActivities routing is
+the first thing to build. If nobody responds, nothing else matters.
