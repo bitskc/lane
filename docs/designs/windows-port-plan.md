@@ -74,10 +74,10 @@ Platform *createPlatform(QObject *parent = nullptr);  // factory in platform/Pla
 | Default-browser set UX | `Controller.cpp:472-482`, `OverviewPage.qml:24-27` | `Platform::openDefaultBrowserSettings` (rename `makeDefaultBrowser` in Controller to match intent) |
 | Autostart | `Autostart.cpp:15-53`, Controller `autostart` property | `Platform::setAutostart` |
 | Tray | `Controller.cpp:51-65` | `Platform::createTrayIcon` |
-| Notifications | `Controller.cpp:685-690`, `748-754`, `797-814` | `Platform::notify` |
-| Discovery roots | `discovery.cpp:880-887` (`defaultDiscoveryPaths`) | `Platform::discoveryPaths` |
+| Notifications | `Controller.cpp:685-690, 796-804, 807-814` | `Platform::notify` |
+| Discovery roots | `discovery.cpp:880-887` (`defaultDiscoveryPaths`), `discovery.cpp:297-384` (`fingerprint()` path tables) | `Platform::discoveryPaths` |
 | Email action | `discovery.cpp:865-875` (`xdg-email`) | `Platform::platformActionTargets` |
-| Source-app stub | `SourceInfo.cpp:6-11` | Stays stub on Windows for MVP; optional P2+ `GetForegroundWindow` path |
+| Source-app stub | `src/app/SourceInfo.cpp:6-11` | Stays stub on Windows for MVP; optional P2+ `GetForegroundWindow` path |
 
 `Controller` gets a `Platform *m_platform` injected at construction (from `main.cpp`). Linux implementation wraps today's behavior with minimal logic moves, not rewrites.
 
@@ -171,7 +171,7 @@ Effort is person-weeks for one experienced Qt developer. Tail QA (SmartScreen, m
 | Autostart: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `Lane` → `"C:\...\lane.exe" --daemon` | `WindowsRegistry.cpp` |
 | Settings window: verify Kirigami FormCard pages on Windows; fix any `org.kde.desktop` style gaps | `Settings.qml`, `OverviewPage.qml` (copy text: drop "Wayland" in autostart description) |
 | `closeOnFocusLoss` behavior QA on Windows | `Controller.cpp`, QML |
-| Source-app rules (optional): `GetForegroundWindow` + `GetWindowThreadProcessId` in `SourceInfo.cpp` | `SourceInfo.cpp`, `SourceInfo_windows.cpp` |
+| Source-app rules (optional): `GetForegroundWindow` + `GetWindowThreadProcessId` in `src/app/SourceInfo.cpp` | `src/app/SourceInfo.cpp`, `SourceInfo_windows.cpp` |
 
 ### P3: Packaging, signing, updates (1.5-2.5 pw)
 
@@ -259,9 +259,9 @@ Effort is person-weeks for one experienced Qt developer. Tail QA (SmartScreen, m
 
 Rules engine + profile/PWA discovery + picker + path-scoped remembered destinations + default-browser proxy loop. User can install, set Lane as default via Settings, click links, get a fast picker, and have silent routing for remembered hosts and explicit rules.
 
-**Explicitly post-MVP for launch:** hold HUD (P2), containers (P1 if ready, else fast-follow), source-app rules, curated tracking-param list, Plasma-only features (KActivities).
+**Explicitly post-MVP for launch:** hold HUD (P2 only; not in MVP), containers (P1 if ready, else fast-follow), source-app rules, curated tracking-param list, Plasma-only features (KActivities).
 
-Two-line summary: *Ship when a Windows user can make Lane the default http/https handler, click a link, and have rules + remembered paths route silently while everything else gets the keyboard picker with profile-aware targets.*
+Two-line summary: *Ship when a Windows user can make Lane the default http/https handler, click a link, and have rules + remembered paths route silently while everything else gets the keyboard picker with profile-aware targets. Hold HUD waits for P2.*
 
 ---
 
@@ -317,4 +317,6 @@ steps:
 
 **Single biggest technical risk:** Windows focus-stealing restrictions may prevent reliable keyboard-exclusive picker behavior without `AllowSetForegroundWindow`/`AttachThreadInput` gymnastics or a global-hotkey fallback.
 
-**MVP (2 lines):** Rules + profiles + picker + path-scoped remembered destinations on Windows, with the default-browser IPC loop working. Hold HUD and containers can land in P1/P2 without blocking first release.
+**MVP (2 lines):** Rules + profiles + picker + path-scoped remembered destinations on Windows, with the default-browser IPC loop working. Containers target P1; hold HUD is P2 and not required for first release.
+
+[Showing lines 1-300 of 302. Use :301 to continue]
