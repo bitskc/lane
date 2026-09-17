@@ -82,8 +82,13 @@ Release from the `main` branch after the changes you want are merged.
    ```bash
    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
    cmake --build build
+   cmake --install build
    ctest --test-dir build --output-on-failure
    ```
+
+   `appstreamtest` only validates AppStream metadata after a real install
+   to the configured prefix. Running `ctest` before `cmake --install`
+   makes that test pass with "Not installed yet, skipping".
 
 6. **Validate the metainfo file** (optional but recommended if you
    have `appstreamcli` installed):

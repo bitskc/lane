@@ -137,6 +137,12 @@ pkill -f "lane --daemon"
 lane --daemon &
 ```
 
+`lane --rediscover` is not a lightweight one-shot command. It goes through
+the same D-Bus entry point as opening a link: if a daemon is already
+running, the new process hands off to it and exits; if not, it starts the
+full background process, reloads config, rescans targets, and stays
+resident.
+
 For Claude Code, Codex, and similar agents, see `AGENTS.md` for the full
 config shape and CLI inspection commands.
 
@@ -144,9 +150,10 @@ config shape and CLI inspection commands.
 
 `~/.config/lane/config.json` is the source of truth. The settings window
 writes the same file. If you edit it by hand, run `lane --rediscover` to
-reload the file and rescan targets in the running daemon. Restarting the
-daemon (`pkill -f "lane --daemon"` then `lane --daemon &`) still works if
-you want a clean process.
+reload the file and rescan targets in the running daemon (via D-Bus when
+one is already up; otherwise it starts the full background process).
+Restarting the daemon (`pkill -f "lane --daemon"` then `lane --daemon &`)
+still works if you want a clean process.
 
 ## CLI
 
@@ -163,7 +170,7 @@ lane --config-path                # print the config file path
 lane --list                       # print discovered targets
 lane --settings                   # open settings
 lane --configure                  # alias for --settings
-lane --rediscover                 # rescan browsers and refresh targets
+lane --rediscover                 # reload config/rescan via running daemon (starts full process if none)
 ```
 
 ## Build (CachyOS / Arch)
@@ -180,13 +187,14 @@ sudo pacman -S --needed cmake extra-cmake-modules ninja qt6-base qt6-declarative
   qqc2-desktop-style
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
 cmake --build build
-ctest --test-dir build --output-on-failure
 cmake --install build
+ctest --test-dir build --output-on-failure
 update-desktop-database "$HOME/.local/share/applications"
 ```
 
 `appstreamtest` only runs after `cmake --install`; before that it reports
-"Not installed yet, skipping".
+"Not installed yet, skipping". Install to the same prefix you passed to
+CMake so the manifest paths exist.
 
 The install prefix is baked into the desktop and service files, so the
 launcher finds the binary even when `$HOME/.local/bin` is not on PATH.

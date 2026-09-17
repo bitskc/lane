@@ -48,6 +48,11 @@ void UpdateChecker::check()
 
 void UpdateChecker::startRequest(const QUrl &url, int redirectsLeft)
 {
+    if (!isSafeUpdateRedirect(url)) {
+        fail(describeUnsafeRedirect(QLatin1String(kGitHubRepoSlug)));
+        return;
+    }
+
     QNetworkRequest req(url);
     // We resolve and vet redirects ourselves below rather than letting Qt
     // follow them, so a redirect to a non-https or private address is never

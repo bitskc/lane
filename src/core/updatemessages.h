@@ -17,11 +17,9 @@ namespace Lane
 // "you are offline" reads differently from "GitHub is down".
 QString describeNetworkError(QNetworkReply::NetworkError error);
 
-// GitHub answered 403 or 429 (rate limited). GitHub sends the reset time
-// as a Unix timestamp in the x-ratelimit-reset header; pass it as
-// resetEpochSeconds when available so the message can say roughly when to
-// try again instead of a bare "later". Pass a value <= 0 when the header
-// was missing or did not parse.
+// GitHub answered 429, or 403 with a parsed x-ratelimit-reset header
+// (rate limited). Other 403 responses are reported as unexpected HTTP
+// status, not as rate limiting.
 QString describeRateLimited(qint64 resetEpochSeconds);
 
 // GitHub answered 404 for releases/latest. This is genuinely ambiguous:

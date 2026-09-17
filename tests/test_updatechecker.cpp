@@ -68,9 +68,15 @@ private Q_SLOTS:
                                                              QStringLiteral("0.2.0"), QStringLiteral("bitskc/lane"));
         const UpdateDecision withoutReset = decodeUpdateReply(429, QNetworkReply::NoError, QByteArray(), QByteArray(),
                                                                 QStringLiteral("0.2.0"), QStringLiteral("bitskc/lane"));
+        const UpdateDecision forbidden403 = decodeUpdateReply(403, QNetworkReply::NoError, QByteArray(), QByteArray(),
+                                                               QStringLiteral("0.2.0"), QStringLiteral("bitskc/lane"));
         QCOMPARE(static_cast<int>(withReset.outcome), static_cast<int>(UpdateOutcome::Failed));
         QCOMPARE(static_cast<int>(withoutReset.outcome), static_cast<int>(UpdateOutcome::Failed));
-        QVERIFY(withReset.errorMessage != withoutReset.errorMessage);
+        QCOMPARE(static_cast<int>(forbidden403.outcome), static_cast<int>(UpdateOutcome::Failed));
+        QVERIFY(withReset.errorMessage.contains(QStringLiteral("rate limiting")));
+        QVERIFY(withoutReset.errorMessage.contains(QStringLiteral("rate limiting")));
+        QVERIFY(!forbidden403.errorMessage.contains(QStringLiteral("rate limiting")));
+        QVERIFY(forbidden403.errorMessage.contains(QStringLiteral("HTTP 403")));
     }
 
     void malformedJsonFails()
@@ -94,6 +100,12 @@ private Q_SLOTS:
         const UpdateDecision d = decodeUpdateReply(200, QNetworkReply::NoError, body, QByteArray(),
                                                     QStringLiteral("0.2.0"), QStringLiteral("bitskc/lane"));
         QCOMPARE(static_cast<int>(d.outcome), static_cast<int>(UpdateOutcome::Failed));
+
+        const QByteArray offHostBody =
+            releaseBody(QStringLiteral("v1.0.0"), QStringLiteral("https://evil.example/releases/tag/v1.0.0"));
+        const UpdateDecision offHost = decodeUpdateReply(200, QNetworkReply::NoError, offHostBody, QByteArray(),
+                                                          QStringLiteral("0.2.0"), QStringLiteral("bitskc/lane"));
+        QCOMPARE(static_cast<int>(offHost.outcome), static_cast<int>(UpdateOutcome::Failed));
     }
 
     void unparsableVersionFailsButKeepsReleaseInfo()
@@ -110,10 +122,21 @@ private Q_SLOTS:
     void redirectSafetyRejectsNonHttpsAndPrivateHosts()
     {
         QVERIFY(isSafeUpdateRedirect(QUrl(QStringLiteral("https://api.github.com/repos/bitskc/lane/releases/latest"))));
+        QVERIFY(isSafeUpdateRedirect(QUrl(QStringLiteral("https://github.com/bitskc/lane/releases/latest"))));
         QVERIFY(!isSafeUpdateRedirect(QUrl(QStringLiteral("http://api.github.com/repos/bitskc/lane/releases/latest"))));
         QVERIFY(!isSafeUpdateRedirect(QUrl(QStringLiteral("https://127.0.0.1/evil"))));
         QVERIFY(!isSafeUpdateRedirect(QUrl(QStringLiteral("https://localhost/evil"))));
+        QVERIFY(!isSafeUpdateRedirect(QUrl(QStringLiteral("https://evil.example/redirect"))));
         QVERIFY(!isSafeUpdateRedirect(QUrl()));
+    }
+
+    void githubHostPinningAllowsOnlyGitHubHosts()
+    {
+        QVERIFY(isAllowedGitHubUpdateHost(QStringLiteral("github.com")));
+        QVERIFY(isAllowedGitHubUpdateHost(QStringLiteral("api.github.com")));
+        QVERIFY(isAllowedGitHubUpdateHost(QStringLiteral("GitHub.COM")));
+        QVERIFY(!isAllowedGitHubUpdateHost(QStringLiteral("raw.githubusercontent.com")));
+        QVERIFY(!isAllowedGitHubUpdateHost(QStringLiteral("evil.github.com")));
     }
 };
 
