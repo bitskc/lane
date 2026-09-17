@@ -137,6 +137,8 @@ FormCard.FormCardPage {
                     QQC.Button {
                         text: "Default"
                         flat: true
+                        checkable: true
+                        checked: model.targetId === controller.defaultTargetId
                         onClicked: controller.defaultTargetId = model.targetId
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -218,6 +220,8 @@ FormCard.FormCardPage {
                     QQC.Button {
                         text: "Default"
                         flat: true
+                        checkable: true
+                        checked: model.targetId === controller.defaultTargetId
                         onClicked: controller.defaultTargetId = model.targetId
                         Layout.alignment: Qt.AlignVCenter
                     }

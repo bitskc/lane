@@ -38,6 +38,10 @@ version is 0, minor releases may still contain breaking changes.
   deleted no longer appear as dead targets.
 - Quoted arguments in Exec= lines (like `--command="zen browser"`) are
   kept as a single argument instead of being split apart.
+- Picker and hold overlay no longer require the optional layer-shell QML
+  module; they failed to load entirely on systems without it.
+- Default target buttons on the Browsers & apps page now show which
+  destination is currently selected.
 - Picker filter with no matches shows a "No matching destinations"
   message instead of an empty row, and Enter no longer tries to pick
   from an empty list.
@@ -291,19 +295,15 @@ version is 0, minor releases may still contain breaking changes.
   crash or power loss mid-write can no longer truncate `config.json`.
 - A config file that does not parse is moved aside to
   `config.json.corrupt-<timestamp>` with a warning instead of being
-  silently replaced by defaults. Rules and remembered destinations are
-  never discarded without a copy.
-
-### Docs
 ⚠ 1 unresolved conflict detected
 - ours = HEAD
-- theirs = 5e22e75 (Fix QML polish from round-2 gstack review.)
+- theirs = bc55adc (Remove redundant layer-shell QML import; show default-target state)
 NOTICE: Inspect a block by reading `conflict://<N>` (add `/ours` / `/theirs` / `/base` to render a single side). Resolve with `write({ path: "conflict://<N>", content })`, or bulk-resolve every registered conflict with `write({ path: "conflict://*", content })`. Writes replace ONLY the marker block (markers + all sides) — never repeat the lines before/after it; they stay in place.
 `content` shorthand: a line that is exactly `@ours` / `@theirs` / `@base` / `@both` expands to that recorded section. `@both` is ours-then-theirs with no separator — only for additive conflicts where each side adds something different; NEVER for competing edits of the same lines (pick a side or write the combined text). Lines that are not a token pass through verbatim, so `"// keep both\n@ours\n@theirs"` literally writes the comment, then ours, then theirs.
 Per-id bulk: `write({ path: "conflict://*", content: "1: @ours\n2: @theirs\n…" })` resolves each listed id with that side in ONE call — the cheapest way through many pick-one conflicts; unlisted ids stay registered.
 Resolve each block faithfully: keep one side (`@ours`/`@theirs`), or combine them when both intents apply — never invent content beyond the recorded sides, and never stack both sides of competing edits. Resolve several conflicts in a single turn by issuing multiple `write` calls at once; ids stay valid as earlier blocks are resolved.
 
-──── #1  L23-54 ────
+──── #1  L23-47 ────
 <<< ours
 - Native browser desktop entries no longer leak their own Exec= flags
   into launch arguments. An entry like `Exec=/usr/bin/firefox
@@ -313,12 +313,9 @@ Resolve each block faithfully: keep one side (`@ours`/`@theirs`), or combine the
 - Desktop entries whose Exec= line starts with `env VAR=...` (for example
 … (12 more lines)
 >>> theirs
-- Picker filter with no matches shows a "No matching destinations"
-  message instead of an empty row, and Enter no longer tries to pick
-  from an empty list.
-- Picker card height counts only section headers visible in the eight-row
-  viewport, not every section in the filtered model.
-- Drag reorder on Browsers & apps clears its pending move id when a drop
-… (5 more lines)
+- Picker and hold overlay no longer require the optional layer-shell QML
+  module; they failed to load entirely on systems without it.
+- Default target buttons on the Browsers & apps page now show which
+  destination is currently selected.
 
-[Showing lines 1-300 of 366. Use :301 to continue]
+[Showing lines 1-300 of 331. Use :301 to continue]

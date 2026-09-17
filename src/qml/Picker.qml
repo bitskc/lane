@@ -3,7 +3,6 @@ import QtQuick.Controls as QQC
 import QtQuick.Layouts
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
-import org.kde.layershell 1.0 as LayerShell
 
 Window {
     id: root
@@ -13,11 +12,6 @@ Window {
     title: "Lane"
     width: Screen.width
     height: Screen.height
-
-    LayerShell.Window.layer: LayerShell.Window.LayerOverlay
-    LayerShell.Window.keyboardInteractivity: LayerShell.Window.KeyboardInteractivityExclusive
-    LayerShell.Window.scope: "lane-picker"
-    LayerShell.Window.exclusionZone: -1
 
     readonly property int maxRows: 8
     readonly property int rowHeight: 48
