@@ -28,6 +28,14 @@ version is 0, minor releases may still contain breaking changes.
   wrong URL (the newer click's). The URL is now captured when the
   routing decision is made and carried through the async launch, so
   target and URL can no longer be mixed between clicks.
+- Opening a link in a Flatpak browser profile (Zen, Firefox, and
+  friends) no longer trips the "already running, but is not
+  responding" dialog. Lane passed the host's
+  `~/.var/app/<app-id>/...` profile path to `--profile`, but inside
+  the sandbox the store is mounted at its persist path (`~/.zen` for
+  Zen) and the running instance's remoting name is derived from that
+  spelling, so the new launch could never find it. The `--profile`
+  argument now uses the in-sandbox path.
 - A queued click that decided to launch or hold left the picker
   showing the previous click's rows; picking one would then open the
   new URL in a stale destination. The picker now closes whenever a

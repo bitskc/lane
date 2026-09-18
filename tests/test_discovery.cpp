@@ -266,12 +266,21 @@ private Q_SLOTS:
 
         // The argv is the Flatpak wrapper's own tokens followed by Lane's
         // profile args, not "flatpak --profile ..." (which would silently
-        // fail: flatpak has no --profile option of its own).
+        // fail: flatpak has no --profile option of its own). The --profile
+        // dir is the in-sandbox spelling: inside the sandbox the profile
+        // store is mounted at ~/.zen, not at the host's
+        // ~/.var/app/<app-id>/.zen path, and the running instance's
+        // remoting name is derived from that spelling. Passing the host
+        // path makes Zen report "already running but not responding".
+        const QString sandboxProfileDir =
+            QString(zenDefault->profileDir).replace(root + QStringLiteral("/home/.var/app/app.zen_browser.zen/"),
+                                                    root + QStringLiteral("/home/"));
+        QVERIFY(sandboxProfileDir != zenDefault->profileDir);
         QCOMPARE(zenDefault->exec, QStringLiteral("/usr/bin/flatpak"));
         QCOMPARE(zenDefault->args,
                  QStringList({QStringLiteral("run"), QStringLiteral("--branch=stable"), QStringLiteral("--arch=x86_64"),
                               QStringLiteral("--command=zen"), QStringLiteral("app.zen_browser.zen"), QStringLiteral("--profile"),
-                              zenDefault->profileDir, QStringLiteral("--new-tab"), QStringLiteral("$url")}));
+                              sandboxProfileDir, QStringLiteral("--new-tab"), QStringLiteral("$url")}));
 
         // Containers still come through for the Flatpak profile store,
         // carrying the same Flatpak argv prefix.
@@ -282,6 +291,7 @@ private Q_SLOTS:
         QCOMPARE(work->exec, QStringLiteral("/usr/bin/flatpak"));
         QVERIFY(work->args.contains(QStringLiteral("app.zen_browser.zen")));
         QVERIFY(work->args.contains(QStringLiteral("--profile")));
+        QVERIFY(!work->args.contains(zenDefault->profileDir));
     }
 
     void stripsFlatpakFileForwardingMarkersFromExecPrefix()
@@ -336,7 +346,9 @@ private Q_SLOTS:
         QCOMPARE(zenDefault->args,
                  QStringList({QStringLiteral("run"), QStringLiteral("--branch=stable"), QStringLiteral("--arch=x86_64"),
                               QStringLiteral("--command=launch-script.sh"), QStringLiteral("--file-forwarding"),
-                              QStringLiteral("app.zen_browser.zen"), QStringLiteral("--profile"), zenDefault->profileDir,
+                              QStringLiteral("app.zen_browser.zen"), QStringLiteral("--profile"),
+                              QString(zenDefault->profileDir).replace(root + QStringLiteral("/home/.var/app/app.zen_browser.zen/"),
+                                                                      root + QStringLiteral("/home/")),
                               QStringLiteral("--new-tab"), QStringLiteral("$url")}));
     }
 
