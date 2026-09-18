@@ -10,7 +10,22 @@ pacman line), then:
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX="$HOME/.local"
 cmake --build build
+cmake --install build --prefix build/throwaway-install
 ctest --test-dir build --output-on-failure
+```
+
+On Arch/CachyOS, install the dependencies from the Build section of
+README.md. On openSUSE Tumbleweed:
+
+```bash
+sudo zypper install cmake extra-cmake-modules ninja gcc-c++ \
+  qt6-base-devel qt6-declarative-devel qt6-svg-devel \
+  kirigami-addons6-devel kirigami-addons6 \
+  kf6-kirigami-imports kf6-ki18n-devel kf6-kcoreaddons-devel \
+  kf6-kconfig-devel kf6-kdbusaddons-devel kf6-knotifications-devel \
+  kf6-kwindowsystem-devel kf6-kiconthemes-devel kf6-kcolorscheme-devel \
+  kf6-kstatusnotifieritem-devel kf6-kcrash-devel \
+  layer-shell-qt6-imports
 ```
 
 ## Adding a browser family
@@ -32,6 +47,16 @@ Most new browser support lands in `src/core/discovery.cpp`.
    profile store, and any `prefs.js` files the walk expects) and assert
    the new targets in `tests/test_discovery.cpp`. Copy whole Gecko trees
    with the helper there when profiles need real directories on disk.
+
+For a Flatpak install, stage the profile store under
+`$HOME/.var/app/<app-id>/...` (Gecko: `.<brand>` under that tree;
+Chromium: `config/<vendor-dir>`), point `DiscoveryPaths::home` at the
+synthetic home, and use a desktop entry whose `Exec=` runs
+`flatpak run ... <app-id>`. Assert both profile discovery and launch
+argv: Lane must keep the flatpak wrapper tokens in front of its own
+`--profile`/`--new-tab` args and pass the in-sandbox profile path, not
+the host `~/.var/app/...` spelling. See `discoversFlatpakZenProfile()` in
+`tests/test_discovery.cpp` for the pattern.
 
 Two traps to expect:
 

@@ -125,7 +125,8 @@
                             "title",
                             "process"
                         ],
-                        "default": "url"
+                        "default": "url",
+                        "description": "Where to match the pattern. Use url (default). title and process are kept for compatibility with older configs but cannot match on Wayland because active caller identity is unavailable."
                     },
                     "regex": {
                         "type": "boolean",

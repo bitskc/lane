@@ -451,7 +451,8 @@ Fingerprint fingerprint(const DesktopApp &app, const DiscoveryPaths &paths)
         chromium(QStringLiteral("Chromium"), QStringLiteral("chromium"));
         return fp;
     }
-    if (blob.contains(QLatin1String("microsoft-edge")) || blob.contains(QLatin1String("msedge"))) {
+    if (blob.contains(QLatin1String("microsoft-edge")) || blob.contains(QLatin1String("microsoft edge"))
+        || blob.contains(QLatin1String("msedge"))) {
         chromium(QStringLiteral("Edge"), QStringLiteral("microsoft-edge"));
         return fp;
     }

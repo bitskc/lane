@@ -91,17 +91,17 @@ know where you want it yet, so the picker overlay appears.
 
 ### Stop a silent open
 
-When Lane opens a link from a remembered choice, a unique PWA, or the
-default target, it shows a hold bar for about 1.6 seconds before
-launching.
+When "Pause before opening" is enabled in Preferences, Lane shows a hold
+bar for about 1.6 seconds before launching from a remembered choice, a
+unique PWA, or the default target.
 
 1. The bar says "Opening in" followed by the target name, with a
    progress bar underneath.
 2. Press Enter to open now, without waiting.
 3. Press Esc or Space to cancel the hold and show the picker instead.
 4. Written rules skip the hold and open immediately.
-5. Turn the hold off in Preferences. Switch off "Pause before opening"
-   to launch right away with no hold bar.
+5. The hold is off by default. Turn it on in Preferences with "Pause
+   before opening" if you want the countdown before each silent open.
 
 ### Teach it a rule
 

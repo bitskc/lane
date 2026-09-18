@@ -16,6 +16,12 @@ jobs:
       - name: Install git
         run: pacman -Syu --noconfirm && pacman -S --noconfirm git
       - uses: actions/checkout@v4
+      - name: Reject merge-conflict markers
+        run: |
+          if git grep -nE '^(<{7}|>{7}|={7})|conflict://|unresolved conflict detected' -- '*.md' '*.qml' '*.cpp' '*.h' '*.json' '*.yml'; then
+            echo "Tracked files contain merge-conflict markers or agent conflict-tool output"
+            exit 1
+          fi
       - name: Install dependencies
         run: |
           pacman -S --noconfirm --needed \
