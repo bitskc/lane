@@ -155,10 +155,18 @@ not change how a hand-edited entry is loaded.
 ### Containers
 
 Firefox/Zen contextual identities (containers) show up in `lane --list`
-as their own targets, kind `"container"`. The ID looks like
-`browser:zen:sahyoxd1.Default (release):container:2`: the parent
-profile's ID with `:container:<userContextId>` appended. Rules can
-point `targetId` at one of these the same as any other target.
+as their own targets, kind `container` (fourth column). The ID looks like
+`browser:app.zen_browser.zen:t4v0evw9.Default (release):container:2`:
+the parent profile's desktop id and folder name, with
+`:container:<userContextId>` appended. Rules can point `targetId` at one
+of these the same as any other target.
+
+Flatpak Zen keeps profiles under `~/.var/app/app.zen_browser.zen/.zen`,
+not `~/.config/zen`. Lane releases before Flatpak discovery landed (v0.2.0
+and earlier) list a fake `browser:<desktop-id>:default` row with no
+containers. Build from `main` or run a newer binary, then
+`lane --rediscover` (or open Settings, which rescans) so the running
+daemon picks up Zen and its containers.
 
 Lane only lists containers for a profile where it can tell a
 protocol-handler extension (Open URL in Container, Default Container
@@ -203,7 +211,7 @@ Array of find/replace pairs applied to the URL before matching.
 lane --version                 # print the installed version and exit
 lane --help                    # print usage and exit
 lane --config-path             # print the config file path and exit
-lane --list                    # print all discovered targets with IDs
+lane --list                    # print targets: id, name, exec, kind
 lane --explain https://example.com   # print the routing decision for a URL
 lane --settings                # open settings
 lane --configure               # alias for --settings

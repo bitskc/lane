@@ -18,6 +18,9 @@ version is 0, minor releases may still contain breaking changes.
   kept in front of its own `--profile`/`--new-tab` flags, instead of
   handing those flags to `flatpak` itself.
 
+- `lane --list` includes a fourth `kind` column (`browser`, `container`,
+  `pwa`, `action`, `app`) for agent inspection.
+
 ### Fixed
 
 - A second link clicked while Lane was still asking the compositor for
@@ -41,6 +44,11 @@ version is 0, minor releases may still contain breaking changes.
 - The hold duration range is now 400-5000 ms in all three places that
   define it: the config schema, the Preferences spinbox, and the
   settings setter (previously 400+, 400-5000, and 200-10000).
+- Picker section order is fixed (Web apps, Containers, Browsers, …) so
+  Firefox/Zen containers are not buried below every browser profile when
+  `targetOrder` lists Brave/Firefox/Edge first.
+- Opening Settings rescans installed browsers so the daemon is not stuck
+  on a pre-upgrade or pre-install target list until Rediscover is clicked.
 
 - Native browser desktop entries no longer leak their own Exec= flags
   into launch arguments. An entry like `Exec=/usr/bin/firefox
