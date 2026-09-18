@@ -586,7 +586,7 @@ ContainerHandlerStatus containerHandlerStatus(const QString &profileDir)
 // Builds the container targets for one already-discovered real (non-private)
 // Gecko profile target. `profile` must already have its final id, exec,
 // icon and profileDir set.
-QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefix)
+QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefix, const QString &launchProfileDir)
 {
     QList<Target> out;
     if (profile.profileDir.isEmpty()) {
@@ -650,7 +650,7 @@ QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefi
         const QString encodedName = QString::fromUtf8(QUrl::toPercentEncoding(name));
         t.args = argPrefix + QStringList{
             QStringLiteral("--profile"),
-            profile.profileDir,
+            launchProfileDir,
             QStringLiteral("--new-tab"),
             QStringLiteral("ext+container:name=") + encodedName + QStringLiteral("&url=$urlEncoded"),
         };
@@ -665,11 +665,27 @@ QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefi
     return out;
 }
 
-QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
+QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp, const DiscoveryPaths &paths)
 {
     QList<Target> out;
     const auto prefix = execPrefix(app.execLine);
     const QStringList argPrefix = flatpakPrefixArgs(prefix);
+    const QString flatpakId = argPrefix.isEmpty() ? QString() : flatpakAppId(argPrefix);
+    // Inside the Flatpak sandbox the profile store is mounted at its
+    // persist path (~/.zen for Zen), not at the host's
+    // ~/.var/app/<app-id>/... spelling. The running instance registers
+    // its remoting name from the in-sandbox spelling, so --profile must
+    // use it too: with the host spelling the launch can't find the
+    // running instance and Zen reports "already running but not
+    // responding". profileDir keeps the host path for Lane's own file
+    // reads; only the argv spelling is translated.
+    auto launchProfileDir = [&](const QString &hostDir) {
+        if (flatpakId.isEmpty()) {
+            return hostDir;
+        }
+        const QString base = paths.home + QStringLiteral("/.var/app/") + flatpakId + QLatin1Char('/');
+        return hostDir.startsWith(base) ? paths.home + QLatin1Char('/') + hostDir.mid(base.size()) : hostDir;
+    };
     const QString iniPath = fp.dataDir + QStringLiteral("/profiles.ini");
     if (!QFile::exists(iniPath)) {
         Target t;
@@ -762,20 +778,20 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp)
         t.subtitle = t.browserName + QStringLiteral(" · ") + t.name;
         t.exec = prefix.program;
         t.args = argPrefix
-            + QStringList{QStringLiteral("--profile"), r.path, QStringLiteral("--new-tab"), QStringLiteral("$url")};
+            + QStringList{QStringLiteral("--profile"), launchProfileDir(r.path), QStringLiteral("--new-tab"), QStringLiteral("$url")};
         t.icon = app.icon;
         t.profileKey = r.name;
         t.profileDir = r.path;
         t.isBrowserDefault = isInstallDefault;
         out.append(t);
-        out.append(geckoContainers(t, argPrefix));
+        out.append(geckoContainers(t, argPrefix, launchProfileDir(r.path)));
 
         Target priv = t;
         priv.id += QStringLiteral(":private");
         priv.name = t.name + QStringLiteral(" (Private)");
         priv.subtitle = t.browserName + QStringLiteral(" · Private");
         priv.args = argPrefix
-            + QStringList{QStringLiteral("--profile"), r.path, QStringLiteral("--private-window"), QStringLiteral("$url")};
+            + QStringList{QStringLiteral("--profile"), launchProfileDir(r.path), QStringLiteral("--private-window"), QStringLiteral("$url")};
         priv.incognito = true;
         out.append(priv);
     }
@@ -1013,7 +1029,7 @@ QList<Target> discoverTargets(const DiscoveryPaths &paths)
         QList<Target> found;
         switch (group.fp.engine) {
         case Engine::Gecko:
-            found = geckoProfiles(group.app, group.fp);
+            found = geckoProfiles(group.app, group.fp, paths);
             break;
         case Engine::Chromium:
             found = chromiumProfiles(group.app, group.fp);
