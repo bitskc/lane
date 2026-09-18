@@ -12,7 +12,7 @@ depends=(
   kwindowsystem kiconthemes kcolorscheme kcrash kstatusnotifieritem
   layer-shell-qt qqc2-desktop-style
 )
-makedepends=(cmake extra-cmake-modules ninja)
+makedepends=(cmake extra-cmake-modules ninja appstream)
 source=("$pkgname-$pkgver.tar.gz::https://github.com/bitskc/lane/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('b4bf96183b7bc2407266eca809d17de6024d5bcbdeaa194ec4fce1806190510c')
 

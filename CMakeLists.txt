@@ -54,7 +54,6 @@ find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
 )
 ecm_find_qmlmodule(org.kde.kirigami REQUIRED)
 ecm_find_qmlmodule(org.kde.kirigamiaddons.formcard REQUIRED)
-ecm_find_qmlmodule(org.kde.layershell REQUIRED)
 find_package(LayerShellQt REQUIRED)
 
 qt_policy(SET QTP0001 NEW)

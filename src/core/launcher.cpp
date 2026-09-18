@@ -83,17 +83,42 @@ const QSet<QString> &blockedInterpreters()
 // blocked interpreter via `run --command=<prog>`, which is what actually
 // executes inside the sandbox. A hand-edited target like
 // exec=flatpak args="run --command=sh app.id" would otherwise sail past
-// the exec-basename check and spawn a shell. The subcommand must be
-// exactly `run` (other subcommands like `enter`, `build`, or `debug` are
-// not browser launches), and a dotted reverse-DNS app id must be present.
+// the exec-basename check and spawn a shell. Global options may precede
+// the subcommand (`flatpak --user run app.id`, `--installation=x run`,
+// `--arch`, `--runtime`, ...), so they are skipped first; the first
+// non-option token must then be exactly `run` (other subcommands like
+// `enter`, `build`, or `debug` are not browser launches), and a dotted
+// reverse-DNS app id must be present.
 bool flatpakRunArgsBlocked(const QStringList &args)
 {
-    if (args.isEmpty() || args.first() != QLatin1String("run")) {
+    // Global options that consume the NEXT token as their value when not
+    // given as --opt=value (flatpak(1) GLOBAL OPTIONS).
+    static const QSet<QString> globalOptWithValue = {
+        QStringLiteral("--installation"), QStringLiteral("--arch"),
+        QStringLiteral("--runtime"), QStringLiteral("--app-path"),
+        QStringLiteral("--usr-path"), QStringLiteral("--system-helper"),
+        QStringLiteral("--default-branch"), QStringLiteral("--runtime-version"),
+    };
+    qsizetype i = 0;
+    for (; i < args.size(); ++i) {
+        const QString &a = args.at(i);
+        if (a == QLatin1String("--")) {
+            ++i;
+            break;
+        }
+        if (!a.startsWith(QLatin1Char('-'))) {
+            break;
+        }
+        if (globalOptWithValue.contains(a) && i + 1 < args.size()) {
+            ++i;
+        }
+    }
+    if (i >= args.size() || args.at(i) != QLatin1String("run")) {
         return true;
     }
     static const QRegularExpression appIdPattern(QStringLiteral("^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)+$"));
     bool hasAppId = false;
-    for (qsizetype i = 0; i < args.size(); ++i) {
+    for (++i; i < args.size(); ++i) {
         const QString &a = args.at(i);
         if (a.startsWith(QLatin1String("--command="))) {
             if (isBlockedInterpreter(a.mid(QStringLiteral("--command=").size()))) {
