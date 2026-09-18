@@ -466,6 +466,11 @@ void Controller::copyCurrent()
 
 void Controller::openSettings()
 {
+    // Rescan browsers/profiles/containers when settings opens so the
+    // Browsers & apps page and picker are not stuck on whatever the daemon
+    // discovered at startup (e.g. after a Lane upgrade or a new Flatpak
+    // browser install) until the user finds Rediscover on Overview.
+    reload();
     const bool wasDefaultBrowser = m_isDefaultBrowser;
     refreshDefaultBrowserState();
     if (wasDefaultBrowser != m_isDefaultBrowser) {

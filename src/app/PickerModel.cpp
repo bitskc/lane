@@ -129,22 +129,29 @@ void PickerModel::applyFilter()
 
     // rankForPicker() already decided priority order (current-site PWA and
     // remembered destination lead); group same-kind rows together for the
-    // display only, via a stable partition keyed on each section's first
-    // occurrence, so the ranking itself is never touched but a 45-target
-    // list is still scannable in clusters instead of interleaved.
+    // display only. Section *order* is fixed (not first-encounter order from
+    // rankForPicker) so containers are not buried below every browser profile
+    // when targetOrder lists Brave/Firefox/Edge first.
     QHash<QString, QList<Target>> buckets;
-    QStringList sectionOrder;
     for (const auto &t : matched) {
-        const QString key = sectionFor(t);
+        buckets[sectionFor(t)].append(t);
+    }
+    static const QStringList kSectionOrder = {
+        QStringLiteral("Web apps"),
+        QStringLiteral("Containers"),
+        QStringLiteral("Browsers"),
+        QStringLiteral("Apps"),
+        QStringLiteral("Actions"),
+    };
+    int sections = 0;
+    for (const auto &key : kSectionOrder) {
         if (!buckets.contains(key)) {
-            sectionOrder << key;
+            continue;
         }
-        buckets[key].append(t);
-    }
-    for (const auto &key : sectionOrder) {
         m_shown += buckets.value(key);
+        ++sections;
     }
-    m_sectionCount = sectionOrder.size();
+    m_sectionCount = sections;
 
     endResetModel();
     Q_EMIT countChanged();

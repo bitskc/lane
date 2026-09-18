@@ -41,6 +41,13 @@ version is 0, minor releases may still contain breaking changes.
 - The hold duration range is now 400-5000 ms in all three places that
   define it: the config schema, the Preferences spinbox, and the
   settings setter (previously 400+, 400-5000, and 200-10000).
+- Picker section order is fixed (Web apps, Containers, Browsers, …) so
+  Firefox/Zen containers are not buried below every browser profile when
+  `targetOrder` lists Brave/Firefox/Edge first.
+- Opening Settings rescans installed browsers so the daemon is not stuck
+  on a pre-upgrade or pre-install target list until Rediscover is clicked.
+- `lane --list` includes a fourth `kind` column (`browser`, `container`,
+  `pwa`, `action`, `app`) for agent inspection.
 
 - Native browser desktop entries no longer leak their own Exec= flags
   into launch arguments. An entry like `Exec=/usr/bin/firefox
@@ -376,3 +383,8 @@ First public release.
 [Unreleased]: https://github.com/bitskc/lane/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/bitskc/lane/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bitskc/lane/releases/tag/v0.1.0
+⚠ 1 unresolved conflict detected
+- ours = HEAD
+- theirs = bc55adc (Remove redundant layer-shell QML import; show default-target state)
+
+[Showing lines 1-300 of 321. Use :301 to continue]

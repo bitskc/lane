@@ -122,10 +122,11 @@ int main(int argc, char **argv)
                 continue;
             }
             std::fprintf(stdout,
-                         "%s\t%s\t%s\n",
+                         "%s\t%s\t%s\t%s\n",
                          qPrintable(t.id),
                          qPrintable(t.displayName()),
-                         qPrintable(t.exec));
+                         qPrintable(t.exec),
+                         qPrintable(kindName(t.kind)));
         }
         return 0;
     }
