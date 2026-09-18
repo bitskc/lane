@@ -83,27 +83,64 @@ const QSet<QString> &blockedInterpreters()
 // blocked interpreter via `run --command=<prog>`, which is what actually
 // executes inside the sandbox. A hand-edited target like
 // exec=flatpak args="run --command=sh app.id" would otherwise sail past
-// the exec-basename check and spawn a shell. The subcommand must be
-// exactly `run` (other subcommands like `enter`, `build`, or `debug` are
-// not browser launches), and a dotted reverse-DNS app id must be present.
+// the exec-basename check and spawn a shell.
+//
+// flatpak's extract_command() takes the FIRST non-dash token as the
+// subcommand and keeps every option token — including ones before it —
+// for that subcommand's GOption parse. So `flatpak --command=sh run
+// app.id` really does run sh, and no pre-command option consumes a
+// separate value token (`flatpak --installation x list` errors "x is not
+// a flatpak command"). Two consequences: dangerous run-options must be
+// scanned position-independently, and the pre-subcommand skip is a plain
+// dash-prefix skip. The first non-option token must be exactly `run`
+// (other subcommands like `enter`, `build`, or `debug` are not browser
+// launches), and a dotted reverse-DNS app id must be present.
 bool flatpakRunArgsBlocked(const QStringList &args)
 {
-    if (args.isEmpty() || args.first() != QLatin1String("run")) {
+    // Run-options whose value names what executes or widens the sandbox;
+    // flatpak applies them anywhere in argv, so scan every token.
+    static const QSet<QString> dangerousOpts = {
+        QStringLiteral("--command"), QStringLiteral("--env"),
+        QStringLiteral("--filesystem"), QStringLiteral("--socket"),
+        QStringLiteral("--device"),
+    };
+    for (qsizetype i = 0; i < args.size(); ++i) {
+        const QString &a = args.at(i);
+        const qsizetype eq = a.indexOf(QLatin1Char('='));
+        const QString opt = eq < 0 ? a : a.left(eq);
+        if (!dangerousOpts.contains(opt)) {
+            continue;
+        }
+        QString value;
+        if (eq >= 0) {
+            value = a.mid(eq + 1);
+        } else if (i + 1 < args.size()) {
+            value = args.at(i + 1);
+        }
+        if (isBlockedInterpreter(value)) {
+            return true;
+        }
+    }
+
+    qsizetype i = 0;
+    for (; i < args.size(); ++i) {
+        const QString &a = args.at(i);
+        if (a == QLatin1String("--")) {
+            ++i;
+            break;
+        }
+        if (!a.startsWith(QLatin1Char('-'))) {
+            break;
+        }
+    }
+    if (i >= args.size() || args.at(i) != QLatin1String("run")) {
         return true;
     }
     static const QRegularExpression appIdPattern(QStringLiteral("^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)+$"));
     bool hasAppId = false;
-    for (qsizetype i = 0; i < args.size(); ++i) {
+    for (++i; i < args.size(); ++i) {
         const QString &a = args.at(i);
-        if (a.startsWith(QLatin1String("--command="))) {
-            if (isBlockedInterpreter(a.mid(QStringLiteral("--command=").size()))) {
-                return true;
-            }
-        } else if (a == QLatin1String("--command") && i + 1 < args.size()) {
-            if (isBlockedInterpreter(args.at(i + 1))) {
-                return true;
-            }
-        } else if (!a.startsWith(QLatin1String("--")) && appIdPattern.match(a).hasMatch()) {
+        if (!a.startsWith(QLatin1String("--")) && appIdPattern.match(a).hasMatch()) {
             hasAppId = true;
         }
     }

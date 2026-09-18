@@ -307,6 +307,50 @@ private Q_SLOTS:
         }
     }
 
+    void launchTargetFlatpakGlobalOptionsBeforeRun()
+    {
+        // `flatpak --user run app.id` and `flatpak --installation=x run`
+        // are legitimate launches: global options precede the subcommand.
+        // A non-run subcommand after global options is still blocked.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString outPath = dir.filePath(QStringLiteral("flatpak-args.txt"));
+        const QString script = dir.filePath(QStringLiteral("flatpak"));
+        QFile f(script);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+        f.write(QStringLiteral("#!/bin/sh\nprintf '%s\\n' \"$@\" > '%1'\n").arg(outPath).toUtf8());
+        f.close();
+        QFile::setPermissions(script, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = script;
+        t.args = {QStringLiteral("--user"), QStringLiteral("run"),
+                  QStringLiteral("org.mozilla.firefox"), QStringLiteral("$url")};
+        QVERIFY(launchTarget(t, QStringLiteral("https://example.com")));
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(outPath), 2000);
+        QFile out(outPath);
+        QVERIFY(out.open(QIODevice::ReadOnly));
+        QVERIFY(out.readAll().contains("org.mozilla.firefox"));
+
+        // No pre-command option consumes a separate value token: flatpak
+        // takes `extra` as the subcommand and errors, so this is blocked.
+        t.args = {QStringLiteral("--installation"), QStringLiteral("extra"),
+                  QStringLiteral("run"), QStringLiteral("org.mozilla.firefox"),
+                  QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+        // Non-run subcommand behind a global option stays blocked.
+        t.args = {QStringLiteral("--user"), QStringLiteral("enter"),
+                  QStringLiteral("org.mozilla.firefox"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+
+        // flatpak applies run-options anywhere in argv: --command=sh
+        // BEFORE the run subcommand still executes sh inside the sandbox.
+        t.args = {QStringLiteral("--command=sh"), QStringLiteral("run"),
+                  QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+    }
+
     void launchTargetRejectsSymlinkToFlatpak()
     {
         // exec's own basename is innocuous ("browser"), but it is a

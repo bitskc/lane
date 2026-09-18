@@ -774,6 +774,56 @@ private Q_SLOTS:
         }));
     }
 
+    void envWrappedExecSkipsEnvOptionFlags()
+    {
+        // `env -i firefox`, `env -u FOO firefox`, `env -C / firefox`,
+        // `env -- firefox` must all unwrap to firefox — env's own option
+        // flags are not the program. Previously `env -i` unwrapped to
+        // program=-i, a dead target that could never launch.
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString root = tmp.path();
+
+        QDir().mkpath(root + QStringLiteral("/apps"));
+        const QList<QPair<QString, QByteArray>> entries = {
+            {QStringLiteral("firefox"), QByteArrayLiteral("Exec=env -i firefox %u\n")},
+            {QStringLiteral("firefox2"), QByteArrayLiteral("Exec=env -u MOZ_X11 firefox %u\n")},
+            {QStringLiteral("firefox3"), QByteArrayLiteral("Exec=env --chdir=/ MOZ_X11=1 firefox %u\n")},
+            {QStringLiteral("firefox4"), QByteArrayLiteral("Exec=env -- MOZ_X11=1 firefox %u\n")},
+            {QStringLiteral("dead"), QByteArrayLiteral("Exec=env -i\n")},
+        };
+        for (const auto &[name, exec] : entries) {
+            QFile desktop(root + QStringLiteral("/apps/%1.desktop").arg(name));
+            QVERIFY(desktop.open(QIODevice::WriteOnly));
+            desktop.write(QByteArrayLiteral(
+                "[Desktop Entry]\n"
+                "Name=Firefox\n"
+                "Icon=firefox\n"
+                "Type=Application\n"
+                "Categories=Network;WebBrowser;\n"
+                "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n").insert(16, exec));
+            desktop.close();
+        }
+
+        copyTree(fixtureRoot() + QStringLiteral("/gecko/firefox"),
+                  root + QStringLiteral("/config/mozilla/firefox"));
+
+        DiscoveryPaths p;
+        p.home = root + QStringLiteral("/home");
+        p.configHome = root + QStringLiteral("/config");
+        p.dataHome = root + QStringLiteral("/data");
+        p.applicationDirs = {root + QStringLiteral("/apps")};
+
+        const auto targets = discoverTargets(p);
+        QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.exec.startsWith(QLatin1Char('-')) || t.exec == QLatin1String("env")
+                || t.id.contains(QLatin1String("dead"));
+        }));
+        QVERIFY(std::any_of(targets.begin(), targets.end(), [](const Target &t) {
+            return t.exec == QLatin1String("firefox");
+        }));
+    }
+
     void execPrefixHonorsQuotedArgs()
     {
         // A quoted argument in Exec= must survive as one argv token:

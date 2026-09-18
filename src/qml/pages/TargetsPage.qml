@@ -138,6 +138,11 @@ FormCard.FormCardPage {
                         text: "Default"
                         flat: model.targetId !== controller.defaultTargetId
                         highlighted: model.targetId === controller.defaultTargetId
+                        Accessible.name: model.targetId === controller.defaultTargetId
+                            ? "Default (currently selected)" : "Set as default"
+                        QQC.ToolTip.visible: hovered
+                        QQC.ToolTip.text: model.targetId === controller.defaultTargetId
+                            ? "This is the default target" : "Set as default target"
                         onClicked: controller.defaultTargetId = model.targetId
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -220,6 +225,11 @@ FormCard.FormCardPage {
                         text: "Default"
                         flat: model.targetId !== controller.defaultTargetId
                         highlighted: model.targetId === controller.defaultTargetId
+                        Accessible.name: model.targetId === controller.defaultTargetId
+                            ? "Default (currently selected)" : "Set as default"
+                        QQC.ToolTip.visible: hovered
+                        QQC.ToolTip.text: model.targetId === controller.defaultTargetId
+                            ? "This is the default target" : "Set as default target"
                         onClicked: controller.defaultTargetId = model.targetId
                         Layout.alignment: Qt.AlignVCenter
                     }

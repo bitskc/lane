@@ -111,13 +111,45 @@ ExecPrefix execPrefix(const QString &execLine)
     }
     out.program = tokens.takeFirst();
     if (QFileInfo(out.program).fileName() == QLatin1String("env")) {
-        // `env VAR=value ... prog`: skip the assignments, keep the first
-        // real program token. A bare `env` (or only assignments) leaves
+        // `env [opts] VAR=value ... prog`: skip env's own option flags
+        // first (-i, -u VAR, -C DIR, -0, --, --ignore-environment,
+        // --unset[=VAR], --chdir=DIR, --debug, --split-string, ...), then
+        // the assignments, and keep the first real program token. Without
+        // the option skip, `env -i firefox` unwraps to program=-i, a dead
+        // target. A bare `env` (or only options/assignments) leaves
         // program empty and the entry is dropped.
         out.program.clear();
         static const QRegularExpression assignment(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*=.*$"));
+        // Options that consume the NEXT token as their value when not
+        // given as --opt=value: -u NAME, -C DIR, -S STRING (and the long
+        // forms --unset/--chdir/--split-string without '=').
+        static const QSet<QString> envOptWithValue = {
+            QStringLiteral("-u"), QStringLiteral("-C"), QStringLiteral("-S"),
+            QStringLiteral("--unset"), QStringLiteral("--chdir"),
+            QStringLiteral("--split-string"),
+        };
+        bool optionsDone = false;
         while (!tokens.isEmpty()) {
             const QString tok = tokens.takeFirst();
+            if (!optionsDone) {
+                if (tok == QLatin1String("--")) {
+                    optionsDone = true;
+                    continue;
+                }
+                if (envOptWithValue.contains(tok)) {
+                    if (!tokens.isEmpty()) {
+                        tokens.takeFirst();
+                    }
+                    continue;
+                }
+                // -i, -0, --ignore-environment, --unset=X, --chdir=X,
+                // --debug, and any other -/-- token are env's own flags;
+                // an unknown one fails inside env, never a program.
+                if (tok.startsWith(QLatin1Char('-'))) {
+                    continue;
+                }
+                optionsDone = true;
+            }
             if (assignment.match(tok).hasMatch()) {
                 continue;
             }
