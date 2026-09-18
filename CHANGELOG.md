@@ -9,6 +9,10 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Added
 
+- CI rejects tracked files that still contain merge-conflict markers or
+  agent conflict-tool output, and CONTRIBUTING now documents the install
+  step `ctest` needs plus Flatpak fixture layout and openSUSE packages.
+
 - Browsers installed as Flatpaks (Zen, Firefox, LibreWolf, Floorp,
   Waterfox, Brave, Chrome, Chromium, Edge, Vivaldi, Opera, Thorium) are
   discovered correctly. Lane now finds their real profile store under
@@ -22,6 +26,22 @@ version is 0, minor releases may still contain breaking changes.
   `pwa`, `action`, `app`) for agent inspection.
 
 ### Fixed
+
+- The picker's top suggestion is always the first row again. Section
+  grouping no longer buries the ranked pick below the first Web app or
+  container, and the suggestion carries a "Suggested" badge.
+
+- Flatpak Edge desktop entries whose `Name=` is "Microsoft Edge" are
+  fingerprinted as Chromium/Edge again, so profile discovery no longer
+  falls through to a generic default.
+- Comments in `launcher.cpp` and `config.cpp` now describe the real
+  flatpak argv gate and unknown-key warning behavior.
+- Short-link unshorten requests send `User-Agent: Lane/<version>` from the
+  build version instead of a hardcoded `Lane/0.1`.
+- The config schema documents that `title` and `process` rule locations
+  are compat-only and cannot match on Wayland.
+- README's hold-bar tutorial now says the pause is opt-in via
+  Preferences, matching the `holdAutoOpen` default.
 
 - A second link clicked while Lane was still asking the compositor for
   an activation token could open in the right browser but with the
@@ -294,101 +314,5 @@ version is 0, minor releases may still contain breaking changes.
   `ItemDelegate` as an ordinary child: plain children inherit `model`/
   `index` normally, and `Kirigami.ListItemDragHandle.listItem` still
   points at the inner `ItemDelegate`, not the wrapper, so the wrapper
-  keeps the row's layout slot in the `ListView` while the delegate
-  handle reparents the `ItemDelegate` during a drag, matching
-  `ListItemDragHandle`'s documented contract. The private-windows
-  section has no drag handle and keeps its `ItemDelegate` as the
-  direct delegate.
 
-### Security
-
-- Custom targets loaded from `config.json` now go through the same
-  shell and interpreter blocklist the settings window enforces.
-  `launchTarget()` refuses a blocked interpreter, and `targetFromJson()`
-  drops a bad entry at load time with a warning naming the id, keeping
-  the rest of the config. Before this, a hand-edited or agent-edited
-  `customTargets` entry pointing at `bash` or `python3` would run on
-  the next matching click with no check.
-- The blocklist above checked only the exec path's own basename, which
-  two bypasses got past: an absolute exec that was itself a symlink to
-  a blocked interpreter under an unrelated name, and a wrapper like
-  `env` re-execing a blocked interpreter through its own args rather
-  than being one itself. `isBlockedInterpreterChain()` now walks the
-  full symlink chain from exec to whatever it actually resolves to,
-  checking every hop's basename, and the blocklist itself now also
-  covers re-exec wrappers (`env`, `xargs`, `sudo`, `pkexec`, `ssh`,
-  `find`, and others that can run a different program than the one
-  named in exec). This remains a blocklist, not a privilege boundary:
-  editing `config.json` already requires write access to the user's
-  home directory, so it is defense in depth against a hand-edited or
-  agent-edited config, not protection against a locally compromised
-  account.
-- `Controller::persist()` (every settings, rule, target-order, and
-  remembered-destination change) used to discard `saveConfig()`'s
-  result. A failed atomic write (disk full, permissions, read-only
-  `~/.config/lane`) was a silent no-op: the change looked saved and
-  was gone on the next restart. Lane now shows a notification when a
-  save fails.
-- Config writes are atomic (`QSaveFile`, temp file plus rename). A
-  crash or power loss mid-write can no longer truncate `config.json`.
-- A config file that does not parse is moved aside to
-  `config.json.corrupt-<timestamp>` with a warning instead of being
-  silently replaced by defaults. Rules and remembered destinations are
-  never discarded without a copy.
-
-## [0.1.0] - 2026-09-11
-
-First public release.
-
-### Added
-
-- Picker overlay: pick a target by number, filter by typing, or press
-  Alt+A to remember a destination.
-- Hold bar: a short pause (about 1.6 seconds) before a silent open, so
-  you can stop it with Esc or Space. Explicit rules skip the hold.
-- Two-pane settings window with Overview, Browsers & apps, Rules, and
-  Preferences pages.
-- Drag-reorder and rename for browsers and apps on the Browsers & apps
-  page. Private/incognito windows are excluded from the drag order for
-  their parent browser.
-- Path-scoped memory for remembered destinations. `github.com/bitskc`
-  can go somewhere different from `github.com`. Comma narrows the
-  remembered path, period widens it.
-- "Always for" now defaults to the path, not the whole host.
-- Rules engine: match by URL with optional regex, scoped to
-  any/domain/path. First match wins. Rule objects also accept
-  `"title"` and `"process"` locations for compatibility, but those
-  cannot match on Wayland because caller identity is not available.
-- Discovery for Gecko profiles (Firefox, Zen, LibreWolf, Floorp,
-  Waterfox), Chromium-family profiles (Brave, Chrome, Edge, Vivaldi,
-  Opera), and `firefoxpwa` sites.
-- Outlook safe-link unwrapping and optional link unshortening.
-- Agent-friendly `~/.config/lane/config.json` with a published JSON
-  schema (`docs/config.schema.json`), plus `lane --list`,
-  `lane --explain URL`, and `lane --config-path` for inspecting
-  config without the GUI. See `AGENTS.md`.
-- `KStatusNotifierItem` tray icon with Settings and Rediscover actions.
-- systemd user unit for autostart, installed to the systemd user unit
-  search path.
-
-### Changed
-
-- Desktop entry, D-Bus service, and autostart files now use absolute
-  paths to the installed binary, so Plasma's app menu and D-Bus
-  activation find `lane` even when `~/.local/bin` is not on `PATH`.
-- Lane claims a real D-Bus name, `app.lane.Lane`, instead of a
-  placeholder, so the app menu can start it and duplicate launches
-  hand off to the running instance.
-- Project license switched to the PolyForm Noncommercial License 1.0.0.
-  Personal and hobby use is free; commercial use needs a separate
-  license. See `COMMERCIAL.md`.
-
-### Security
-
-- Lane only ever opens `http` and `https` URLs. It rejects `file`,
-  `javascript`, `data`, and URLs with embedded credentials. Custom
-  handlers run as argv, never through a shell.
-
-[Unreleased]: https://github.com/bitskc/lane/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/bitskc/lane/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/bitskc/lane/releases/tag/v0.1.0
+[Showing lines 1-300 of 306. Use :301 to continue]

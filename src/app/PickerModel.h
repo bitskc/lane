@@ -13,9 +13,10 @@ class PickerModel : public QAbstractListModel
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
     // Number of distinct section headers list.qml will actually render for
     // the currently shown rows (see sectionFor() in PickerModel.cpp: up to
-    // five -- Containers, Web apps, Actions, Apps, Browsers). Exists so the
-    // picker window can size itself for however many headers are really
-    // present instead of a hardcoded guess.
+    // six -- the pinned leader's "Suggested" header plus Containers,
+    // Web apps, Actions, Apps, Browsers). Exists so the picker window can
+    // size itself for however many headers are really present instead of a
+    // hardcoded guess.
     Q_PROPERTY(int sectionCount READ sectionCount NOTIFY countChanged)
 
 public:

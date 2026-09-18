@@ -38,7 +38,10 @@ QVariant PickerModel::data(const QModelIndex &index, int role) const
     case KindRole:
         return kindName(t.kind);
     case SectionRole:
-        return sectionFor(t);
+        // Row 0 is the ranked leader pinned by applyFilter(); it gets its
+        // own "Suggested" header so it is not grouped under (and does not
+        // duplicate) the section it was pulled out of.
+        return index.row() == 0 ? QStringLiteral("Suggested") : sectionFor(t);
     case ColorRole:
         return t.kind == Kind::Container && t.color.isValid() ? t.color.name() : QString();
     case ShortcutRole:
@@ -128,13 +131,15 @@ void PickerModel::applyFilter()
     }
 
     // rankForPicker() already decided priority order (current-site PWA and
-    // remembered destination lead); group same-kind rows together for the
-    // display only. Section *order* is fixed (not first-encounter order from
-    // rankForPicker) so containers are not buried below every browser profile
-    // when targetOrder lists Brave/Firefox/Edge first.
+    // remembered destination lead). Its top pick is pinned to row 0 so
+    // Enter/digit-1 always open the suggestion; the remaining rows are
+    // grouped by section for display only. Section *order* is fixed (not
+    // first-encounter order from rankForPicker) so containers are not
+    // buried below every browser profile when targetOrder lists
+    // Brave/Firefox/Edge first.
     QHash<QString, QList<Target>> buckets;
-    for (const auto &t : matched) {
-        buckets[sectionFor(t)].append(t);
+    for (qsizetype i = 1; i < matched.size(); ++i) {
+        buckets[sectionFor(matched.at(i))].append(matched.at(i));
     }
     static const QStringList kSectionOrder = {
         QStringLiteral("Web apps"),
@@ -144,6 +149,10 @@ void PickerModel::applyFilter()
         QStringLiteral("Actions"),
     };
     int sections = 0;
+    if (!matched.isEmpty()) {
+        m_shown.append(matched.first());
+        ++sections; // the leader's own "Suggested" section
+    }
     for (const auto &key : kSectionOrder) {
         if (!buckets.contains(key)) {
             continue;
