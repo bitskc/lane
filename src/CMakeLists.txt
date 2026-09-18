@@ -14,7 +14,7 @@ set(lane_core_SRCS
 )
 
 add_library(lane-core STATIC ${lane_core_SRCS})
-target_include_directories(lane-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(lane-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(lane-core
     PUBLIC
         Qt6::Core

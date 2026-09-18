@@ -1,5 +1,6 @@
 #include "unshorten.h"
 
+#include "lane_version.h"
 #include "urlutil.h"
 
 #include <QEventLoop>
@@ -24,7 +25,7 @@ QString unshortenSync(const QString &url, int timeoutMs)
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     req.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
     req.setTransferTimeout(timeoutMs);
-    req.setRawHeader("User-Agent", "Lane/0.1");
+    req.setRawHeader("User-Agent", QByteArray("Lane/") + LANE_VERSION_STRING);
     req.setMaximumRedirectsAllowed(0);
 
     QNetworkReply *reply = nam.head(req);

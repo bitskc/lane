@@ -18,3 +18,9 @@ lane_test(test_destination)
 lane_test(test_version)
 lane_test(test_updatechecker)
 lane_test(test_unshorten)
+
+# PickerModel lives in the lane executable, not lane-core, so its test
+# compiles the source directly.
+add_executable(test_pickermodel test_pickermodel.cpp ${CMAKE_SOURCE_DIR}/src/app/PickerModel.cpp)
+target_link_libraries(test_pickermodel PRIVATE lane-core Qt6::Test)
+add_test(NAME test_pickermodel COMMAND test_pickermodel)

@@ -97,8 +97,10 @@ const QSet<QString> &blockedInterpreters()
 // launches), and a dotted reverse-DNS app id must be present.
 bool flatpakRunArgsBlocked(const QStringList &args)
 {
-    // Run-options whose value names what executes or widens the sandbox;
-    // flatpak applies them anywhere in argv, so scan every token.
+    // Scan flatpak run-options that can name an alternate command (--command)
+    // or wrap execution (--env, --filesystem, --socket, --device). flatpak
+    // applies them anywhere in argv; only reject when the option's value
+    // names a blocked interpreter, not for every sandbox-widening value.
     static const QSet<QString> dangerousOpts = {
         QStringLiteral("--command"), QStringLiteral("--env"),
         QStringLiteral("--filesystem"), QStringLiteral("--socket"),

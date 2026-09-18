@@ -320,6 +320,25 @@ Window {
                             }
                         }
                         Rectangle {
+                            // Row 0 is the ranked leader (model role
+                            // `suggested`); badge it so the pinned pick
+                            // reads as a suggestion, not just the first
+                            // row of a section.
+                            visible: suggested
+                            Layout.preferredWidth: suggestedLabel.implicitWidth + 12
+                            Layout.preferredHeight: 16
+                            radius: 8
+                            color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.15)
+                            QQC.Label {
+                                id: suggestedLabel
+                                anchors.centerIn: parent
+                                text: "Suggested"
+                                font.pixelSize: 9
+                                font.weight: Font.DemiBold
+                                color: Kirigami.Theme.highlightColor
+                            }
+                        }
+                        Rectangle {
                             visible: shortcut.length > 0 && filterField.text.length === 0
                             width: 20
                             height: 20

@@ -21,7 +21,27 @@ version is 0, minor releases may still contain breaking changes.
 - `lane --list` includes a fourth `kind` column (`browser`, `container`,
   `pwa`, `action`, `app`) for agent inspection.
 
+- CI rejects tracked files that still contain merge-conflict markers or
+  agent conflict-tool output, and CONTRIBUTING now documents the install
+  step `ctest` needs plus Flatpak fixture layout and openSUSE packages.
+
 ### Fixed
+
+- The picker's top suggestion is always the first row again. Section
+  grouping no longer buries the ranked pick below the first Web app or
+  container, and the suggestion carries a "Suggested" badge.
+
+- Flatpak Edge desktop entries whose `Name=` is "Microsoft Edge" are
+  fingerprinted as Chromium/Edge again, so profile discovery no longer
+  falls through to a generic default.
+- Comments in `launcher.cpp` and `config.cpp` now describe the real
+  flatpak argv gate and unknown-key warning behavior.
+- Short-link unshorten requests send `User-Agent: Lane/<version>` from the
+  build version instead of a hardcoded `Lane/0.1`.
+- The config schema documents that `title` and `process` rule locations
+  are compat-only and cannot match on Wayland.
+- README's hold-bar tutorial now says the pause is opt-in via
+  Preferences, matching the `holdAutoOpen` default.
 
 - A second link clicked while Lane was still asking the compositor for
   an activation token could open in the right browser but with the

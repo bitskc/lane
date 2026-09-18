@@ -223,10 +223,10 @@ Config loadConfig(const QString &path)
     const QJsonObject o = doc.object();
 
     // Tolerant on purpose: an unrecognized key (a typo like "pickerPolcy",
-    // or a key from a newer/older Lane version) is silently ignored by the
+    // or a key from a newer/older Lane version) is ignored by the
     // field-by-field reads below rather than rejecting the whole config,
     // but a typo that quietly becomes a default is worth surfacing once
-    // per load instead of never at all.
+    // per load, so unrecognized keys are warned about here.
     {
         static const QSet<QString> knownKeys = {
             QStringLiteral("version"),           QStringLiteral("pickerPolicy"),     QStringLiteral("closeOnFocusLoss"),
