@@ -18,6 +18,9 @@ version is 0, minor releases may still contain breaking changes.
   kept in front of its own `--profile`/`--new-tab` flags, instead of
   handing those flags to `flatpak` itself.
 
+- `lane --list` includes a fourth `kind` column (`browser`, `container`,
+  `pwa`, `action`, `app`) for agent inspection.
+
 ### Fixed
 
 - A second link clicked while Lane was still asking the compositor for
@@ -46,8 +49,6 @@ version is 0, minor releases may still contain breaking changes.
   `targetOrder` lists Brave/Firefox/Edge first.
 - Opening Settings rescans installed browsers so the daemon is not stuck
   on a pre-upgrade or pre-install target list until Rediscover is clicked.
-- `lane --list` includes a fourth `kind` column (`browser`, `container`,
-  `pwa`, `action`, `app`) for agent inspection.
 
 - Native browser desktop entries no longer leak their own Exec= flags
   into launch arguments. An entry like `Exec=/usr/bin/firefox
@@ -383,8 +384,3 @@ First public release.
 [Unreleased]: https://github.com/bitskc/lane/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/bitskc/lane/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bitskc/lane/releases/tag/v0.1.0
-⚠ 1 unresolved conflict detected
-- ours = HEAD
-- theirs = bc55adc (Remove redundant layer-shell QML import; show default-target state)
-
-[Showing lines 1-300 of 321. Use :301 to continue]
