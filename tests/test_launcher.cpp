@@ -333,15 +333,21 @@ private Q_SLOTS:
         QVERIFY(out.open(QIODevice::ReadOnly));
         QVERIFY(out.readAll().contains("org.mozilla.firefox"));
 
-        // --installation takes a value; the token after it is the subcommand.
+        // No pre-command option consumes a separate value token: flatpak
+        // takes `extra` as the subcommand and errors, so this is blocked.
         t.args = {QStringLiteral("--installation"), QStringLiteral("extra"),
                   QStringLiteral("run"), QStringLiteral("org.mozilla.firefox"),
                   QStringLiteral("$url")};
-        QVERIFY(launchTarget(t, QStringLiteral("https://example.com")));
-
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
         // Non-run subcommand behind a global option stays blocked.
         t.args = {QStringLiteral("--user"), QStringLiteral("enter"),
                   QStringLiteral("org.mozilla.firefox"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+
+        // flatpak applies run-options anywhere in argv: --command=sh
+        // BEFORE the run subcommand still executes sh inside the sandbox.
+        t.args = {QStringLiteral("--command=sh"), QStringLiteral("run"),
+                  QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
         QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
     }
 
