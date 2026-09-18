@@ -20,6 +20,28 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Fixed
 
+- A second link clicked while Lane was still asking the compositor for
+  an activation token could open in the right browser but with the
+  wrong URL (the newer click's). The URL is now captured when the
+  routing decision is made and carried through the async launch, so
+  target and URL can no longer be mixed between clicks.
+- A queued click that decided to launch or hold left the picker
+  showing the previous click's rows; picking one would then open the
+  new URL in a stale destination. The picker now closes whenever a
+  click's decision is not to pick.
+- Removed the `recentTargetIds` and `toastMs` config keys. Both were
+  written and loaded but never read, and `recentTargetIds` meant every
+  link open rewrote the config file.
+- `lane` invoked over D-Bus no longer guesses at argv[0] by matching
+  the name "lane"; the program name is always stripped, so a renamed
+  binary can no longer be mistaken for a URL.
+- A burst of links arriving while Lane was busy expanding a short URL
+  queued without bound and could open a train of stale windows later.
+  The queue now keeps only the four most recent clicks.
+- The hold duration range is now 400-5000 ms in all three places that
+  define it: the config schema, the Preferences spinbox, and the
+  settings setter (previously 400+, 400-5000, and 200-10000).
+
 - Native browser desktop entries no longer leak their own Exec= flags
   into launch arguments. An entry like `Exec=/usr/bin/firefox
   --new-window %u` used to put `--new-window` in front of Lane's
@@ -295,27 +317,62 @@ version is 0, minor releases may still contain breaking changes.
   crash or power loss mid-write can no longer truncate `config.json`.
 - A config file that does not parse is moved aside to
   `config.json.corrupt-<timestamp>` with a warning instead of being
-⚠ 1 unresolved conflict detected
-- ours = HEAD
-- theirs = bc55adc (Remove redundant layer-shell QML import; show default-target state)
-NOTICE: Inspect a block by reading `conflict://<N>` (add `/ours` / `/theirs` / `/base` to render a single side). Resolve with `write({ path: "conflict://<N>", content })`, or bulk-resolve every registered conflict with `write({ path: "conflict://*", content })`. Writes replace ONLY the marker block (markers + all sides) — never repeat the lines before/after it; they stay in place.
-`content` shorthand: a line that is exactly `@ours` / `@theirs` / `@base` / `@both` expands to that recorded section. `@both` is ours-then-theirs with no separator — only for additive conflicts where each side adds something different; NEVER for competing edits of the same lines (pick a side or write the combined text). Lines that are not a token pass through verbatim, so `"// keep both\n@ours\n@theirs"` literally writes the comment, then ours, then theirs.
-Per-id bulk: `write({ path: "conflict://*", content: "1: @ours\n2: @theirs\n…" })` resolves each listed id with that side in ONE call — the cheapest way through many pick-one conflicts; unlisted ids stay registered.
-Resolve each block faithfully: keep one side (`@ours`/`@theirs`), or combine them when both intents apply — never invent content beyond the recorded sides, and never stack both sides of competing edits. Resolve several conflicts in a single turn by issuing multiple `write` calls at once; ids stay valid as earlier blocks are resolved.
+  silently replaced by defaults. Rules and remembered destinations are
+  never discarded without a copy.
 
-──── #1  L23-47 ────
-<<< ours
-- Native browser desktop entries no longer leak their own Exec= flags
-  into launch arguments. An entry like `Exec=/usr/bin/firefox
-  --new-window %u` used to put `--new-window` in front of Lane's
-  `--profile` flag, so the browser opened the profile directory as a URL.
-  Only Flatpak entries keep their `flatpak run ... <app-id>` prefix now.
-- Desktop entries whose Exec= line starts with `env VAR=...` (for example
-… (12 more lines)
->>> theirs
-- Picker and hold overlay no longer require the optional layer-shell QML
-  module; they failed to load entirely on systems without it.
-- Default target buttons on the Browsers & apps page now show which
-  destination is currently selected.
+## [0.1.0] - 2026-09-11
 
-[Showing lines 1-300 of 331. Use :301 to continue]
+First public release.
+
+### Added
+
+- Picker overlay: pick a target by number, filter by typing, or press
+  Alt+A to remember a destination.
+- Hold bar: a short pause (about 1.6 seconds) before a silent open, so
+  you can stop it with Esc or Space. Explicit rules skip the hold.
+- Two-pane settings window with Overview, Browsers & apps, Rules, and
+  Preferences pages.
+- Drag-reorder and rename for browsers and apps on the Browsers & apps
+  page. Private/incognito windows are excluded from the drag order for
+  their parent browser.
+- Path-scoped memory for remembered destinations. `github.com/bitskc`
+  can go somewhere different from `github.com`. Comma narrows the
+  remembered path, period widens it.
+- "Always for" now defaults to the path, not the whole host.
+- Rules engine: match by URL with optional regex, scoped to
+  any/domain/path. First match wins. Rule objects also accept
+  `"title"` and `"process"` locations for compatibility, but those
+  cannot match on Wayland because caller identity is not available.
+- Discovery for Gecko profiles (Firefox, Zen, LibreWolf, Floorp,
+  Waterfox), Chromium-family profiles (Brave, Chrome, Edge, Vivaldi,
+  Opera), and `firefoxpwa` sites.
+- Outlook safe-link unwrapping and optional link unshortening.
+- Agent-friendly `~/.config/lane/config.json` with a published JSON
+  schema (`docs/config.schema.json`), plus `lane --list`,
+  `lane --explain URL`, and `lane --config-path` for inspecting
+  config without the GUI. See `AGENTS.md`.
+- `KStatusNotifierItem` tray icon with Settings and Rediscover actions.
+- systemd user unit for autostart, installed to the systemd user unit
+  search path.
+
+### Changed
+
+- Desktop entry, D-Bus service, and autostart files now use absolute
+  paths to the installed binary, so Plasma's app menu and D-Bus
+  activation find `lane` even when `~/.local/bin` is not on `PATH`.
+- Lane claims a real D-Bus name, `app.lane.Lane`, instead of a
+  placeholder, so the app menu can start it and duplicate launches
+  hand off to the running instance.
+- Project license switched to the PolyForm Noncommercial License 1.0.0.
+  Personal and hobby use is free; commercial use needs a separate
+  license. See `COMMERCIAL.md`.
+
+### Security
+
+- Lane only ever opens `http` and `https` URLs. It rejects `file`,
+  `javascript`, `data`, and URLs with embedded credentials. Custom
+  handlers run as argv, never through a shell.
+
+[Unreleased]: https://github.com/bitskc/lane/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bitskc/lane/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/bitskc/lane/releases/tag/v0.1.0
