@@ -50,7 +50,6 @@ Top-level keys:
   "closeOnFocusLoss": true,
   "showUrl": true,
   "toast": true,
-  "toastMs": 2800,
   "unwrapO365": true,
   "unshorten": true,
   "openUnwrapped": false,
@@ -63,7 +62,6 @@ Top-level keys:
   "targetOrder": [],
   "targetAliases": {},
   "remembered": {},
-  "recentTargetIds": [],
   "rules": [],
   "customTargets": [],
   "substitutions": []
