@@ -1,62 +1,82 @@
-# CEO Review: Lane (round 2)
+# CEO Review: Lane (round 3)
 
-Reviewed 2026-09-17, five days after v0.2.0 shipped. Repo state: remote is now `bitskc/lane` (verified: `git remote -v`, GitHub releases API returns 200), tags v0.1.0 and v0.2.0 exist, PKGBUILD carries a real sha256. Still 0 stars, 0 forks, 0 watchers. One open issue (#12, an auto-detected argv bug). AUR query for `lane` returns zero results. No stranger has installed this yet.
+Reviewed 2026-09-18. Repo state: `bitskc/lane` @ 1de0d59, 53 commits since v0.2.0, all fixes and polish. Still 0 stars, 0 forks, 0 watchers. AUR RPC for `lane` still returns zero results. Six auto-detected issues open, one of them a P1 regression in the picker. No stranger has installed this yet.
 
 ## Verdict
 
-**THE ONLY MOVE LEFT IS ANDY'S TEN MINUTES ON AUR.**
+**THE WEDGE IS REAL. THE PRODUCT STILL HAS NO DOOR.**
 
-Everything the last review asked engineering to do got done: repo renamed, 0.2.0 tagged and released, update checker live, PKGBUILD checksummed. The remaining blocker is not code. It is an AUR account and an SSH key, which only Andy can create. Until that happens, Lane is a product with no distribution channel and no users, and every hour spent on features, ports, or docs is spent on an audience of one. Publish the package, post it to r/kde pointing at Junction issue #9, then stop building until a stranger says something.
+Three consecutive reviews have now said the same thing: publish to AUR, post to r/kde, stop building until a stranger responds. The code has gotten better every round. The distribution has not moved. The wedge question is settled: "Plasma-native Choosy" is real because Junction explicitly refused profile routing (issue #9, closed unimplemented) and every other competitor is platform-locked to Mac or Windows. The niche is small but it is unowned. What is not settled is whether anyone in the niche will ever find Lane, because `yay -S lane` still does not work.
 
-## Round-1 fix verification
+## Round-2 fix verification
 
-| # | Round-1 finding | Claimed status | Verified status |
-|---|---|---|---|
-| 1 | Rename repo to bitskc/lane | Done | **Held.** Remote is `bitskc/lane`, releases API returns 200, PKGBUILD `source=` resolves and `sha256sums` is a real hash (`packaging/PKGBUILD:16-17`). |
-| 2 | Tag 0.2.0, publish AUR, post r/kde | Partially | **Held, half done.** v0.2.0 tagged and released. AUR has no `lane` package (RPC query returns 0 results, 2026-09-17). r/kde post not made. The two items that produce users are the two that did not happen. |
-| 3 | Containers = scope creep; README should be honest about bridge dependency | Unknown | **Mostly held.** README:36-38 now says containers appear "wherever `containers.json` exists and the browser has a protocol-handler extension installed to act on them." That is honest about the dependency without naming the 1.9K-user figure. Acceptable. |
-| 4 | Stop adding features until real users | Partially | **Held with a caveat.** Flatpak discovery shipped (justified: Andy's beelink is a real user). The Windows port plan is docs only, no code, and the port assessment itself recommends against porting. No feature code landed for a hypothetical audience. |
-| 5 | holdAutoOpen default contradicts DESIGN.md | Fixed | **Code fixed, docs regressed.** `types.h:149` and `config.cpp:261` default to false; schema and tests agree. But `DESIGN.md:44-46` still says "on (default)", `AGENTS.md:52` shows `"holdAutoOpen": true` in the example config, and `README.md:47-49` describes the hold bar as standard behavior with no opt-in note. The fix landed in code and drifted in docs. |
+| # | Round-2 finding | Verified status |
+|---|---|---|
+| 1 | AUR publish blocked on Andy's account | **Not done.** AUR still has no `lane` package. Third review running. |
+| 2 | Windows port plan: keep doc, don't build | **Held.** No port code landed. |
+| 3 | Doc drift on holdAutoOpen default | **Fixed.** DESIGN.md:44-46 now says "off by default," AGENTS.md:57 shows `"holdAutoOpen": false`, README:49 says "Optional hold bar." All three spots corrected. |
+| 4 | Issue #12 argv fix in next release | **Fixed.** #12 closed; the fix is in Unreleased (native Exec flags no longer leak into launch args). |
+| 5 | Ship small 0.2.1/0.3.0, don't let it grow | **At risk.** Unreleased has 53 commits of fixes. That is no longer a small release, and one of the fixes introduced a new P1 (issue #33). |
 
 ## Findings, ranked by impact
 
-### 1. AUR publish is blocked on a ten-minute account creation, and it is the entire distribution strategy
+### 1. AUR is still the whole ballgame and still blocked on ten minutes of Andy's time
 
-The PKGBUILD is done: real checksum, license install, offscreen tests. The only step left is `ssh aur@aur.archlinux.org` account setup and `git push` to `aur.archlinux.org/lane.git`. No agent can do this; it needs Andy's AUR account and SSH key. This has been the blocker since before 0.2.0 shipped and it is still the blocker. Every other finding in this document is secondary to the fact that `yay -S lane` does not work yet. This is now the second consecutive review where the top recommendation is "publish the package," and the work remaining is smaller than it was last time.
+Same finding as rounds 1 and 2, now with more evidence that nothing else matters. The PKGBUILD is done and has survived two review waves. The repo is renamed, tagged, checksummed. The only missing step is a human creating an AUR account and pushing. Every fix merged since 0.2.0 improves a product with zero users and zero distribution. This is not a criticism of the fixes; they were worth doing. It is a statement about sequencing: the marginal user gained by any further code work is exactly zero until the package exists in a place a Plasma user would look.
 
-### 2. The Windows port plan is a well-written answer to a question nobody asked
+### 2. v0.3.0 is pending but not actually staged, and it carries a self-inflicted P1
 
-`docs/designs/windows-port-plan.md` is thorough: a real `Platform` interface, phased P0-P3, honest risk table. It is also 10-14 person-weeks of work aimed at a market where Browser Tamer is actively maintained (commits today, 2026-09-17; release 6.2.3 on Sep 1, verified via GitHub API) and free. The port assessment's own recommendation is "do not port." The plan existing as a deferred option is fine and cheap. What would not be fine is treating it as the next thing to build: it trades Lane's only wedge (Plasma-native, the thing no competitor can copy) for a parity fight against a maintained incumbent, before a single Linux stranger has installed the product. Keep the doc. Do not start P0. Revisit only if a paying Windows user appears, which is the scenario COMMERCIAL.md exists for.
+`CMakeLists.txt:2` still says `project(lane VERSION 0.2.0)` and `packaging/PKGBUILD:2` still says `pkgver=0.2.0`. The Unreleased changelog is large and good (flatpak discovery, in-sandbox profile paths, launch security hardening, picker ordering). But issue #33 is a P1 the project gave itself: the fixed picker section order (Web apps first) moved the ranked leader off row 0, so Enter and shortcut 1 can open the wrong target. Row 0 is load-bearing in three places (pre-selection, Enter, shortcut 1). This must be fixed or the section order reverted before tagging. Shipping 0.3.0 with a picker that opens the wrong destination on the most common keystroke would be worse than not shipping.
 
-### 3. Documentation drift is becoming a pattern, not an accident
+Also open and worth triaging before tag: #35 (flatpak gate unenforced dangerousOpts, security-labeled, medium) and #36 (env unwrap ghost targets, medium). #34, #37, #38 are low-risk and can ride a later release.
 
-Round 1 flagged the openspec "out of scope" line silently reversed by shipped code. Round 2 finds the same shape again: the holdAutoOpen default flipped in code, changelog, schema, and tests, but DESIGN.md, AGENTS.md, and the README product summary still describe the old default. Individually this is a five-minute fix. As a pattern it means the repo's prose cannot be trusted to match its behavior, which matters more now that AGENTS.md is explicitly pitched at AI agents that will read the docs instead of the code. Fix the three spots and add "docs match behavior" to the release checklist in RELEASING.md.
+### 3. The release is ready to ask users to install it, once #33 lands
 
-### 4. The competitive analysis is the best strategic document in the repo; its #1 recommendation should wait for users anyway
+Answering the readiness question directly: yes, with one condition. The changelog shows a product that has absorbed real Wayland paper cuts (activation tokens, layer-shell nulls, flatpak remoting, notification component names) and fixed them. The security posture is stated and enforced. The docs now match behavior. The one thing standing between "ready" and "not ready" is the row-0 regression, because it sits on the product's core interaction. Fix #33, bump the version in both places, tag, publish, post. In that order.
 
-`docs/designs/competitive-analysis.md` is genuinely good work: verified claims, honest inference tags, and a correct read that Lane's moat is "several weeks of Wayland paper cuts already absorbed" plus features nobody can copy without becoming a KDE app. Its top recommendation (KActivities-scoped routing) is the right kind of feature: Plasma-only, uncopyable, reuses the existing scope model. But it is still a feature for an audience of zero. The correct sequencing is: AUR, r/kde post, then if any stranger responds, KActivities is the first thing to build because it deepens the wedge. If nobody responds, it changes nothing.
+### 4. Licensing: PolyForm NC holds up fine; pricing-unset is not a blocker
 
-### 5. Issue #12 is the first real bug report shaped like a user problem
+PolyForm Noncommercial is the right call for a KDE utility at this stage and there is no evidence against it. It does not block AUR (custom licenses are routine there), does not block Flathub later, and preserves the only plausible revenue path (someone wrapping Lane in a paid product or distro offering). The commercial path is credible in shape even if thin in volume: the buyer is a company shipping a Linux product or internal tooling that wants to embed or rebrand the router, not individual users. Choosy and Velja prove individuals will pay $8-10 for this category on Mac, but Lane's license already gives personal use away free, so the paid tier is correctly aimed at commercial use only. Pricing-unset is fine at zero users; "email me and we'll figure it out" is the correct price for a product with no commercial inbound. Revisit only when the first commercial inquiry arrives.
 
-The open issue (native-browser argv silently changes when the desktop Exec carries extra non-field-code flags) is auto-detected, not user-filed, but it is exactly the class of bug a real user hits and cannot diagnose: Lane launches the browser with subtly wrong arguments. It belongs in the next release alongside flatpak discovery. A 0.2.1 or 0.3.0 with flatpak support plus this fix is a reasonable, small release. Do not let it grow.
+### 5. Moat: execution plus absorbed pain, and that is enough for this niche
+
+There is no structural moat. The config format is JSON, the rules engine is conventional, and a competent team could clone the feature list in weeks. What Lane has is three things competitors demonstrably have not built (path-scoped memory, the hold HUD, agent-facing CLI/schema, all verified unique across six competitors in `docs/designs/competitive-analysis.md`) plus a pile of Wayland-specific fixes that represent absorbed cost. Junction, the only motivated Linux competitor, looked at profile routing and declined. The moat is that nobody else wants this niche badly enough to pay the entry cost, and Lane already paid it. That is a real moat for a niche product. It does not need to be bigger.
+
+## What blocks adoption, ranked
+
+1. **No AUR package.** The single channel where the target user (Arch-based Plasma power user) actually looks. Blocked on Andy's account creation. Everything else is noise until this exists.
+2. **v0.3.0 not tagged.** Version still 0.2.0 in CMake and PKGBUILD; the flatpak work and 50+ fixes are unreleased. And it cannot be tagged until issue #33 (P1, Enter opens wrong target) is resolved.
+3. **No announcement.** No r/kde post, no KDE Discourse post, no Planet KDE. Zero stars is partly a discovery problem, not only a distribution problem. The post writes itself: lead with path-scoped memory and the hold HUD, cite Junction #9.
+4. **Plasma-only, Wayland-first.** A real constraint but a chosen one, and correct. GNOME users have Junction; chasing them costs the wedge.
+5. **Source-only for non-Arch users.** No deb/rpm/Flathub. Secondary to AUR; revisit only if the r/kde post draws non-Arch interest.
+
+## Deliberately not doing
+
+- **Windows/macOS port.** Browser Tamer is free and maintained on Windows; Choosy/Velja own Mac. Porting trades the only wedge for a parity fight. The port assessment's own recommendation is "do not port." Keep the docs, build nothing.
+- **Browser extension bridge.** A second product surface (Chrome + Firefox extension stores, review processes, versioning) for zero users. Revisit only if users ask for browser-to-browser hops.
+- **Scripting (Lua/JS).** Explicit non-goal, correct. Finicky proves it is a maintenance-heavy feature for a niche of the niche.
+- **Source-app rules.** Impossible on Wayland today; no portal hands Lane the caller's identity. Building toward it is wasted infrastructure.
+- **GNOME/GTK version.** Junction exists and declined this exact feature set. Let them have it.
+- **Setting a commercial price now.** No inbound, no signal. Pricing-unset is honest and correct.
+- **Relicensing to GPL/MIT.** One-way door, no reason to walk through it at zero users.
+- **KActivities routing, tracking-param list, reclaim watchdog.** All three are good, verified recommendations from the competitive analysis. All three wait until a stranger installs Lane. Features for an audience of zero are still features for an audience of zero.
 
 ## Considered and fine
 
-- **PolyForm NC + email commercial track.** Still right. Zero users means zero signal to change it, and the license does not block AUR or Flathub. Junction has been GPLv3 for five years and nobody resold it, but relicensing is a one-way door and there is no reason to walk through it today.
-- **Flatpak discovery in Unreleased.** Justified scope: the user it serves (Andy on beelink) is real, the change is discovery-layer only, and it removes an install-time failure for the exact audience an AUR package attracts.
-- **Windows port deferred by user decision.** Correct call, matches the port assessment's own recommendation.
-- **No Lua, no scripting, no browser extension bridge.** Still correct. Each is a second product surface for zero users.
-- **The hold HUD and path-scoped memory as differentiators.** The competitive analysis verified both are unique across six competitors. These are the things to lead with in the r/kde post, not the feature checklist.
+- **Flatpak discovery.** Justified: real user (Andy on beelink), discovery-layer only, removes an install-time failure for exactly the AUR audience.
+- **The 53-commit fix wave.** Not scope creep; it is the product getting honest. The auto-review loop found real bugs (stale picker rows, argv leaks, flatpak remoting) and fixed them.
+- **Hold HUD off by default.** Right call; docs now agree with code.
+- **Opt-in default browser, http/https only.** Correct scope and correct security posture.
+- **Agent-facing CLI and AGENTS.md.** Cheap, unique, and increasingly how config files get written.
 
 ## Next 30 days
 
-1. **Andy: create an AUR account and SSH key, publish `lane` to AUR.** Ten minutes of human action, then `yay -S lane` works. This is the whole ballgame.
-2. **Post to r/kde and KDE Discourse.** Lead with the two verified-unique features (path-scoped memory, hold HUD) and point at Junction issue #9, the four-year-old closed-unimplemented request for exactly what Lane ships. Include the AUR install line.
-3. **Ship 0.2.1 or 0.3.0 with flatpak discovery, the issue #12 argv fix, and the three doc-drift fixes** (DESIGN.md:44-46, AGENTS.md:52, README.md:47-49). Small, honest, done.
-4. **Do not start the Windows port, do not build KActivities routing, do not add features** unless a stranger installs Lane and asks for something. Then build that.
+1. **Fix or revert issue #33** (picker row-0 regression). Triage #35 and #36 for the same release.
+2. **Bump to 0.3.0** in CMakeLists.txt and PKGBUILD, tag, release.
+3. **Andy: create the AUR account, publish `lane`.** Third time asking. Ten minutes.
+4. **Post to r/kde and KDE Discourse** with the AUR install line, leading with the two verified-unique features.
+5. **Then stop.** No new features until a stranger says something.
 
 ## Method
 
-Read from the repo (2026-09-17): `README.md`, `COMMERCIAL.md`, `CHANGELOG.md`, `packaging/PKGBUILD`, `docs/RELEASING.md`, `docs/designs/competitive-analysis.md`, `docs/designs/port-assessment.md`, `docs/designs/windows-port-plan.md`, prior `docs/reviews/ceo.md`, `docs/designs/gstack-full-analysis.md`, `docs/reviews/design.md`. `git remote -v`, `git tag`, `git log`. Grep for `holdAutoOpen` across code, docs, schema, tests.
-
-Verified live (2026-09-17): GitHub API for `bitskc/lane` (exists, 0 stars/forks/watchers, releases API 200), AUR RPC for `lane` (0 results), `aloneguid/bt` commits (today) and latest release (6.2.3, 2026-09-01), open issue #12.
+Read from the repo (2026-09-18): README.md, DESIGN.md, COMMERCIAL.md, CHANGELOG.md, packaging/PKGBUILD, CMakeLists.txt, docs/designs/competitive-analysis.md, prior docs/reviews/ceo.md, AGENTS.md (hold config section). `git log`, `git tag`, `gh issue list`, `gh issue view 33`. Verified live: GitHub API repo stats (0 stars/forks/watchers), AUR RPC info+search for `lane` (0 results).
