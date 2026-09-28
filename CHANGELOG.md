@@ -11,7 +11,6 @@ Nothing yet.
 
 ## [0.3.0] - 2026-09-28
 
-
 ### Added
 
 - Browsers installed as Flatpaks (Zen, Firefox, LibreWolf, Floorp,
