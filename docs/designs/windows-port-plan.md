@@ -101,7 +101,7 @@ Platform *createPlatform(QObject *parent = nullptr);  // factory in platform/Pla
 
 `CMakeLists.txt` (root) and `src/CMakeLists.txt`:
 
-- `if(WIN32)`: drop `LayerShellQt`, `KF6::DBusAddons`, `KF6::StatusNotifierItem`, `KF6::WindowSystem`, `Qt6::DBus`, `ecm_find_qmlmodule(org.kde.layershell)`.
+- `if(WIN32)`: drop `LayerShellQt`, `KF6::DBusAddons`, `KF6::StatusNotifierItem`, `KF6::WindowSystem`, `Qt6::DBus`. Layer-shell is C++-only (`find_package(LayerShellQt REQUIRED)`, consumed by `Controller::configureLayerShell`); there is no `org.kde.layershell` QML module to drop.
 - Keep Kirigami, I18n, CoreAddons, IconThemes, ColorScheme, qqc2-desktop-style. **[verified]** per `port-assessment.md`: NeoChat and other KF6 Kirigami apps ship on Windows via Craft; Lane is more Plasma-coupled than they are, but the Kirigami stack itself is precedented.
 - Add `target_link_libraries(lane PRIVATE ...)` for `Qt6::Widgets` (tray), platform sources.
 - Gate Linux-only install rules (`.desktop`, D-Bus service, systemd unit, notifyrc) behind `if(UNIX AND NOT APPLE)` or `if(LINUX)`.
@@ -218,8 +218,7 @@ Effort is person-weeks for one experienced Qt developer. Tail QA (SmartScreen, m
 
 | Linux today | Windows swap | Recommendation |
 |---|---|---|
-| `org.kde.layershell` QML import | None; topmost `QWindow` | **Per-platform QML files** in `qt_add_qml_module`: `qml/linux/Picker.qml` vs `qml/windows/Picker.qml`. CMake selects the list by `WIN32`. Avoid runtime fallback in one file: layer-shell import fails module load on Windows if present. |
-| `LayerShellQt::Window` in C++ | `WindowsOverlay::configure()` | Linux keeps `configureLayerShell`; Windows sets flags + HWND ex-style |
+| `LayerShellQt::Window` in C++ (`Controller::configureLayerShell`); no QML import | `WindowsOverlay::configure()` | **Per-platform QML files** in `qt_add_qml_module`: `qml/linux/Picker.qml` vs `qml/windows/Picker.qml`. CMake selects the list by `WIN32`. Linux keeps `configureLayerShell`; Windows sets flags + HWND ex-style. |
 | `KStatusNotifierItem` | `QSystemTrayIcon` | Platform factory |
 | `KDBusService` | Mutex + `QLocalServer` | Platform |
 | `KNotification` + notifyrc | Tray message or toast | Platform |
@@ -318,5 +317,3 @@ steps:
 **Single biggest technical risk:** Windows focus-stealing restrictions may prevent reliable keyboard-exclusive picker behavior without `AllowSetForegroundWindow`/`AttachThreadInput` gymnastics or a global-hotkey fallback.
 
 **MVP (2 lines):** Rules + profiles + picker + path-scoped remembered destinations on Windows, with the default-browser IPC loop working. Containers target P1; hold HUD is P2 and not required for first release.
-
-[Showing lines 1-300 of 302. Use :301 to continue]

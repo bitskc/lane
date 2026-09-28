@@ -22,8 +22,11 @@ version is 0, minor releases may still contain breaking changes.
   `pwa`, `action`, `app`) for agent inspection.
 
 - CI rejects tracked files that still contain merge-conflict markers or
-  agent conflict-tool output, and CONTRIBUTING now documents the install
-  step `ctest` needs plus Flatpak fixture layout and openSUSE packages.
+  agent conflict-tool output, leaked tool-artifact text (a pagination
+  footer or internal artifact reference pasted into a file by mistake),
+  or a missing trailing newline, and CONTRIBUTING now documents the
+  install step `ctest` needs plus Flatpak fixture layout and openSUSE
+  packages.
 
 ### Fixed
 
@@ -111,6 +114,30 @@ version is 0, minor releases may still contain breaking changes.
   row. Section collapse controls, picker section headers, and destination
   ladder buttons now have accessibility names. Rename fields show a hover
   underline so they read as editable.
+- Flatpak-only browser installs (no native desktop file anywhere
+  `XDG_DATA_DIRS` points) are now discovered. Lane also scans both
+  Flatpak export directories
+  (`~/.local/share/flatpak/exports/share/applications` and
+  `/var/lib/flatpak/exports/share/applications`), and warns once if
+  flatpak is installed but neither directory contributed a desktop file.
+- Opening Settings from the tray no longer rescans and resets browser
+  models every time the window is activated. The rescan could prune a
+  remembered host on a transient discovery miss while the user was mid
+  edit; it now only runs when the settings window is not already open.
+- The flatpak run-options gate no longer blocks legitimate launches that
+  pass `--filesystem`, `--env`, `--socket`, or `--device`. Those
+  sandbox-widening options were checked against the interpreter
+  blocklist by the option value's basename, so `--env=SHELL=/bin/bash`
+  read as basename `bash` and falsely blocked a launch that never runs a
+  shell. Only `--command`, which actually replaces the sandboxed entry
+  point, is policed now.
+- `env`-wrapped Exec= lines no longer unwrap to a wrong or ghost program
+  when the wrapper uses `-a`/`--argv0`, bundles short options like
+  `-iu`, or uses `-S`/`--split-string`. `-a`/`--argv0` is now recognized
+  as taking a value, and any option this parser cannot resolve
+  (including `-S`/`--split-string`, which takes a whole shell-syntax
+  string as one argument) drops the entry instead of guessing at the
+  next token as the program.
 
 ## [0.2.0] - 2026-09-12
 

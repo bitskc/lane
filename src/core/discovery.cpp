@@ -14,6 +14,7 @@
 #include <QHash>
 #include <QStandardPaths>
 #include <QSet>
+#include <QDebug>
 #include <QRegularExpression>
 
 
@@ -102,6 +103,48 @@ bool isExecFieldCode(const QString &token)
     return token.startsWith(QLatin1String("@@")) || fieldCode.match(token).hasMatch();
 }
 
+// Consumes one `env` short-option token (e.g. "-i", or a bundled cluster
+// like "-iu" the way getopt allows i and u to combine). Returns false,
+// setting `unparseable`, when the token names an option this parser
+// cannot resolve to a fixed valueless/value-taking shape (-S/--split-string,
+// or any character outside env's known short options): the caller must
+// then fail closed rather than risk treating the following token as the
+// program when it is really that option's value.
+bool consumeEnvShortOpts(const QString &tok, QStringList &tokens, bool &unparseable)
+{
+    for (qsizetype i = 1; i < tok.size(); ++i) {
+        const QChar c = tok.at(i);
+        if (c == QLatin1Char('i') || c == QLatin1Char('0') || c == QLatin1Char('v')) {
+            continue; // -i/--ignore-environment, -0/--null, -v/--verbose: valueless
+        }
+        if (c == QLatin1Char('S')) {
+            // -S/--split-string takes a single shell-syntax string that
+            // this tokenizer does not interpret; parsing the rest of argv
+            // as plain Exec tokens could pick one of its words as the
+            // program. Fail closed instead of guessing.
+            unparseable = true;
+            return false;
+        }
+        if (c == QLatin1Char('u') || c == QLatin1Char('C') || c == QLatin1Char('a')) {
+            // -u NAME / -C DIR / -a ARGV0: the value is whatever is left
+            // of this token ("-uNAME"), or the next token if nothing is
+            // left ("-u NAME", or the last char of a bundle like "-iu
+            // NAME"). Either way it stops this token's option scan.
+            const QString rest = tok.mid(i + 1);
+            if (rest.isEmpty() && !tokens.isEmpty()) {
+                tokens.takeFirst();
+            }
+            return true;
+        }
+        // Any other short option is not one env supports; a real `env`
+        // invocation with it would fail before ever reaching a program,
+        // so the rest of argv cannot be trusted to start with one.
+        unparseable = true;
+        return false;
+    }
+    return true;
+}
+
 ExecPrefix execPrefix(const QString &execLine)
 {
     ExecPrefix out;
@@ -112,40 +155,65 @@ ExecPrefix execPrefix(const QString &execLine)
     out.program = tokens.takeFirst();
     if (QFileInfo(out.program).fileName() == QLatin1String("env")) {
         // `env [opts] VAR=value ... prog`: skip env's own option flags
-        // first (-i, -u VAR, -C DIR, -0, --, --ignore-environment,
-        // --unset[=VAR], --chdir=DIR, --debug, --split-string, ...), then
-        // the assignments, and keep the first real program token. Without
-        // the option skip, `env -i firefox` unwraps to program=-i, a dead
-        // target. A bare `env` (or only options/assignments) leaves
-        // program empty and the entry is dropped.
+        // first, then the assignments, and keep the first real program
+        // token. Without the option skip, `env -i firefox` unwraps to
+        // program=-i, a dead target. A bare `env` (or only
+        // options/assignments) leaves program empty and the entry is
+        // dropped.
+        //
+        // Options are recognized from an explicit allowlist rather than
+        // "anything starting with '-'": an option this allowlist does not
+        // know, or one whose value syntax it cannot parse
+        // (-S/--split-string takes a whole shell command line as one
+        // string), means the rest of argv is not reliably "value* then
+        // program" any more, so the whole entry is dropped instead of
+        // guessing and possibly unwrapping to one of env's own flags or
+        // option values as a fake "program".
         out.program.clear();
         static const QRegularExpression assignment(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*=.*$"));
-        // Options that consume the NEXT token as their value when not
-        // given as --opt=value: -u NAME, -C DIR, -S STRING (and the long
-        // forms --unset/--chdir/--split-string without '=').
-        static const QSet<QString> envOptWithValue = {
-            QStringLiteral("-u"), QStringLiteral("-C"), QStringLiteral("-S"),
-            QStringLiteral("--unset"), QStringLiteral("--chdir"),
-            QStringLiteral("--split-string"),
+        // Long options that consume the NEXT token as their value when
+        // not given as --opt=value.
+        static const QSet<QString> envLongOptWithValue = {
+            QStringLiteral("--unset"), QStringLiteral("--chdir"), QStringLiteral("--argv0"),
+        };
+        // Long options that take no value.
+        static const QSet<QString> envLongOptNoValue = {
+            QStringLiteral("--ignore-environment"), QStringLiteral("--null"),
+            QStringLiteral("--debug"), QStringLiteral("--verbose"),
         };
         bool optionsDone = false;
-        while (!tokens.isEmpty()) {
+        bool unparseable = false;
+        while (!unparseable && !tokens.isEmpty()) {
             const QString tok = tokens.takeFirst();
             if (!optionsDone) {
                 if (tok == QLatin1String("--")) {
                     optionsDone = true;
                     continue;
                 }
-                if (envOptWithValue.contains(tok)) {
-                    if (!tokens.isEmpty()) {
-                        tokens.takeFirst();
+                if (tok.startsWith(QLatin1String("--"))) {
+                    const qsizetype eq = tok.indexOf(QLatin1Char('='));
+                    const QString name = eq < 0 ? tok : tok.left(eq);
+                    if (name == QLatin1String("--split-string")) {
+                        unparseable = true;
+                        break;
                     }
-                    continue;
+                    if (envLongOptWithValue.contains(name)) {
+                        if (eq < 0 && !tokens.isEmpty()) {
+                            tokens.takeFirst();
+                        }
+                        continue;
+                    }
+                    if (envLongOptNoValue.contains(name)) {
+                        continue;
+                    }
+                    // Unrecognized long option: fail closed.
+                    unparseable = true;
+                    break;
                 }
-                // -i, -0, --ignore-environment, --unset=X, --chdir=X,
-                // --debug, and any other -/-- token are env's own flags;
-                // an unknown one fails inside env, never a program.
                 if (tok.startsWith(QLatin1Char('-'))) {
+                    if (!consumeEnvShortOpts(tok, tokens, unparseable)) {
+                        break;
+                    }
                     continue;
                 }
                 optionsDone = true;
@@ -994,6 +1062,35 @@ DiscoveryPaths defaultDiscoveryPaths()
     p.configHome = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
     p.dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
     p.applicationDirs = QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation);
+
+    // QStandardPaths::ApplicationsLocation does not include Flatpak's own
+    // export directories, so a Flatpak-only browser install (no native
+    // desktop file anywhere XDG_DATA_DIRS points) is invisible to
+    // discovery even though `flatpak run <app-id>` works fine by hand.
+    // Flatpak exports desktop files to both the per-user prefix
+    // (~/.local/share/flatpak/exports/share/applications, i.e. under
+    // dataHome) and the system-wide installation
+    // (/var/lib/flatpak/exports/share/applications); append both
+    // unconditionally, since scanDesktopFiles() already no-ops on a
+    // directory that does not exist.
+    const QStringList flatpakExportDirs = {
+        p.dataHome + QStringLiteral("/flatpak/exports/share/applications"),
+        QStringLiteral("/var/lib/flatpak/exports/share/applications"),
+    };
+    p.applicationDirs << flatpakExportDirs;
+
+    // If flatpak itself is installed but neither export directory handed
+    // discovery a single browser desktop file, something is off (a
+    // broken install, an unusual --installation path, or exports that
+    // were never regenerated) and the user's Flatpak browsers will
+    // silently be missing from Lane; say so once instead of failing
+    // quietly.
+    if (!QStandardPaths::findExecutable(QStringLiteral("flatpak")).isEmpty()
+        && scanDesktopFiles(flatpakExportDirs).isEmpty()) {
+        qWarning() << "Lane: flatpak is installed but no browser desktop files were found under"
+                   << flatpakExportDirs << "- Flatpak browsers may not appear in discovery";
+    }
+
     return p;
 }
 

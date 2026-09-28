@@ -97,14 +97,28 @@ const QSet<QString> &blockedInterpreters()
 // launches), and a dotted reverse-DNS app id must be present.
 bool flatpakRunArgsBlocked(const QStringList &args)
 {
-    // Scan flatpak run-options that can name an alternate command (--command)
-    // or wrap execution (--env, --filesystem, --socket, --device). flatpak
-    // applies them anywhere in argv; only reject when the option's value
-    // names a blocked interpreter, not for every sandbox-widening value.
+    // Scan flatpak run-options that can name an alternate command:
+    // --command replaces the sandboxed entry point outright, so
+    // `flatpak run --command=sh app.id` really does run sh instead of the
+    // app. Only reject when the option's value names a blocked
+    // interpreter, not for every occurrence of --command.
+    //
+    // Non-goal: --env, --filesystem, --socket, --device, and the rest of
+    // flatpak's sandbox-widening options are deliberately NOT policed
+    // here. Each of those broadens what the *existing* sandboxed app can
+    // reach (an extra bind mount, an extra device node, an extra
+    // inherited env var); none of them substitutes a different program to
+    // exec. An earlier version of this gate matched their option names
+    // against isBlockedInterpreter() too, which only checks the value's
+    // basename: `--env=SHELL=/bin/bash` reads as basename "bash" and
+    // false-positive blocked a legitimate launch that never runs a shell
+    // as its own process. Policing them would also buy nothing: an actor
+    // who can hand-edit a target's exec/args to add --filesystem=host can
+    // just as easily change exec itself, or add --command=sh directly;
+    // there is no privilege boundary between "can widen this target's
+    // sandbox options" and "can name this target's own program".
     static const QSet<QString> dangerousOpts = {
-        QStringLiteral("--command"), QStringLiteral("--env"),
-        QStringLiteral("--filesystem"), QStringLiteral("--socket"),
-        QStringLiteral("--device"),
+        QStringLiteral("--command"),
     };
     for (qsizetype i = 0; i < args.size(); ++i) {
         const QString &a = args.at(i);

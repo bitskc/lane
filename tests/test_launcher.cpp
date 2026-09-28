@@ -376,6 +376,49 @@ private Q_SLOTS:
                   QStringLiteral("app.zen_browser.zen"), QStringLiteral("$url")};
         QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
     }
+
+    void launchTargetFlatpakGateScopedToCommandOnly()
+    {
+        // The flatpak run-options gate only polices --command, which
+        // replaces the sandboxed entry point outright. Sandbox-widening
+        // options (--filesystem, --env, --socket, --device, ...) are not
+        // policed: they broaden what the *existing* app can reach, they
+        // never substitute a different program to exec. A previous
+        // version matched their names against isBlockedInterpreter() too,
+        // which only inspects the value's basename, so
+        // --env=SHELL=/bin/bash read as basename "bash" and falsely
+        // blocked a launch that never runs a shell as its own process.
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString outPath = dir.filePath(QStringLiteral("flatpak-scope-args.txt"));
+        const QString script = dir.filePath(QStringLiteral("flatpak"));
+        QFile f(script);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+        f.write(QStringLiteral("#!/bin/sh\nprintf '%s\\n' \"$@\" > '%1'\n").arg(outPath).toUtf8());
+        f.close();
+        QFile::setPermissions(script, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+
+        Target t;
+        t.kind = Kind::Custom;
+        t.exec = script;
+
+        t.args = {QStringLiteral("run"), QStringLiteral("--filesystem=host"),
+                  QStringLiteral("app.id"), QStringLiteral("$url")};
+        QVERIFY(launchTarget(t, QStringLiteral("https://example.com")));
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(outPath), 2000);
+        QFile::remove(outPath);
+
+        t.args = {QStringLiteral("run"), QStringLiteral("--env=SHELL=/bin/bash"),
+                  QStringLiteral("app.id"), QStringLiteral("$url")};
+        QVERIFY(launchTarget(t, QStringLiteral("https://example.com")));
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(outPath), 2000);
+        QFile::remove(outPath);
+
+        t.args = {QStringLiteral("--command=sh"), QStringLiteral("run"),
+                  QStringLiteral("app.id"), QStringLiteral("$url")};
+        QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
+        QVERIFY(!QFile::exists(outPath));
+    }
 };
 
 QTEST_MAIN(LauncherTest)

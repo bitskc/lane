@@ -789,51 +789,77 @@ private Q_SLOTS:
     void envWrappedExecSkipsEnvOptionFlags()
     {
         // `env -i firefox`, `env -u FOO firefox`, `env -C / firefox`,
-        // `env -- firefox` must all unwrap to firefox — env's own option
-        // flags are not the program. Previously `env -i` unwrapped to
+        // `env -- firefox`, `env -a NAME firefox` (--argv0), and bundled
+        // short options like `env -iu FOO firefox` must all unwrap to
+        // firefox: env's own option flags, and any value they consume,
+        // are not the program. Previously `env -i` unwrapped to
         // program=-i, a dead target that could never launch.
+        //
+        // `env -S '...'` takes a single shell-syntax string this parser
+        // does not interpret; guessing at its tokens could pick one of
+        // its words as the program, so the whole entry is dropped
+        // instead.
+        //
+        // Each fixture is discovered on its own (its own applicationDirs
+        // entry) rather than all together: discoverTargets() groups
+        // desktop files that resolve to the same browser+profile-store
+        // signature into one canonical target, which would silently hide
+        // a broken unwrap in any but the "most canonical" desktop file.
         QTemporaryDir tmp;
         QVERIFY(tmp.isValid());
         const QString root = tmp.path();
 
-        QDir().mkpath(root + QStringLiteral("/apps"));
-        const QList<QPair<QString, QByteArray>> entries = {
-            {QStringLiteral("firefox"), QByteArrayLiteral("Exec=env -i firefox %u\n")},
-            {QStringLiteral("firefox2"), QByteArrayLiteral("Exec=env -u MOZ_X11 firefox %u\n")},
-            {QStringLiteral("firefox3"), QByteArrayLiteral("Exec=env --chdir=/ MOZ_X11=1 firefox %u\n")},
-            {QStringLiteral("firefox4"), QByteArrayLiteral("Exec=env -- MOZ_X11=1 firefox %u\n")},
-            {QStringLiteral("dead"), QByteArrayLiteral("Exec=env -i\n")},
-        };
-        for (const auto &[name, exec] : entries) {
-            QFile desktop(root + QStringLiteral("/apps/%1.desktop").arg(name));
-            QVERIFY(desktop.open(QIODevice::WriteOnly));
-            desktop.write(QByteArrayLiteral(
-                "[Desktop Entry]\n"
-                "Name=Firefox\n"
-                "Icon=firefox\n"
-                "Type=Application\n"
-                "Categories=Network;WebBrowser;\n"
-                "MimeType=x-scheme-handler/http;x-scheme-handler/https;\n").insert(16, exec));
-            desktop.close();
-        }
-
         copyTree(fixtureRoot() + QStringLiteral("/gecko/firefox"),
                   root + QStringLiteral("/config/mozilla/firefox"));
 
-        DiscoveryPaths p;
-        p.home = root + QStringLiteral("/home");
-        p.configHome = root + QStringLiteral("/config");
-        p.dataHome = root + QStringLiteral("/data");
-        p.applicationDirs = {root + QStringLiteral("/apps")};
+        struct Entry {
+            QString id;
+            QByteArray execLine; // "%EXEC%" stands in for the real program token
+            QString expectedExec; // empty means the entry must not appear at all
+        };
+        const QList<Entry> entries = {
+            {QStringLiteral("firefox"), QByteArrayLiteral("env -i %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("firefox2"), QByteArrayLiteral("env -u MOZ_X11 %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("firefox3"), QByteArrayLiteral("env --chdir=/ MOZ_X11=1 %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("firefox4"), QByteArrayLiteral("env -- MOZ_X11=1 %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("argv0"), QByteArrayLiteral("env -a myname %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("bundledShortOpts"), QByteArrayLiteral("env -iu MOZ_X11 %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("splitString"), QByteArrayLiteral("env -S '%EXEC% --kiosk' %u"), QString()},
+            {QStringLiteral("dead"), QByteArrayLiteral("env -i"), QString()},
+        };
 
-        const auto targets = discoverTargets(p);
-        QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
-            return t.exec.startsWith(QLatin1Char('-')) || t.exec == QLatin1String("env")
-                || t.id.contains(QLatin1String("dead"));
-        }));
-        QVERIFY(std::any_of(targets.begin(), targets.end(), [](const Target &t) {
-            return t.exec == QLatin1String("firefox");
-        }));
+        for (const auto &entry : entries) {
+            QByteArray execLine = entry.execLine;
+            execLine.replace("%EXEC%", "firefox");
+
+            const QString appsDir = root + QStringLiteral("/apps-") + entry.id;
+            QDir().mkpath(appsDir);
+            QFile desktop(appsDir + QStringLiteral("/app.desktop"));
+            QVERIFY(desktop.open(QIODevice::WriteOnly));
+            desktop.write(QByteArrayLiteral("[Desktop Entry]\nName=Firefox\nIcon=firefox\nType=Application\n"
+                                             "Categories=Network;WebBrowser;\n"
+                                             "MimeType=x-scheme-handler/http;x-scheme-handler/https;\nExec=")
+                          + execLine + QByteArrayLiteral("\n"));
+            desktop.close();
+
+            DiscoveryPaths p;
+            p.home = root + QStringLiteral("/home");
+            p.configHome = root + QStringLiteral("/config");
+            p.dataHome = root + QStringLiteral("/data");
+            p.applicationDirs = {appsDir};
+
+            const auto targets = discoverTargets(p);
+            const auto found = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+                return t.browserName == QLatin1String("Firefox") && t.kind == Kind::BrowserProfile && !t.incognito;
+            });
+
+            if (entry.expectedExec.isEmpty()) {
+                QVERIFY2(found == targets.end(), qPrintable(entry.id));
+            } else {
+                QVERIFY2(found != targets.end(), qPrintable(entry.id));
+                QCOMPARE(found->exec, entry.expectedExec);
+            }
+        }
     }
 
     void execPrefixHonorsQuotedArgs()

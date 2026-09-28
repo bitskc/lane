@@ -469,8 +469,14 @@ void Controller::openSettings()
     // Rescan browsers/profiles/containers when settings opens so the
     // Browsers & apps page and picker are not stuck on whatever the daemon
     // discovered at startup (e.g. after a Lane upgrade or a new Flatpak
-    // browser install) until the user finds Rediscover on Overview.
-    reload();
+    // browser install) until the user finds Rediscover on Overview. Skip
+    // the rescan if the settings window is already open and visible: a
+    // second tray activation while the user is mid-edit must not reset
+    // models or prune remembered hosts out from under them on a transient
+    // discovery miss.
+    if (!(m_settingsWindow && m_settingsWindow->isVisible())) {
+        reload();
+    }
     const bool wasDefaultBrowser = m_isDefaultBrowser;
     refreshDefaultBrowserState();
     if (wasDefaultBrowser != m_isDefaultBrowser) {
