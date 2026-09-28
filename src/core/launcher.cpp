@@ -97,14 +97,22 @@ const QSet<QString> &blockedInterpreters()
 // launches), and a dotted reverse-DNS app id must be present.
 bool flatpakRunArgsBlocked(const QStringList &args)
 {
-    // Scan flatpak run-options that can name an alternate command (--command)
-    // or wrap execution (--env, --filesystem, --socket, --device). flatpak
-    // applies them anywhere in argv; only reject when the option's value
-    // names a blocked interpreter, not for every sandbox-widening value.
+    // Scan flatpak run-options that can name an alternate command:
+    // --command replaces the sandboxed entry point outright, so
+    // `flatpak run --command=sh app.id` really does run sh instead of the
+    // app. Only reject when the option's value names a blocked
+    // interpreter, not for every occurrence of --command.
+    //
+    // Non-goal: --env, --filesystem, --socket, --device, and the rest of
+    // flatpak's sandbox-widening options are deliberately NOT policed
+    // here. Matching their option names against isBlockedInterpreter()
+    // only checks the value's basename, which produces false positives:
+    // `--env=SHELL=/bin/bash` reads as basename "bash" and would block a
+    // legitimate launch that never runs a shell. The gate's declared
+    // scope is option values that replace the program flatpak execs;
+    // widening that scope is a product decision, not a cleanup.
     static const QSet<QString> dangerousOpts = {
-        QStringLiteral("--command"), QStringLiteral("--env"),
-        QStringLiteral("--filesystem"), QStringLiteral("--socket"),
-        QStringLiteral("--device"),
+        QStringLiteral("--command"),
     };
     for (qsizetype i = 0; i < args.size(); ++i) {
         const QString &a = args.at(i);

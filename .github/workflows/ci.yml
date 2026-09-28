@@ -26,6 +26,38 @@ jobs:
             echo "Tracked files contain merge-conflict markers or agent conflict-tool output"
             exit 1
           fi
+      - name: Reject leaked tool-artifact text
+        run: |
+          # Agent sessions occasionally paste a tool's own pagination
+          # footer or artifact reference straight into a file instead of
+          # its actual content (e.g. a `read` truncation footer landing
+          # in a doc). Skip this workflow file (which documents the
+          # patterns it searches for) and docs/reviews/ (which
+          # legitimately quotes tool output verbatim as review evidence).
+          if git grep -nE '\[Showing lines [0-9]+-[0-9]+ of [0-9]+\.|Use :[0-9]+ to continue|artifact://' -- \
+            ':!.github/workflows/ci.yml' ':!docs/reviews/'; then
+            echo "Tracked files contain leaked tool-artifact text (paste debris from an agent session)"
+            exit 1
+          fi
+      - name: Check tracked files end with a newline
+        run: |
+          # A missing trailing newline is usually the same class of
+          # mistake as the artifact check above: a file written by a tool
+          # that truncated mid-output. Skip binary files (grep -I treats
+          # them as non-matching) and empty files (no trailing newline to
+          # have).
+          missing=0
+          while IFS= read -r -d '' f; do
+            [ -s "$f" ] || continue
+            grep -Iq '' -- "$f" 2>/dev/null || continue
+            if [ "$(tail -c1 -- "$f" | wc -l)" -ne 1 ]; then
+              echo "Missing trailing newline: $f"
+              missing=1
+            fi
+          done < <(git ls-files -z)
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
       - name: Install dependencies
         run: |
           pacman -S --noconfirm --needed \
