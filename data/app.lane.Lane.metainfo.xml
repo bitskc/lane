@@ -45,6 +45,19 @@
     <binary>lane</binary>
   </provides>
   <releases>
+    <release version="0.3.0" date="2026-09-28">
+      <description>
+        <p>Flatpak browser support and a picker that stays honest.</p>
+        <ul>
+          <li>Browsers installed as Flatpaks (Zen, Firefox, LibreWolf, Brave, Chrome, Edge, and more) are discovered with their real profile stores and launched with correct sandbox arguments</li>
+          <li>Flatpak browsers open in an already-running instance instead of showing the "not responding" dialog</li>
+          <li>The picker's top suggestion is always row one, pinned with a Suggested badge</li>
+          <li>Queued clicks can no longer mix targets and URLs, and the picker closes when a click decides to launch or hold</li>
+          <li>Settings open no longer rescans targets on every tray activation</li>
+          <li>env-wrapped Exec lines unwrap correctly or drop instead of creating ghost targets</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-09-12">
       <description>
         <p>Containers, better picker grouping, and a long list of fixes.</p>

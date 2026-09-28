@@ -60,7 +60,7 @@ Roughly **~60% of `src/core/`** ports without logic changes.
 
 1. CMake conditionals: drop LayerShellQt, KDBusAddons, Qt6 DBus on non-Linux.
 2. `Platform` interface: overlay, single-instance, default-browser, autostart, tray, notifications.
-3. QML without `org.kde.layershell` (or per-OS QML trees).
+3. Overlay is already QML-free of `org.kde.layershell` (it is C++ `LayerShellQt::Window` via `Controller::configureLayerShell`), but a Windows/macOS port needs per-OS overlay plumbing anyway.
 4. IPC for URL forwarding to resident daemon.
 5. Discovery path tables per OS (reuse parsers).
 6. Replace `xdg-email` action target.
