@@ -402,7 +402,11 @@ private Q_SLOTS:
         t.kind = Kind::Custom;
         t.exec = script;
 
-        t.args = {QStringLiteral("run"), QStringLiteral("--filesystem=host"),
+        // A value whose basename lands in blockedInterpreters() proves the
+        // gate no longer matches on sandbox-widening option names: under the
+        // pre-fix code this argv was rejected even though no program is
+        // being substituted.
+        t.args = {QStringLiteral("run"), QStringLiteral("--filesystem=/home/user/bin/python3"),
                   QStringLiteral("app.id"), QStringLiteral("$url")};
         QVERIFY(launchTarget(t, QStringLiteral("https://example.com")));
         QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(outPath), 2000);

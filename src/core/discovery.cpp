@@ -1079,14 +1079,20 @@ DiscoveryPaths defaultDiscoveryPaths()
     };
     p.applicationDirs << flatpakExportDirs;
 
-    // If flatpak itself is installed but neither export directory handed
-    // discovery a single browser desktop file, something is off (a
-    // broken install, an unusual --installation path, or exports that
-    // were never regenerated) and the user's Flatpak browsers will
-    // silently be missing from Lane; say so once instead of failing
-    // quietly.
-    if (!QStandardPaths::findExecutable(QStringLiteral("flatpak")).isEmpty()
+    // If flatpak itself is installed AND at least one export dir exists
+    // (so some flatpak app is installed) but neither export dir handed
+    // discovery a single browser desktop file, the user's Flatpak
+    // browsers will silently be missing from Lane. The latch keeps the
+    // warning from repeating on every reload/Rediscover/openSettings
+    // pass through this function.
+    static bool warnedNoFlatpakBrowser = false;
+    const bool anyExportDirExists =
+        QDir(p.dataHome + QStringLiteral("/flatpak/exports/share/applications")).exists()
+        || QDir(QStringLiteral("/var/lib/flatpak/exports/share/applications")).exists();
+    if (!warnedNoFlatpakBrowser && anyExportDirExists
+        && !QStandardPaths::findExecutable(QStringLiteral("flatpak")).isEmpty()
         && scanDesktopFiles(flatpakExportDirs).isEmpty()) {
+        warnedNoFlatpakBrowser = true;
         qWarning() << "Lane: flatpak is installed but no browser desktop files were found under"
                    << flatpakExportDirs << "- Flatpak browsers may not appear in discovery";
     }
