@@ -42,6 +42,34 @@ version is 0, minor releases may still contain breaking changes.
   it, instead of silently accepting the option and discarding the
   value.
 
+- `env` long options can now be abbreviated the way real `env` allows,
+  as long as the abbreviation is unambiguous. `env --ignore-env firefox`
+  and `env --chd /tmp firefox` now resolve to firefox instead of being
+  dropped, matching `getopt_long`'s prefix matching. An abbreviation
+  that could mean more than one option, like `env --i` (which could be
+  `--ignore-environment` or `--ignore-signal`), is still rejected, the
+  same way real `env` rejects it as ambiguous.
+
+- `--verbose` is gone from the list of `env` options Lane recognizes.
+  It was never a real GNU `env` option; the actual verbose/debug flag
+  is `-v` or `--debug`, which Lane already handled. `env --verbose`
+  now fails closed like any other option Lane doesn't recognize,
+  instead of being silently treated as valid.
+
+- When Lane drops a desktop entry because its `env` wrapper uses an
+  option it can't parse, it now logs the entry's id and the offending
+  Exec line, so the drop is visible instead of silent.
+
+- Lane no longer deletes a remembered host the first time its browser
+  goes missing from one discovery pass. A single missed discovery can
+  happen for reasons that have nothing to do with the browser being
+  gone, like a Flatpak export directory still being written mid-update
+  or a systemd unit starting with a bare `XDG_DATA_DIRS`. Lane now
+  waits for a target to be missing across several reloads in a row
+  before it forgets which browser you picked for a site. Manually
+  clearing dead entries from the Rules page still happens right away,
+  since that's something you asked for directly.
+
 - CI's merge-conflict-marker and trailing-newline guards now scan the
   whole tree (excluding review notes and the workflow file itself)
   instead of a fixed path allowlist, so a violation outside the

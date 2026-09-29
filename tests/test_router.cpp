@@ -290,6 +290,24 @@ private Q_SLOTS:
         QCOMPARE(dangling.size(), 1);
         QCOMPARE(dangling.first(), QStringLiteral("old-site.example"));
     }
+
+    // Controller::pruneStaleRemembered() (Controller.cpp) is coupled to
+    // Qt's event loop and QML window lifecycle, so it is not practical to
+    // instantiate a full Controller here; this instead covers the
+    // extracted grace-period decision it is built on. A remembered host
+    // whose target is missing from one discovery pass must not be treated
+    // as gone for good (a transient discovery false negative - Flatpak
+    // export dir mid-update, a bare systemd unit with no
+    // XDG_DATA_DIRS - looks identical to the target actually being
+    // uninstalled on any single pass); only a miss count that has reached
+    // the grace-period threshold should be pruned.
+    void shouldPruneRememberedRequiresConsecutiveMisses()
+    {
+        QVERIFY(!shouldPruneRemembered(1, 3));
+        QVERIFY(!shouldPruneRemembered(2, 3));
+        QVERIFY(shouldPruneRemembered(3, 3));
+        QVERIFY(shouldPruneRemembered(4, 3));
+    }
 };
 
 QTEST_MAIN(RouterTest)

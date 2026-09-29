@@ -89,6 +89,13 @@ QStringList splitExecTokens(const QString &execLine)
 struct ExecPrefix {
     QString program;
     QStringList args;
+    // Set when an `env` wrapper's option scan hit an option this parser
+    // could not resolve (unknown long option, an ambiguous abbreviation
+    // of two or more known ones, or -S/--split-string) and gave up rather
+    // than guess. Distinguishes that case from a syntactically fine
+    // wrapper that simply never names a program (e.g. a bare `env`),
+    // which also leaves `program` empty but is not a parse failure.
+    bool unparseable = false;
 };
 
 bool isExecFieldCode(const QString &token)
@@ -115,7 +122,7 @@ bool consumeEnvShortOpts(const QString &tok, QStringList &tokens, bool &unparsea
     for (qsizetype i = 1; i < tok.size(); ++i) {
         const QChar c = tok.at(i);
         if (c == QLatin1Char('i') || c == QLatin1Char('0') || c == QLatin1Char('v')) {
-            continue; // -i/--ignore-environment, -0/--null, -v/--verbose: valueless
+            continue; // -i/--ignore-environment, -0/--null, -v/--debug: valueless
         }
         if (c == QLatin1Char('S')) {
             // -S/--split-string takes a single shell-syntax string that
@@ -179,9 +186,12 @@ ExecPrefix execPrefix(const QString &execLine)
         // Long options that take no value at all; a real `env` errors if
         // one of these is given as --opt=value, so this parser matches
         // that and fails closed rather than silently accepting it.
+        // (GNU env's --verbose does not exist; the valueless verbose/debug
+        // flag is -v/--debug, already covered by --debug and by 'v' in
+        // consumeEnvShortOpts.)
         static const QSet<QString> envLongOptNoValue = {
             QStringLiteral("--ignore-environment"), QStringLiteral("--null"),
-            QStringLiteral("--debug"), QStringLiteral("--verbose"),
+            QStringLiteral("--debug"),
             // no_argument in GNU env: it errors on --list-signal-handling=x,
             // so it lives here, not in the optional-value set below.
             QStringLiteral("--list-signal-handling"),
@@ -210,7 +220,42 @@ ExecPrefix execPrefix(const QString &execLine)
                 }
                 if (tok.startsWith(QLatin1String("--"))) {
                     const qsizetype eq = tok.indexOf(QLatin1Char('='));
-                    const QString name = eq < 0 ? tok : tok.left(eq);
+                    QString name = eq < 0 ? tok : tok.left(eq);
+                    const bool knownExactly = name == QLatin1String("--split-string")
+                        || envLongOptWithValue.contains(name) || envLongOptOptionalValue.contains(name)
+                        || envLongOptNoValue.contains(name);
+                    if (!knownExactly) {
+                        // Not an exact match against any known long
+                        // option: try resolving it as an unambiguous
+                        // prefix of exactly one, the way getopt_long does
+                        // ("--ignore-env" -> "--ignore-environment",
+                        // "--chd" -> "--chdir"). A prefix of two or more
+                        // known options (e.g. "--i", matching both
+                        // --ignore-environment and --ignore-signal) is
+                        // itself an ambiguity error in real getopt_long,
+                        // so that case is left unresolved here and falls
+                        // through to the same fail-closed branch below as
+                        // a genuinely unknown option.
+                        static const QStringList allLongOpts = [] {
+                            QStringList l;
+                            l << envLongOptWithValue.values() << envLongOptOptionalValue.values()
+                              << envLongOptNoValue.values() << QStringLiteral("--split-string");
+                            return l;
+                        }();
+                        QString onlyMatch;
+                        int matchCount = 0;
+                        for (const auto &known : allLongOpts) {
+                            if (known.startsWith(name)) {
+                                onlyMatch = known;
+                                if (++matchCount > 1) {
+                                    break;
+                                }
+                            }
+                        }
+                        if (matchCount == 1) {
+                            name = onlyMatch;
+                        }
+                    }
                     if (name == QLatin1String("--split-string")) {
                         unparseable = true;
                         break;
@@ -226,16 +271,17 @@ ExecPrefix execPrefix(const QString &execLine)
                     }
                     if (envLongOptNoValue.contains(name)) {
                         if (eq >= 0) {
-                            // e.g. "--verbose=x": this option takes no
-                            // value at all, not even optionally; real env
-                            // errors on it, so fail closed instead of
-                            // silently accepting and dropping the "=x".
+                            // e.g. "--debug=x": this option takes no value
+                            // at all, not even optionally; real env errors
+                            // on it, so fail closed instead of silently
+                            // accepting and dropping the "=x".
                             unparseable = true;
                             break;
                         }
                         continue;
                     }
-                    // Unrecognized long option: fail closed.
+                    // Unrecognized long option, or an ambiguous prefix of
+                    // two or more known ones: fail closed.
                     unparseable = true;
                     break;
                 }
@@ -261,6 +307,7 @@ ExecPrefix execPrefix(const QString &execLine)
             out.program = tok;
             break;
         }
+        out.unparseable = unparseable;
     }
     for (const auto &t : tokens) {
         if (!isExecFieldCode(t)) {
@@ -382,8 +429,21 @@ QList<DesktopApp> scanDesktopFiles(const QStringList &dirs)
             }
             // An Exec= line that unwraps to no real program (e.g. a bare
             // `env VAR=...` with nothing after it) can never launch;
-            // drop the entry rather than listing a dead target.
-            if (execPrefix(app.execLine).program.isEmpty()) {
+            // drop the entry rather than listing a dead target. When the
+            // cause is specifically an env option this parser could not
+            // resolve (as opposed to a wrapper that legitimately names no
+            // program), log which desktop entry was dropped and why: this
+            // used to fail silently, which turned a discovery false
+            // negative into unrecoverable data loss once
+            // Controller::reload() pruned the now-"dead" remembered hosts
+            // pointing at it.
+            const ExecPrefix prefix = execPrefix(app.execLine);
+            if (prefix.program.isEmpty()) {
+                if (prefix.unparseable) {
+                    qDebug() << "Lane: dropping desktop entry" << id
+                             << "- its Exec= env wrapper uses an option this parser does not recognize:"
+                             << app.execLine;
+                }
                 continue;
             }
             seen.insert(id);

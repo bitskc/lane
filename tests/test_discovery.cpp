@@ -847,6 +847,36 @@ private Q_SLOTS:
             // =value form must fail closed like --verbose=x does.
             {QStringLiteral("listSignalHandlingWithValue"), QByteArrayLiteral("env --list-signal-handling=x %EXEC% %u"), QString()},
             {QStringLiteral("chdirNoProgram"), QByteArrayLiteral("env --chdir=/tmp %u"), QString()},
+            // --default-signal etc. already resolve via exact match
+            // (envLongOptOptionalValue); this fixture just pins that the
+            // standalone case (not combined with --block-signal/
+            // --ignore-signal as blockDefaultIgnoreSignal exercises) also
+            // unwraps correctly.
+            {QStringLiteral("defaultSignalStandalone"), QByteArrayLiteral("env --default-signal=PIPE %EXEC% %u"), QStringLiteral("firefox")},
+            // getopt_long-style unambiguous long-option abbreviations:
+            // "--ignore-env" is a prefix of exactly one known option
+            // (--ignore-environment), so it resolves the same as the full
+            // name would.
+            {QStringLiteral("ignoreEnvAbbrev"), QByteArrayLiteral("env --ignore-env %EXEC% %u"), QStringLiteral("firefox")},
+            // "--chd" is a prefix of exactly one known option (--chdir,
+            // value-taking), and the value ("/tmp") must still be consumed
+            // as that option's argument, not mistaken for the program.
+            {QStringLiteral("chdirAbbrev"), QByteArrayLiteral("env --chd /tmp %EXEC% %u"), QStringLiteral("firefox")},
+            // Not a prefix of any known option at all: must fail closed
+            // like any other unrecognized long option.
+            {QStringLiteral("bogusLongOpt"), QByteArrayLiteral("env --bogus %EXEC% %u"), QString()},
+            // "--i" is a prefix of two known options (--ignore-environment
+            // and --ignore-signal): real getopt_long treats that as an
+            // ambiguous-option error, so this parser must fail closed
+            // exactly like an unrecognized option rather than guessing
+            // between them.
+            {QStringLiteral("ambiguousIPrefix"), QByteArrayLiteral("env --i %EXEC% %u"), QString()},
+            // --verbose is not a real GNU env option (env's -v/--debug
+            // covers verbose/debug output); now that it has been dropped
+            // from the no-value allowlist, it must fail closed like any
+            // other unrecognized long option instead of being silently
+            // accepted.
+            {QStringLiteral("verboseNoLongerRecognized"), QByteArrayLiteral("env --verbose %EXEC% %u"), QString()},
         };
 
         for (const auto &entry : entries) {
