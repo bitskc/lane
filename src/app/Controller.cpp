@@ -31,6 +31,7 @@
 #include <QQmlError>
 #include <QQuickStyle>
 #include <QScreen>
+#include <QSet>
 #include <QSharedPointer>
 #include <QTimer>
 #include <QUrl>
@@ -559,12 +560,53 @@ QStringList Controller::danglingRememberedHosts() const
 
 void Controller::clearDeadRemembered()
 {
+    // Explicit, user-confirmed action (the Settings "Clear dead" button):
+    // prune everything currently dangling immediately, no grace period.
+    // reload() never calls this directly any more; see
+    // pruneStaleRemembered() for the automatic path.
     const QStringList dead = danglingRememberedKeys(m_targets, m_config);
     if (dead.isEmpty()) {
         return;
     }
     for (const auto &host : dead) {
         m_config.remembered.remove(host);
+        m_rememberedMissCounts.remove(host);
+    }
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::pruneStaleRemembered()
+{
+    // How many consecutive reload() passes a dangling key must survive
+    // before it is treated as gone for good rather than a transient
+    // discovery miss. See m_rememberedMissCounts's doc comment in
+    // Controller.h for why a single miss is not enough evidence.
+    static constexpr int kGraceReloads = 3;
+    const QStringList dead = danglingRememberedKeys(m_targets, m_config);
+    const QSet<QString> deadSet(dead.begin(), dead.end());
+    // A key that is no longer dangling (its target reappeared) does not
+    // need a miss count any more.
+    for (auto it = m_rememberedMissCounts.begin(); it != m_rememberedMissCounts.end();) {
+        if (!deadSet.contains(it.key())) {
+            it = m_rememberedMissCounts.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    QStringList toPrune;
+    for (const auto &host : dead) {
+        const int misses = ++m_rememberedMissCounts[host];
+        if (shouldPruneRemembered(misses, kGraceReloads)) {
+            toPrune << host;
+        }
+    }
+    if (toPrune.isEmpty()) {
+        return;
+    }
+    for (const auto &host : toPrune) {
+        m_config.remembered.remove(host);
+        m_rememberedMissCounts.remove(host);
     }
     persist();
     Q_EMIT settingsChanged();
@@ -683,15 +725,20 @@ void Controller::reload()
     m_targetModel->setTargets(m_targets);
     m_ruleModel->setRules(m_config.rules);
     // Prune remembered-host entries that point at a target no longer
-    // installed (uninstalled browser, deleted profile): reuses the exact
-    // dead-check danglingRememberedHosts()/clearDeadRemembered() already
-    // use, and clearDeadRemembered() only persists when it actually
-    // removed something, so a normal reload with nothing dead never
-    // writes the config file. Must run after m_ruleModel->setRules()
+    // installed (uninstalled browser, deleted profile). This is
+    // pruneStaleRemembered(), not clearDeadRemembered(): reload() runs on
+    // every daemon start, Settings open, and Rediscover, so pruning
+    // immediately on the first pass a target is not seen would turn any
+    // transient discovery miss (Flatpak export dir mid-update, a bare
+    // systemd unit missing XDG_DATA_DIRS) into permanent, silent deletion
+    // of the user's remembered routing decision. pruneStaleRemembered()
+    // only persists once a key has been dangling for several consecutive
+    // reloads in a row, and only writes the config file on a reload that
+    // actually prunes something. Must run after m_ruleModel->setRules()
     // above: persist() reads m_ruleModel->rules() back into m_config, so
     // running this earlier would clobber the just-loaded rules with
     // whatever the model held before this reload.
-    clearDeadRemembered();
+    pruneStaleRemembered();
     refreshDefaultBrowserState();
     Q_EMIT settingsChanged();
     Q_EMIT defaultBrowserChanged();

@@ -30,6 +30,11 @@ QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &c
     return out;
 }
 
+bool shouldPruneRemembered(int missCount, int threshold)
+{
+    return missCount >= threshold;
+}
+
 const Target *defaultTarget(const QList<Target> &targets, const Config &config)
 {
     if (const Target *t = findTarget(targets, config.defaultTargetId)) {

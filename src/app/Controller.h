@@ -7,6 +7,7 @@
 #include "core/types.h"
 #include "core/pipeline.h"
 
+#include <QHash>
 #include <QObject>
 #include <QPointer>
 #include <QQmlApplicationEngine>
@@ -177,6 +178,14 @@ private:
     void hideHold();
     UnshortenFn unshortenFn() const;
     void refreshDefaultBrowserState();
+    // Automatic counterpart to the manual clearDeadRemembered() above:
+    // called from reload() on every daemon start/Settings open/Rediscover,
+    // so it must not delete a remembered host the first time discovery
+    // fails to see its target (see m_rememberedMissCounts below). Only
+    // clearDeadRemembered() itself (the Settings "Clear dead" button)
+    // prunes immediately, because that is an explicit, user-confirmed
+    // action rather than an automatic side effect of reloading.
+    void pruneStaleRemembered();
 
     Config m_config;
     QString m_configPath;
@@ -193,6 +202,17 @@ private:
     // direct silent launch; the picker and hold paths request their own
     // fresh token instead (see requestActivationAndLaunch()).
     QString m_pendingActivationToken;
+    // Consecutive reload() passes each currently-dangling remembered-host
+    // key (see danglingRememberedKeys()) has stayed dangling. A discovery
+    // false negative (Flatpak export dir mid-update, a bare systemd unit
+    // with no XDG_DATA_DIRS, etc.) looks identical to the target actually
+    // being uninstalled on any single pass, so pruneStaleRemembered() only
+    // deletes a remembered host once its miss count reaches the grace
+    // period (see shouldPruneRemembered() in router.h); a key that
+    // reappears as installed is dropped from this map again. Not part of
+    // Controller's public/QML-facing API: entries come and go purely as a
+    // side effect of reload().
+    QHash<QString, int> m_rememberedMissCounts;
 
     PickerModel *m_pickerModel = nullptr;
     TargetModel *m_targetModel = nullptr;
