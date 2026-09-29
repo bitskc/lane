@@ -748,6 +748,12 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp, const 
     // running instance and Zen reports "already running but not
     // responding". profileDir keeps the host path for Lane's own file
     // reads; only the argv spelling is translated.
+    // ponytail: assumes the app's default Flatpak persist layout (in-sandbox
+    // mount at ~/<subdir>, matching the host's ~/.var/app/<id>/<subdir>). A
+    // user `flatpak override --persist=src:dest` that remaps the mount
+    // elsewhere would defeat this translation; detect via
+    // ~/.local/share/flatpak/overrides/<id> only if override users report
+    // the "not responding" dialog recurring.
     auto launchProfileDir = [&](const QString &hostDir) {
         if (flatpakId.isEmpty()) {
             return hostDir;

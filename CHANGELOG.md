@@ -7,7 +7,19 @@ version is 0, minor releases may still contain breaking changes.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The Flatpak container profile test now checks that `--profile` carries
+  the sandbox-spelled path, not just that the host path is missing.
+  Before, a container plumbing bug that fed in a wrong but non-host path
+  would have passed silently.
+
+- The comment on the Flatpak `--profile` translation now names its
+  assumption: it expects the app's default persist layout. A user who
+  remaps the in-sandbox mount with a `flatpak override --persist`
+  override would still see the "already running but not responding"
+  dialog, since Lane has no way to read that override from the desktop
+  entry alone.
 
 ## [0.3.0] - 2026-09-28
 
