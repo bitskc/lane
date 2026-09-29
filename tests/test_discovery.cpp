@@ -843,6 +843,9 @@ private Q_SLOTS:
             {QStringLiteral("chdirEquals"), QByteArrayLiteral("env --chdir=/tmp %EXEC% %u"), QStringLiteral("firefox")},
             {QStringLiteral("chdirSpace"), QByteArrayLiteral("env --chdir /tmp %EXEC% %u"), QStringLiteral("firefox")},
             {QStringLiteral("verboseWithValue"), QByteArrayLiteral("env --verbose=x %EXEC% %u"), QString()},
+            // GNU env declares --list-signal-handling no_argument, so the
+            // =value form must fail closed like --verbose=x does.
+            {QStringLiteral("listSignalHandlingWithValue"), QByteArrayLiteral("env --list-signal-handling=x %EXEC% %u"), QString()},
             {QStringLiteral("chdirNoProgram"), QByteArrayLiteral("env --chdir=/tmp %u"), QString()},
         };
 

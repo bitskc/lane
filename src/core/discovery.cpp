@@ -182,13 +182,16 @@ ExecPrefix execPrefix(const QString &execLine)
         static const QSet<QString> envLongOptNoValue = {
             QStringLiteral("--ignore-environment"), QStringLiteral("--null"),
             QStringLiteral("--debug"), QStringLiteral("--verbose"),
+            // no_argument in GNU env: it errors on --list-signal-handling=x,
+            // so it lives here, not in the optional-value set below.
+            QStringLiteral("--list-signal-handling"),
         };
         // Long options that take an OPTIONAL value, only via --opt=value
         // (never the next token). Lane ignores the value either way, so
         // an attached "=..." is simply tolerated rather than parsed.
         static const QSet<QString> envLongOptOptionalValue = {
             QStringLiteral("--block-signal"), QStringLiteral("--default-signal"),
-            QStringLiteral("--ignore-signal"), QStringLiteral("--list-signal-handling"),
+            QStringLiteral("--ignore-signal"),
         };
         bool optionsDone = false;
         bool unparseable = false;
