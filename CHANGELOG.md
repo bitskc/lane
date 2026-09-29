@@ -15,11 +15,10 @@ version is 0, minor releases may still contain breaking changes.
   would have passed silently.
 
 - The comment on the Flatpak `--profile` translation now names its
-  assumption: it expects the app's default persist layout. A user who
-  remaps the in-sandbox mount with a `flatpak override --persist`
-  override would still see the "already running but not responding"
-  dialog, since Lane has no way to read that override from the desktop
-  entry alone.
+  assumption: it expects the app's default persist layout. That holds
+  even under `flatpak override --persist`, which only bind-mounts a
+  homedir path to the same subpath; the residual risk is a profile store
+  that is not reached through a persist bind mount at all.
 
 ## [0.3.0] - 2026-09-28
 
