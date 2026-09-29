@@ -176,17 +176,35 @@ ExecPrefix execPrefix(const QString &execLine)
         static const QSet<QString> envLongOptWithValue = {
             QStringLiteral("--unset"), QStringLiteral("--chdir"), QStringLiteral("--argv0"),
         };
-        // Long options that take no value.
+        // Long options that take no value at all; a real `env` errors if
+        // one of these is given as --opt=value, so this parser matches
+        // that and fails closed rather than silently accepting it.
         static const QSet<QString> envLongOptNoValue = {
             QStringLiteral("--ignore-environment"), QStringLiteral("--null"),
             QStringLiteral("--debug"), QStringLiteral("--verbose"),
+            // no_argument in GNU env: it errors on --list-signal-handling=x,
+            // so it lives here, not in the optional-value set below.
+            QStringLiteral("--list-signal-handling"),
+        };
+        // Long options that take an OPTIONAL value, only via --opt=value
+        // (never the next token). Lane ignores the value either way, so
+        // an attached "=..." is simply tolerated rather than parsed.
+        static const QSet<QString> envLongOptOptionalValue = {
+            QStringLiteral("--block-signal"), QStringLiteral("--default-signal"),
+            QStringLiteral("--ignore-signal"),
         };
         bool optionsDone = false;
         bool unparseable = false;
         while (!unparseable && !tokens.isEmpty()) {
             const QString tok = tokens.takeFirst();
             if (!optionsDone) {
-                if (tok == QLatin1String("--")) {
+                if (tok == QLatin1String("--") || tok == QLatin1String("-")) {
+                    // GNU env treats a bare "-" exactly like "--": both end
+                    // option scanning. GNU env also treats a bare "-" as
+                    // shorthand for -i (ignore-environment), but Lane never
+                    // re-execs env (it only inspects Exec= to find the
+                    // wrapped program), so that -i effect is vacuous here;
+                    // only the terminator effect matters.
                     optionsDone = true;
                     continue;
                 }
@@ -203,7 +221,18 @@ ExecPrefix execPrefix(const QString &execLine)
                         }
                         continue;
                     }
+                    if (envLongOptOptionalValue.contains(name)) {
+                        continue;
+                    }
                     if (envLongOptNoValue.contains(name)) {
+                        if (eq >= 0) {
+                            // e.g. "--verbose=x": this option takes no
+                            // value at all, not even optionally; real env
+                            // errors on it, so fail closed instead of
+                            // silently accepting and dropping the "=x".
+                            unparseable = true;
+                            break;
+                        }
                         continue;
                     }
                     // Unrecognized long option: fail closed.
@@ -219,6 +248,14 @@ ExecPrefix execPrefix(const QString &execLine)
                 optionsDone = true;
             }
             if (assignment.match(tok).hasMatch()) {
+                continue;
+            }
+            if (isExecFieldCode(tok)) {
+                // A field code (e.g. bare "%u") can never be the program;
+                // it is Lane/the desktop spec's own placeholder. Skip it
+                // rather than accepting it as a fake "program" (an Exec=
+                // that unwraps to nothing but options and field codes
+                // leaves program empty and the entry is dropped).
                 continue;
             }
             out.program = tok;

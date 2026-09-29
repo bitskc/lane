@@ -20,6 +20,35 @@ version is 0, minor releases may still contain breaking changes.
   homedir path to the same subpath; the residual risk is a profile store
   that is not reached through a persist bind mount at all.
 
+- A bare `env -` prefix (POSIX-compat shorthand for `env --`) is now
+  treated as an options terminator, matching real `env`. Previously
+  Lane kept scanning tokens after it for more options, so
+  `env - --debug --ignore-environment firefox` could resolve to the
+  wrong program instead of stopping option parsing at the `-`.
+
+- `env`'s signal-handling long options (`--block-signal`,
+  `--default-signal`, `--ignore-signal`, `--list-signal-handling`) are
+  now recognized, so `Exec=env --list-signal-handling firefox %u` and
+  similar entries resolve to firefox instead of being dropped as an
+  unparseable wrapper.
+
+- A field code left over after an `env` prefix (for example
+  `Exec=env --chdir=/tmp %u` with no real program token) is no longer
+  mistaken for the program. The entry is correctly dropped instead of
+  resolving to the literal `%u`.
+
+- `env --verbose=x` (and other no-value long options given a `=value`
+  they cannot take) is now rejected the same way real `env` rejects
+  it, instead of silently accepting the option and discarding the
+  value.
+
+- CI's merge-conflict-marker and trailing-newline guards now scan the
+  whole tree (excluding review notes and the workflow file itself)
+  instead of a fixed path allowlist, so a violation outside the
+  allowlisted directories can no longer slip through unnoticed. The
+  newline guard also flags an unexpected binary file instead of
+  silently skipping it.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added

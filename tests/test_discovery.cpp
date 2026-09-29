@@ -827,6 +827,26 @@ private Q_SLOTS:
             {QStringLiteral("bundledShortOpts"), QByteArrayLiteral("env -iu MOZ_X11 %EXEC% %u"), QStringLiteral("firefox")},
             {QStringLiteral("splitString"), QByteArrayLiteral("env -S '%EXEC% --kiosk' %u"), QString()},
             {QStringLiteral("dead"), QByteArrayLiteral("env -i"), QString()},
+            {QStringLiteral("bareDashTerminator"), QByteArrayLiteral("env - %EXEC% %u"), QStringLiteral("firefox")},
+            // Distinguishes correct "-" terminator handling from just
+            // silently no-op'ing on the empty short-opt cluster: once
+            // option scanning is over, GNU env treats the next token as
+            // the program even if it looks like a flag (verified against
+            // real `env - --debug ... prog`, which tries to exec
+            // "--debug" and fails). If "-" wrongly kept option scanning
+            // alive, "--verbose" would be recognized and skipped, and
+            // this would resolve to firefox instead of the literal "--verbose" token.
+            {QStringLiteral("bareDashThenFlagLikeToken"), QByteArrayLiteral("env - --verbose %EXEC% %u"), QStringLiteral("--verbose")},
+            {QStringLiteral("listSignalHandling"), QByteArrayLiteral("env --list-signal-handling %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("blockDefaultIgnoreSignal"),
+             QByteArrayLiteral("env --block-signal --default-signal=INT --ignore-signal %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("chdirEquals"), QByteArrayLiteral("env --chdir=/tmp %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("chdirSpace"), QByteArrayLiteral("env --chdir /tmp %EXEC% %u"), QStringLiteral("firefox")},
+            {QStringLiteral("verboseWithValue"), QByteArrayLiteral("env --verbose=x %EXEC% %u"), QString()},
+            // GNU env declares --list-signal-handling no_argument, so the
+            // =value form must fail closed like --verbose=x does.
+            {QStringLiteral("listSignalHandlingWithValue"), QByteArrayLiteral("env --list-signal-handling=x %EXEC% %u"), QString()},
+            {QStringLiteral("chdirNoProgram"), QByteArrayLiteral("env --chdir=/tmp %u"), QString()},
         };
 
         for (const auto &entry : entries) {

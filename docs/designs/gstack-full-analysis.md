@@ -93,7 +93,7 @@ in RELEASING.md, plus a cheap CI grep for conflict markers (below).
 **Merge-conflict junk is a recurring bug class with zero guard.**
 DevEx found two cleanup commits for CHANGELOG contamination
 (`bef9c23`, `3fde33f`) and prior rounds cite a third. No hook, no CI
-step greps for `<<<<`, `>>>>`, `=======`, or `conflict://`. One CI
+step greps for `<<<<`, `>>>>`, `=======`, or agent conflict-tool output. One CI
 grep line ends the class permanently.
 
 **The distribution blocker is unchanged and still human.** Third round
@@ -191,7 +191,7 @@ Ordered by user impact, not reviewer loudness.
 | 9 | Flatpak Edge fingerprints as Generic: blob check wants `microsoft-edge`/`msedge` but "Microsoft Edge" lowercases to `microsoft edge`. No profiles, no incognito row, no `~/.var/app` dir. Any flatpak browser whose Name lacks the hyphenated brand hits the same wall. | eng #3; discovery.cpp:454 | Match the flatpak app id when `isFlatpak`, or add `microsoft edge` plus word-boundary `edge`. |
 | 10 | `suggested` role bound but never rendered; Alt+A not in footer. The smart default has no visual cue beyond whatever bucketing put first; the only keyboard path to Always is unlabeled. | design #3, #5 | Render `suggested` (badge/weight) once #33 pins it to row 0; add Alt+A to the footer. |
 | 11 | Doc-drift sweep (one theme): launcher.cpp:100 comment overclaims; config.cpp:225 "silently ignored" stale; unshorten.cpp:27 UA `Lane/0.1`; schema lists dead `title`/`process` locations; CHANGELOG 0.1.0 overclaims; CONTRIBUTING ctest-without-install false-greens appstreamtest; no openSUSE build docs. | eng #10; devex #1, #2, #4, #5 | One pass over comments, schema, CONTRIBUTING, README; add "docs match behavior" to RELEASING.md. |
-| 12 | No guard against merge-conflict junk in committed files. Three CHANGELOG contaminations across rounds; no hook, no CI grep. | devex #3 | One CI step grepping `<<<<`, `>>>>`, `=======`, `conflict://`. Ends the class. |
+| 12 | No guard against merge-conflict junk in committed files. Three CHANGELOG contaminations across rounds; no hook, no CI grep. | devex #3 | One CI step grepping `<<<<`, `>>>>`, `=======`, and agent conflict-tool output. Ends the class. |
 | 13 | `env -a`/`--argv0` unwraps to the wrong program (dead or wrong target, never a shell). Fail-closed, P4. | eng #6 | Add `-a`/`--argv0` to `envOptWithValue`. |
 | 14 | Activation-token fallback discards the click's own token: `finish(QString())` instead of `finish(m_pendingActivationToken)` when a Lane window exists. Rare, low-cost. | eng #8 | Pass the pending token through. |
 | 15 | Stale firefoxpwa config produces dead PWA rows when the binary is absent. | eng #9 | Skip PWA discovery when `firefoxpwa` does not resolve. |
