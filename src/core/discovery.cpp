@@ -748,6 +748,14 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp, const 
     // running instance and Zen reports "already running but not
     // responding". profileDir keeps the host path for Lane's own file
     // reads; only the argv spelling is translated.
+    // Assumes the app's default Flatpak persist layout (in-sandbox mount at
+    // ~/<subdir>, matching the host's ~/.var/app/<id>/<subdir>). That
+    // assumption is exact for every gecko flatpakRelDir Lane registers —
+    // `flatpak override --persist=FILENAME` only bind-mounts the homedir
+    // path to the same subpath, so it cannot remap the mount elsewhere.
+    // The real residual risk is a profile store not reached through a
+    // persist bind mount at all; revisit only if users report the
+    // "not responding" dialog recurring on a flatpak browser.
     auto launchProfileDir = [&](const QString &hostDir) {
         if (flatpakId.isEmpty()) {
             return hostDir;

@@ -292,6 +292,7 @@ private Q_SLOTS:
         QVERIFY(work->args.contains(QStringLiteral("app.zen_browser.zen")));
         QVERIFY(work->args.contains(QStringLiteral("--profile")));
         QVERIFY(!work->args.contains(zenDefault->profileDir));
+        QVERIFY(work->args.contains(sandboxProfileDir));
     }
 
     void stripsFlatpakFileForwardingMarkersFromExecPrefix()
