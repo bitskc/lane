@@ -119,6 +119,11 @@ struct Click {
     QString processName;
     QString windowTitle;
     bool forcePicker = false;
+    // Tracking-parameter keys the clean-links cleaner dropped from
+    // matchUrl (see runPipeline() in pipeline.cpp). Empty when
+    // stripTrackingParams is off, the URL had no query, or nothing
+    // matched the banned-key set.
+    QStringList removedTrackingParams;
 };
 
 struct Decision {
@@ -143,6 +148,7 @@ struct Config {
     bool toast = true;
     bool unwrapO365 = true;
     bool unshorten = true;
+    bool stripTrackingParams = true;
     bool openUnwrapped = false;
     bool preferPwa = true;
     bool holdAutoOpen = false;

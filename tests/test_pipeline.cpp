@@ -122,6 +122,80 @@ private Q_SLOTS:
         QCOMPARE(c.matchUrl, QStringLiteral("https://bit.ly/hop-4"));
         QCOMPARE(calls, 4);
     }
+
+    void cleanLinksStripsTrackedParam()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?utm_source=newsletter&id=5"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?id=5"));
+        QCOMPARE(c.removedTrackingParams, QStringList{QStringLiteral("utm_source")});
+    }
+
+    void cleanLinksPreservesFragment()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/page?utm_source=x#section"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/page#section"));
+    }
+
+    void cleanLinksEmptiedQueryLeavesNoTrailingMark()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/page?utm_source=x&utm_medium=y"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/page"));
+    }
+
+    void cleanLinksPreservesBase64PaddingByteForByte()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?token=YWJj==&utm_source=x"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?token=YWJj=="));
+    }
+
+    void cleanLinksStripsSiOnYoutube()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://youtube.com/watch?v=abc&si=xyz"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://youtube.com/watch?v=abc"));
+    }
+
+    void cleanLinksKeepsSiOffYoutube()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?si=xyz"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?si=xyz"));
+    }
+
+    void cleanLinksStripsUppercaseUtm()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?UTM_SOURCE=x&id=5"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?id=5"));
+    }
+
+    void cleanLinksStripsSemicolonSeparatedTracker()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?a=1;utm_source=x"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?a=1"));
+    }
+
+    void cleanLinksLeavesMailtoUntouched()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("mailto:test@example.com?subject=hi&utm_source=x"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("mailto:test@example.com?subject=hi&utm_source=x"));
+        QVERIFY(c.removedTrackingParams.isEmpty());
+    }
+
+    void cleanLinksToggleOffLeavesUrlUntouched()
+    {
+        Config cfg;
+        cfg.stripTrackingParams = false;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?utm_source=x&id=5"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?utm_source=x&id=5"));
+        QVERIFY(c.removedTrackingParams.isEmpty());
+    }
 };
 
 QTEST_MAIN(PipelineTest)

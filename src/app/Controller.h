@@ -37,6 +37,7 @@ class Controller : public QObject
     Q_PROPERTY(bool toastEnabled READ toastEnabled WRITE setToastEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool unwrapO365 READ unwrapO365 WRITE setUnwrapO365 NOTIFY settingsChanged)
     Q_PROPERTY(bool unshorten READ unshorten WRITE setUnshorten NOTIFY settingsChanged)
+    Q_PROPERTY(bool stripTrackingParams READ stripTrackingParams WRITE setStripTrackingParams NOTIFY settingsChanged)
     Q_PROPERTY(bool autostart READ autostart WRITE setAutostartEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool closeOnFocusLoss READ closeOnFocusLoss WRITE setCloseOnFocusLoss NOTIFY settingsChanged)
     Q_PROPERTY(bool showUrl READ showUrl WRITE setShowUrl NOTIFY settingsChanged)
@@ -91,6 +92,8 @@ public:
     void setUnwrapO365(bool on);
     bool unshorten() const { return m_config.unshorten; }
     void setUnshorten(bool on);
+    bool stripTrackingParams() const { return m_config.stripTrackingParams; }
+    void setStripTrackingParams(bool on);
     bool autostart() const { return m_config.autostart; }
     void setAutostartEnabled(bool on);
     bool closeOnFocusLoss() const { return m_config.closeOnFocusLoss; }
