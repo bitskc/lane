@@ -51,6 +51,11 @@ Window {
     Shortcut { sequence: "Down"; onActivated: list.incrementCurrentIndex() }
     Shortcut { sequence: "Up"; onActivated: list.decrementCurrentIndex() }
     Shortcut { sequence: "Alt+A"; onActivated: controller.alwaysForHost = !controller.alwaysForHost }
+    Shortcut {
+        sequence: "Alt+P"
+        enabled: list.currentIndex >= 0
+        onActivated: controller.pickPrivate(list.currentItem.targetId)
+    }
 
     Rectangle {
         id: dim
@@ -221,6 +226,7 @@ Window {
                 currentIndex: 0
                 boundsBehavior: Flickable.StopAtBounds
                 highlightMoveDuration: 80
+                onCurrentIndexChanged: controller.clearPickerNotice()
 
                 Accessible.role: Accessible.List
                 Accessible.name: "Destinations"
@@ -363,6 +369,20 @@ Window {
                 color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
             }
 
+            QQC.Label {
+                id: privateNotice
+                width: parent.width
+                visible: controller.pickerNotice.length > 0
+                text: controller.pickerNotice
+                color: Kirigami.Theme.negativeTextColor
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+
+                Accessible.role: Accessible.StaticText
+                Accessible.name: controller.pickerNotice
+            }
+
             ColumnLayout {
                 width: parent.width
                 spacing: 6
@@ -467,6 +487,15 @@ Window {
                         font.pixelSize: 10
                         font.family: "monospace"
                         opacity: 0.4
+                    }
+                    QQC.Label {
+                        text: "alt+p private"
+                        font.pixelSize: 10
+                        font.family: "monospace"
+                        opacity: 0.4
+
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: "Open in private window, shortcut Alt P"
                     }
                     Item { Layout.fillWidth: true }
                     // Ladder keys: "," narrows the destination (adds a path

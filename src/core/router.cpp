@@ -19,6 +19,30 @@ const Target *findTarget(const QList<Target> &targets, const QString &id)
     return nullptr;
 }
 
+Target privateCounterpart(const QList<Target> &targets, const Target &t)
+{
+    if (t.incognito) {
+        return t;
+    }
+    // Only Gecko and Chromium profiles ever get a private/incognito
+    // sibling generated for them (see geckoProfiles()/chromiumProfiles()
+    // in discovery.cpp); Generic, Pwa, and Action targets never do, so
+    // they fail closed here without a lookup.
+    if (t.engine != Engine::Gecko && t.engine != Engine::Chromium) {
+        return Target();
+    }
+    QString baseId = t.id;
+    if (t.kind == Kind::Container) {
+        const int idx = baseId.lastIndexOf(QStringLiteral(":container:"));
+        if (idx >= 0) {
+            baseId = baseId.left(idx);
+        }
+    }
+    const QString candidateId = baseId + (t.engine == Engine::Gecko ? QStringLiteral(":private") : QStringLiteral(":incognito"));
+    const Target *candidate = findTarget(targets, candidateId);
+    return candidate ? *candidate : Target();
+}
+
 QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &config)
 {
     QStringList out;
