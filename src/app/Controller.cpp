@@ -215,6 +215,13 @@ void Controller::setUnshorten(bool on)
     Q_EMIT settingsChanged();
 }
 
+void Controller::setStripTrackingParams(bool on)
+{
+    m_config.stripTrackingParams = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
 void Controller::setAutostartEnabled(bool on)
 {
     m_config.autostart = on;
