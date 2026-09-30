@@ -57,6 +57,11 @@
             "default": true,
             "description": "Open installed web apps automatically when the link belongs to them"
         },
+        "stripTrackingParams": {
+            "type": "boolean",
+            "default": true,
+            "description": "Strip tracking query parameters (utm_*, fbclid, gclid, etc.) before routing"
+        },
         "holdAutoOpen": {
             "type": "boolean",
             "default": false,
