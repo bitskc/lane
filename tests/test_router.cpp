@@ -16,6 +16,30 @@ static Target makeBrowser(const QString &id, const QString &name, bool def = fal
     return t;
 }
 
+static Target makeChromiumBrowser(const QString &id, const QString &name, const QString &brand = QStringLiteral("Brave"))
+{
+    Target t;
+    t.id = id;
+    t.kind = Kind::BrowserProfile;
+    t.engine = Engine::Chromium;
+    t.name = name;
+    t.browserName = brand;
+    return t;
+}
+
+static Target makeContainer(const QString &baseId, int containerId, const QString &name)
+{
+    Target t;
+    t.id = baseId + QStringLiteral(":container:") + QString::number(containerId);
+    t.kind = Kind::Container;
+    t.engine = Engine::Gecko;
+    t.name = name;
+    t.browserName = QStringLiteral("Zen");
+    t.containerId = containerId;
+    t.containerName = name;
+    return t;
+}
+
 static Target makePwa(const QString &id, const QString &name, const QString &scope)
 {
     Target t;
@@ -307,6 +331,82 @@ private Q_SLOTS:
         QVERIFY(!shouldPruneRemembered(2, 3));
         QVERIFY(shouldPruneRemembered(3, 3));
         QVERIFY(shouldPruneRemembered(4, 3));
+    }
+
+    void privateCounterpartGeckoMatchesPrivateSibling()
+    {
+        Target def = makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true);
+        Target priv = makeBrowser(QStringLiteral("browser:zen:def:private"), QStringLiteral("Default (Private)"));
+        priv.incognito = true;
+        QList<Target> targets{def, priv};
+        const Target result = privateCounterpart(targets, def);
+        QCOMPARE(result.id, priv.id);
+    }
+
+    void privateCounterpartChromiumMatchesIncognitoSibling()
+    {
+        Target def = makeChromiumBrowser(QStringLiteral("browser:brave:Default"), QStringLiteral("Default"));
+        Target inc = makeChromiumBrowser(QStringLiteral("browser:brave:Default:incognito"), QStringLiteral("Default (Incognito)"));
+        inc.incognito = true;
+        QList<Target> targets{def, inc};
+        const Target result = privateCounterpart(targets, def);
+        QCOMPARE(result.id, inc.id);
+    }
+
+    // Brave ships a separate Tor profile alongside the regular incognito
+    // sibling; Alt+P on the normal Brave profile must land on
+    // ":incognito", never accidentally on ":tor" just because it is also
+    // present and also marked incognito.
+    void privateCounterpartBraveDoesNotMatchTorSibling()
+    {
+        Target def = makeChromiumBrowser(QStringLiteral("browser:brave:Default"), QStringLiteral("Default"));
+        Target tor = makeChromiumBrowser(QStringLiteral("browser:brave:tor"), QStringLiteral("Tor"));
+        tor.incognito = true;
+        QList<Target> targets{def, tor};
+        const Target result = privateCounterpart(targets, def);
+        QVERIFY(result.id.isEmpty());
+    }
+
+    void privateCounterpartContainerStripsToBaseAndFindsPrivate()
+    {
+        Target base = makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true);
+        Target container = makeContainer(QStringLiteral("browser:zen:def"), 1, QStringLiteral("Work"));
+        Target priv = makeBrowser(QStringLiteral("browser:zen:def:private"), QStringLiteral("Default (Private)"));
+        priv.incognito = true;
+        QList<Target> targets{base, container, priv};
+        const Target result = privateCounterpart(targets, container);
+        QCOMPARE(result.id, priv.id);
+    }
+
+    void privateCounterpartAlreadyIncognitoReturnsSelf()
+    {
+        Target priv = makeBrowser(QStringLiteral("browser:zen:def:private"), QStringLiteral("Default (Private)"));
+        priv.incognito = true;
+        QList<Target> targets{priv};
+        const Target result = privateCounterpart(targets, priv);
+        QCOMPARE(result.id, priv.id);
+    }
+
+    void privateCounterpartFailsClosedForGenericPwaAndAction()
+    {
+        Target pwa = makePwa(QStringLiteral("pwa:gh"), QStringLiteral("GitHub"), QStringLiteral("https://github.com/"));
+        Target action = makeAction(QStringLiteral("action:email"), QStringLiteral("Email link"));
+        Target custom;
+        custom.id = QStringLiteral("custom:script");
+        custom.kind = Kind::Custom;
+        custom.engine = Engine::Generic;
+        custom.name = QStringLiteral("Script");
+        QList<Target> targets{pwa, action, custom};
+        QVERIFY(privateCounterpart(targets, pwa).id.isEmpty());
+        QVERIFY(privateCounterpart(targets, action).id.isEmpty());
+        QVERIFY(privateCounterpart(targets, custom).id.isEmpty());
+    }
+
+    void privateCounterpartNoSiblingFailsClosed()
+    {
+        Target lone = makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true);
+        QList<Target> targets{lone};
+        QVERIFY(privateCounterpart(targets, lone).id.isEmpty());
     }
 };
 

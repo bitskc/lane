@@ -458,6 +458,38 @@ void Controller::pickId(const QString &id)
     hidePicker();
 }
 
+void Controller::pickPrivate(const QString &targetId)
+{
+    const Target *t = findTarget(m_targets, targetId);
+    if (!t) {
+        return;
+    }
+    const Target priv = privateCounterpart(m_targets, *t);
+    if (priv.id.isEmpty()) {
+        // Fail closed: never launch a normal window as a fallback. Leave
+        // the picker open so the notice is visible and the user can try a
+        // different target.
+        m_pickerNotice = QStringLiteral("No private mode for ") + t->displayName();
+        Q_EMIT pickerNoticeChanged();
+        return;
+    }
+    // Deliberately does not go through pickId(): this bypasses
+    // alwaysForHost/remembered persistence entirely so an ephemeral
+    // Alt+P launch leaves no trace in config.remembered.
+    QWindow *window = (m_pickerWindow && m_pickerWindow->isVisible()) ? m_pickerWindow.data() : nullptr;
+    requestActivationAndLaunch(priv, QStringLiteral("picker-private"), window, m_click);
+    hidePicker();
+}
+
+void Controller::clearPickerNotice()
+{
+    if (m_pickerNotice.isEmpty()) {
+        return;
+    }
+    m_pickerNotice.clear();
+    Q_EMIT pickerNoticeChanged();
+}
+
 void Controller::cancelPicker()
 {
     hidePicker();
@@ -805,6 +837,7 @@ void Controller::applyDecision(const Decision &d)
 void Controller::showPicker()
 {
     ensurePickerEngine();
+    clearPickerNotice();
     if (m_pickerWindow) {
         m_pickerWindow->show();
         m_pickerWindow->requestActivate();
@@ -835,7 +868,11 @@ void Controller::launch(const Target &target, const QString &reason, const QStri
         auto *n = new KNotification(QStringLiteral("launch-failed"), KNotification::CloseOnTimeout, this);
         n->setComponentName(QStringLiteral("app.lane.Lane"));
         n->setTitle(QStringLiteral("Could not open in %1").arg(target.displayName()));
-        n->setText(click.host.isEmpty() ? QStringLiteral("The launch failed.") : click.host);
+        // picker-private launches never surface the host, so a failure
+        // for one does not leak it into Plasma's notification history
+        // either.
+        const bool suppressHost = reason == QLatin1String("picker-private");
+        n->setText(!suppressHost && !click.host.isEmpty() ? click.host : QStringLiteral("The launch failed."));
         n->setIconName(QStringLiteral("dialog-error"));
         n->sendEvent();
         return;
@@ -882,9 +919,11 @@ void Controller::toast(const Target &target, const QString &reason, const QStrin
     auto *n = new KNotification(QStringLiteral("opened"), KNotification::CloseOnTimeout, this);
     n->setComponentName(QStringLiteral("app.lane.Lane"));
     n->setTitle(QStringLiteral("Opened in %1").arg(target.displayName()));
-    n->setText(host.isEmpty() ? QStringLiteral("Link opened") : host);
+    // picker-private launches are ephemeral by design: the host must
+    // never land in Plasma's notification history for one of them.
+    const bool suppressHost = reason == QLatin1String("picker-private");
+    n->setText(!suppressHost && !host.isEmpty() ? host : QStringLiteral("Link opened"));
     n->setIconName(target.icon.isEmpty() ? QStringLiteral("app.lane.Lane") : target.icon);
-    Q_UNUSED(reason);
     n->sendEvent();
 }
 

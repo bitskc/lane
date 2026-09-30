@@ -11,6 +11,17 @@ const Target *findTarget(const QList<Target> &targets, const QString &id);
 const Target *defaultTarget(const QList<Target> &targets, const Config &config);
 QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &config);
 
+// Resolves the private/incognito sibling of a target for the picker's
+// Alt+P shortcut. Already-incognito targets return themselves. Container
+// targets (id suffixed ":container:N") resolve against their base
+// profile's sibling. Matching is by exact profile id only
+// (id + ":private" for Gecko, id + ":incognito" for Chromium) so a
+// same-browser sibling with an unrelated purpose (Brave's ":tor" profile)
+// is never mistaken for the counterpart. Any target with no such sibling
+// in the list -- a PWA, a custom action, an unmatched browser -- fails
+// closed: a default-constructed (empty-id) Target, never a guess.
+Target privateCounterpart(const QList<Target> &targets, const Target &t);
+
 // Grace-period decision for automatic remembered-host pruning: a target
 // missing from one discovery pass is not necessarily uninstalled (a
 // transient discovery false negative, e.g. a Flatpak export dir mid-update

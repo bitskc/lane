@@ -7,6 +7,37 @@ version is 0, minor releases may still contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- An `Alt+P` shortcut in the picker opens the highlighted destination's
+  private or incognito window instead of its normal one. It matches the
+  exact sibling profile Lane already discovers (a Gecko profile's
+  `:private` twin, a Chromium profile's `:incognito` twin), so a
+  multi-profile browser never opens the wrong person's private window,
+  and a Brave user hitting `Alt+P` never ends up in Brave's separate
+  Tor window by mistake. Picking a container tab resolves to its parent
+  profile's private window. If the highlighted destination has no
+  private counterpart (a PWA, a custom action, some other app), Lane
+  shows "No private mode for <name>" inline and leaves the picker open
+  instead of opening anything. These launches never get written to
+  "always use this for this site" memory and never show the site's
+  host in the Plasma notification, since the whole point is to leave
+  no trace of which site you visited privately.
+
+### Changed
+
+- Lane now strips common tracking parameters (`utm_*`, `fbclid`,
+  `gclid`, and friends, plus YouTube/Spotify's `si`) before matching a
+  link against rules, and this is on by default. The link that actually
+  opens is untouched byte-for-byte; only the copy used for rule
+  matching is cleaned, so base64 tokens, semicolon-separated values,
+  and non-ASCII paths or hostnames in the real URL are never at risk
+  of being mangled. Existing rules written against a tracking
+  parameter itself (matching on `utm_source=`, for example) may need
+  updating, since that parameter is now gone by the time matching
+  happens. Turn off the new "Clean links before routing" switch in
+  Preferences to go back to matching on the raw, unstripped link.
+
 ### Fixed
 
 - The Flatpak container profile test now checks that `--profile` carries
