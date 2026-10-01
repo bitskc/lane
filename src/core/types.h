@@ -149,6 +149,7 @@ struct Config {
     bool unwrapO365 = true;
     bool unshorten = true;
     bool stripTrackingParams = true;
+    bool watchdogEnabled = true;
     bool openUnwrapped = false;
     bool preferPwa = true;
     bool holdAutoOpen = false;

@@ -95,5 +95,12 @@ FormCard.FormCardPage {
             checked: controller.toastEnabled
             onToggled: controller.toastEnabled = checked
         }
+        FormCard.FormDelegateSeparator {}
+        FormCard.FormSwitchDelegate {
+            text: "Watch for default-browser takeover"
+            description: "Alert when another app or a browser update replaces Lane as the default handler, with one click to restore it."
+            checked: controller.watchdogEnabled
+            onToggled: controller.watchdogEnabled = checked
+        }
     }
 }

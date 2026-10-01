@@ -236,6 +236,7 @@ Config loadConfig(const QString &path)
             QStringLiteral("defaultTargetId"),   QStringLiteral("hiddenTargetIds"),  QStringLiteral("targetOrder"),
             QStringLiteral("targetAliases"),     QStringLiteral("remembered"),       QStringLiteral("rules"),
             QStringLiteral("customTargets"),     QStringLiteral("substitutions"),    QStringLiteral("stripTrackingParams"),
+            QStringLiteral("watchdogEnabled"),
         };
         QStringList unknown;
         for (auto it = o.begin(); it != o.end(); ++it) {
@@ -255,6 +256,7 @@ Config loadConfig(const QString &path)
     c.unwrapO365 = o[QStringLiteral("unwrapO365")].toBool(true);
     c.unshorten = o[QStringLiteral("unshorten")].toBool(true);
     c.stripTrackingParams = o[QStringLiteral("stripTrackingParams")].toBool(true);
+    c.watchdogEnabled = o[QStringLiteral("watchdogEnabled")].toBool(true);
     c.openUnwrapped = o[QStringLiteral("openUnwrapped")].toBool(false);
     c.preferPwa = o[QStringLiteral("preferPwa")].toBool(true);
     c.holdAutoOpen = o[QStringLiteral("holdAutoOpen")].toBool(false);
@@ -324,6 +326,7 @@ bool saveConfig(const QString &path, const Config &config)
     o[QStringLiteral("unwrapO365")] = config.unwrapO365;
     o[QStringLiteral("unshorten")] = config.unshorten;
     o[QStringLiteral("stripTrackingParams")] = config.stripTrackingParams;
+    o[QStringLiteral("watchdogEnabled")] = config.watchdogEnabled;
     o[QStringLiteral("openUnwrapped")] = config.openUnwrapped;
     o[QStringLiteral("preferPwa")] = config.preferPwa;
     o[QStringLiteral("holdAutoOpen")] = config.holdAutoOpen;

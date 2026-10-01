@@ -31,6 +31,7 @@ set(lane_SRCS
     app/Autostart.cpp
     app/SourceInfo.cpp
     app/UpdateChecker.cpp
+    app/DefaultBrowserWatcher.cpp
 )
 
 qt_add_executable(lane ${lane_SRCS})

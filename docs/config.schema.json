@@ -62,6 +62,11 @@
             "default": true,
             "description": "Strip tracking query parameters (utm_*, fbclid, gclid, etc.) before routing"
         },
+        "watchdogEnabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Notify and offer restore when another app takes over the default browser handler"
+        },
         "holdAutoOpen": {
             "type": "boolean",
             "default": false,

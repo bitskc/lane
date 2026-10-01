@@ -55,6 +55,7 @@ Top-level keys:
   "openUnwrapped": false,
   "preferPwa": true,
   "stripTrackingParams": true,
+  "watchdogEnabled": true,
   "holdAutoOpen": false,
   "holdMs": 1600,
   "autostart": false,

@@ -17,3 +17,8 @@ Action=Popup
 Name=Settings not saved
 Comment=Shown when Lane cannot write config.json to disk
 Action=Popup
+
+[Event/browser-takeover]
+Name=Default browser changed
+Comment=Shown when another app replaces Lane as the default browser
+Action=Popup
