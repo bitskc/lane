@@ -71,6 +71,16 @@ version is 0, minor releases may still contain breaking changes.
   happens. Turn off the new "Clean links before routing" switch in
   Preferences to go back to matching on the raw, unstripped link.
 
+- One list, one order. The picker used to group rows into sections and
+  always pinned its suggestion on top, which meant the order you set on
+  the Settings page only applied inside each group. Now the picker shows
+  a single flat list in exactly the order you arranged on Settings, the
+  matching web app or remembered destination carries a "Suggested" badge
+  wherever it sits, and the Settings page itself is one "Destinations"
+  list where a browser can be dragged above a container or a web app
+  below a custom app. Private windows stay in their own section since
+  the picker never shows them.
+
 ### Fixed
 
 - The Flatpak container profile test now checks that `--profile` carries

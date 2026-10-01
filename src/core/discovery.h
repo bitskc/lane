@@ -15,6 +15,6 @@ struct DiscoveryPaths {
 DiscoveryPaths defaultDiscoveryPaths();
 QList<Target> discoverTargets(const DiscoveryPaths &paths);
 QList<Target> applyConfigToTargets(QList<Target> targets, const Config &config);
-QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id, int newIndexInKind);
+QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id, int newIndex);
 
 } // namespace Lane

@@ -67,6 +67,11 @@ struct Target {
     bool isBrowserDefault = false;
     bool incognito = false;
     bool frameless = false;
+    // Transient display hint for the picker only: set by rankForPicker()
+    // on its returned copy so PickerModel can badge the suggested row.
+    // Never persisted, never set on discovery output or on Controller's
+    // m_targets, and never consulted by routing.
+    bool suggested = false;
 
     QString displayName() const
     {
