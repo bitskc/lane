@@ -1,19 +1,5 @@
 ## ADDED Requirements
 
-### Requirement: Strip tracking parameters
-When tracking parameter stripping is enabled, Lane SHALL remove well-known surveillance and campaign query parameters (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `fbclid`, `gclid`, `gbraid`, `wbraid`, `msclkid`, `twclid`, `mc_eid`, `si`, `igshid`) from HTTP and HTTPS URLs before matching rules or routing to a destination. Non-tracking query parameters SHALL remain unmodified in their original order.
-
-#### Scenario: Stripping campaign tracking parameters
-- **WHEN** Lane processes a URL containing `https://example.com/article?utm_source=twitter&id=42&fbclid=xyz`
-- **AND** tracking parameter stripping is enabled
-- **THEN** Lane normalizes the URL to `https://example.com/article?id=42` before route evaluation
-
-#### Scenario: Preservation of tracking parameters when disabled
-- **WHEN** Lane processes a URL containing `https://example.com/?utm_source=newsletter`
-- **AND** tracking parameter stripping is disabled in configuration
-- **THEN** the URL is routed without parameter modification
-
----
 
 ### Requirement: Plasma Activity-scoped rules and defaults
 Lane SHALL recognize the currently active KDE Plasma Activity. A rule MAY specify an `activity` filter matching either the Activity ID or Activity Name. When set, the rule SHALL only match when the specified Activity is active. In addition, Lane SHALL support per-Activity default destinations that override the global default when no explicit rule or path memory matches.
@@ -46,21 +32,6 @@ Lane SHALL periodically verify whether it remains the registered default handler
 #### Scenario: User restores default via notification
 - **WHEN** the user activates the "Restore Lane" action on the watchdog notification
 - **THEN** Lane re-registers itself as the default handler for http and https
-
----
-
-### Requirement: Open in private window shortcut
-While the picker overlay is displayed, pressing `Alt+P` SHALL immediately divert the active URL to the selected destination's private or incognito profile, bypassing normal non-private profile launching.
-
-#### Scenario: Private window launch from picker
-- **WHEN** the picker displays with a browser profile selected (e.g., Zen Default)
-- **AND** the user presses `Alt+P`
-- **THEN** Lane closes the picker and launches the private counterpart (e.g., Zen Private Window) with the active URL
-
-#### Scenario: Alt+P on custom target without explicit private counterpart
-- **WHEN** the selected target is a generic browser executable without an auto-discovered private counterpart
-- **AND** the user presses `Alt+P`
-- **THEN** Lane appends the standard private flag (`--incognito` for Chromium, `--private-window` for Gecko) to the launch arguments
 
 ---
 
