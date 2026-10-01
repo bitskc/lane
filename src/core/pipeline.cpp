@@ -26,7 +26,6 @@ bool isBannedTrackingKey(const QString &decodedKey)
         QStringLiteral("_hsenc"),      QStringLiteral("_hsmi"),      QStringLiteral("oly_enc_id"),
         QStringLiteral("oly_anon_id"), QStringLiteral("vero_id"),    QStringLiteral("rb_clickid"),
         QStringLiteral("s_cid"),       QStringLiteral("wickedid"),   QStringLiteral("igshid"),
-        QStringLiteral("ref"),
     };
     const QString lower = decodedKey.toLower();
     if (lower.startsWith(QLatin1String("utm_")) || lower.startsWith(QLatin1String("hsa_"))) {
@@ -65,25 +64,46 @@ QString stripTrackingParams(const QString &url, QStringList *removedKeys)
         return url;
     }
 
-    const int queryIdx = url.indexOf(QLatin1Char('?'));
-    if (queryIdx < 0) {
+    // Locate '#' first so a '?' that only appears inside the fragment
+    // (e.g. https://app/#/route?utm_source=x) is never mistaken for the
+    // query start. The query must live between the ':' scheme and '#'.
+    const int fragmentIdx = url.indexOf(QLatin1Char('#'), colonIdx);
+    const int queryEnd = fragmentIdx < 0 ? url.size() : fragmentIdx;
+    const int queryIdx = url.indexOf(QLatin1Char('?'), colonIdx);
+    if (queryIdx < 0 || queryIdx >= queryEnd) {
         return url;
     }
 
-    const int fragmentIdx = url.indexOf(QLatin1Char('#'), queryIdx + 1);
     const QString prefix = url.left(queryIdx);
-    const QString rawQuery = fragmentIdx < 0 ? url.mid(queryIdx + 1) : url.mid(queryIdx + 1, fragmentIdx - queryIdx - 1);
-    const QString suffix = fragmentIdx < 0 ? QString() : url.mid(fragmentIdx);
+    const QString rawQuery = url.mid(queryIdx + 1, queryEnd - queryIdx - 1);
+    const QString suffix = url.mid(queryEnd); // "" when there is no fragment
 
     // hostOf() is a read-only QUrl::fromUserInput() parse used purely to
     // decide the "si" host allowlist below; it never feeds back into the
     // reconstructed string, so it cannot corrupt anything.
     const bool siTracked = isSiTrackedHost(hostOf(url));
 
-    QStringList kept;
-    const QStringList segments = rawQuery.split(QRegularExpression(QStringLiteral("[&;]")));
-    for (const QString &segment : segments) {
+    // Split manually so each segment keeps the separator that preceded it.
+    // Rejoining with a fixed '&' would silently rewrite "a=1;b=2" to
+    // "a=1&b=2" and collapse "&&" even when nothing was dropped. We also
+    // return the input untouched when no tracker was removed, so a bare
+    // trailing '?' or a ';'-separated query survives byte-for-byte.
+    bool dropped = false;
+    QString rebuilt;
+    bool firstKept = true;
+    QChar prevSep = QLatin1Char('\0');
+    int start = 0;
+    for (int i = 0; i <= rawQuery.size(); ++i) {
+        const QChar c = i < rawQuery.size() ? rawQuery[i] : QLatin1Char('\0');
+        const bool atSep = i == rawQuery.size() || c == QLatin1Char('&') || c == QLatin1Char(';');
+        if (!atSep) {
+            continue;
+        }
+        const QString segment = rawQuery.mid(start, i - start);
+        const QChar segSep = (i < rawQuery.size()) ? c : QLatin1Char('\0');
+        start = i + 1;
         if (segment.isEmpty()) {
+            prevSep = segSep;
             continue;
         }
         const int eqIdx = segment.indexOf(QLatin1Char('='));
@@ -96,18 +116,27 @@ QString stripTrackingParams(const QString &url, QStringList *removedKeys)
         }
 
         if (drop) {
+            dropped = true;
             if (removedKeys) {
                 *removedKeys << rawKey;
             }
-            continue;
+        } else {
+            if (!firstKept) {
+                rebuilt += prevSep.isNull() ? QLatin1Char('&') : prevSep;
+            }
+            rebuilt += segment;
+            firstKept = false;
         }
-        kept << segment;
+        prevSep = segSep;
     }
 
-    if (kept.isEmpty()) {
-        return prefix + suffix;
+    if (!dropped) {
+        return url; // no tracker removed: leave every byte alone
     }
-    return prefix + QLatin1Char('?') + kept.join(QLatin1Char('&')) + suffix;
+    if (rebuilt.isEmpty()) {
+        return prefix + suffix; // dropped everything: remove the '?' too
+    }
+    return prefix + QLatin1Char('?') + rebuilt + suffix;
 }
 
 Click runPipeline(const QString &rawUrl, const Config &config, const UnshortenFn &unshorten)

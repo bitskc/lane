@@ -38,7 +38,7 @@ static int explainUrl(const QString &url)
     std::fprintf(stdout, "url\t%s\n", qPrintable(click.originalUrl));
     std::fprintf(stdout, "match\t%s\n", qPrintable(click.matchUrl));
     if (!click.removedTrackingParams.isEmpty()) {
-        std::fprintf(stdout, "[Cleaned tracking parameters] %s\n", qPrintable(click.removedTrackingParams.join(QStringLiteral(", "))));
+        std::fprintf(stdout, "cleaned\t%s\n", qPrintable(click.removedTrackingParams.join(QStringLiteral(", "))));
     }
     std::fprintf(stdout, "host\t%s\n", qPrintable(click.host));
     std::fprintf(stdout, "action\t%s\n", actionName(d.action));

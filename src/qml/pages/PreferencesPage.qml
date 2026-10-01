@@ -85,7 +85,7 @@ FormCard.FormCardPage {
         FormCard.FormDelegateSeparator {}
         FormCard.FormSwitchDelegate {
             text: "Clean links before routing"
-            description: "Strip tracking parameters (utm_*, fbclid, gclid) so rules and remembered sites match the clean URL."
+            description: "Strip tracking parameters (utm_*, fbclid, gclid) so link rules and the picker match the clean URL."
             checked: controller.stripTrackingParams
             onToggled: controller.stripTrackingParams = checked
         }

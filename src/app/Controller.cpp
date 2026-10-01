@@ -462,6 +462,11 @@ void Controller::pickPrivate(const QString &targetId)
 {
     const Target *t = findTarget(m_targets, targetId);
     if (!t) {
+        // Unresolvable id must not fail silently (that's how the delegate
+        // targetId bug hid). Surface the same fail-closed notice.
+        qWarning() << "Lane: pickPrivate got unknown target id" << targetId;
+        m_pickerNotice = QStringLiteral("No private mode available");
+        Q_EMIT pickerNoticeChanged();
         return;
     }
     const Target priv = privateCounterpart(m_targets, *t);

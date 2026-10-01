@@ -152,6 +152,7 @@ Window {
                     onTextChanged: {
                         controller.pickerModel.setFilter(text)
                         list.currentIndex = 0
+                        controller.clearPickerNotice()
                     }
                     Keys.onDownPressed: list.incrementCurrentIndex()
                     Keys.onUpPressed: list.decrementCurrentIndex()
@@ -226,7 +227,7 @@ Window {
                 currentIndex: 0
                 boundsBehavior: Flickable.StopAtBounds
                 highlightMoveDuration: 80
-                onCurrentIndexChanged: controller.clearPickerNotice()
+                onCurrentItemChanged: controller.clearPickerNotice()
 
                 Accessible.role: Accessible.List
                 Accessible.name: "Destinations"
@@ -255,6 +256,7 @@ Window {
 
                 delegate: Rectangle {
                     required property int index
+                    required property string targetId
                     required property string name
                     required property string subtitle
                     required property string iconName

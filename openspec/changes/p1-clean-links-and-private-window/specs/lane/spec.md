@@ -84,3 +84,13 @@ While the picker overlay is displayed and a target is selected, pressing `Alt+P`
 - **WHEN** a target is launched via `Alt+P`
 - **THEN** Lane does NOT write to `config.remembered` regardless of `alwaysForHost` state
 - **AND** the launch toast/notification does NOT disclose the host name in notification history
+
+#### Scenario: Alt+P on a hidden target resolves its private counterpart anyway
+- **WHEN** the highlighted target is marked `hidden` but still appears in the picker (hidden targets stay reachable via Alt+P)
+- **AND** the user presses `Alt+P`
+- **THEN** Lane resolves the private counterpart by exact id regardless of the counterpart's `hidden` flag, and launches it
+
+#### Scenario: Alt+P fail-closed notice clears on selection or filter change
+- **WHEN** the "No private mode for <target>" notice is shown
+- **AND** the user moves the selection to a different target OR types in the filter box
+- **THEN** the notice is cleared so a stale private-mode warning never sits under a different, private-capable target
