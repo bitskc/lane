@@ -236,6 +236,7 @@ Config loadConfig(const QString &path)
             QStringLiteral("defaultTargetId"),   QStringLiteral("hiddenTargetIds"),  QStringLiteral("targetOrder"),
             QStringLiteral("targetAliases"),     QStringLiteral("remembered"),       QStringLiteral("rules"),
             QStringLiteral("customTargets"),     QStringLiteral("substitutions"),    QStringLiteral("stripTrackingParams"),
+            QStringLiteral("activityRoutingEnabled"), QStringLiteral("activityDefaults"),
         };
         QStringList unknown;
         for (auto it = o.begin(); it != o.end(); ++it) {
@@ -261,6 +262,12 @@ Config loadConfig(const QString &path)
     c.holdMs = o[QStringLiteral("holdMs")].toInt(1600);
     c.autostart = o[QStringLiteral("autostart")].toBool(false);
     c.defaultTargetId = o[QStringLiteral("defaultTargetId")].toString();
+    c.activityRoutingEnabled = o[QStringLiteral("activityRoutingEnabled")].toBool(false);
+
+    const auto activityDefaults = o[QStringLiteral("activityDefaults")].toObject();
+    for (auto it = activityDefaults.begin(); it != activityDefaults.end(); ++it) {
+        c.activityDefaults.insert(it.key(), it.value().toString());
+    }
 
     for (const auto &v : o[QStringLiteral("hiddenTargetIds")].toArray()) {
         c.hiddenTargetIds << v.toString();
@@ -291,6 +298,7 @@ Config loadConfig(const QString &path)
         rule.regex = r[QStringLiteral("regex")].toBool(false);
         rule.targetId = r[QStringLiteral("targetId")].toString();
         rule.enabled = r[QStringLiteral("enabled")].toBool(true);
+        rule.activity = r[QStringLiteral("activity")].toString();
         c.rules.append(rule);
     }
 
@@ -330,6 +338,7 @@ bool saveConfig(const QString &path, const Config &config)
     o[QStringLiteral("holdMs")] = config.holdMs;
     o[QStringLiteral("autostart")] = config.autostart;
     o[QStringLiteral("defaultTargetId")] = config.defaultTargetId;
+    o[QStringLiteral("activityRoutingEnabled")] = config.activityRoutingEnabled;
     o[QStringLiteral("hiddenTargetIds")] = QJsonArray::fromStringList(config.hiddenTargetIds);
     o[QStringLiteral("targetOrder")] = QJsonArray::fromStringList(config.targetOrder);
     QJsonObject aliases;
@@ -344,6 +353,12 @@ bool saveConfig(const QString &path, const Config &config)
     }
     o[QStringLiteral("remembered")] = remembered;
 
+    QJsonObject activityDefaults;
+    for (auto it = config.activityDefaults.begin(); it != config.activityDefaults.end(); ++it) {
+        activityDefaults.insert(it.key(), it.value());
+    }
+    o[QStringLiteral("activityDefaults")] = activityDefaults;
+
     QJsonArray rules;
     for (const auto &rule : config.rules) {
         QJsonObject r;
@@ -354,6 +369,7 @@ bool saveConfig(const QString &path, const Config &config)
         r[QStringLiteral("regex")] = rule.regex;
         r[QStringLiteral("targetId")] = rule.targetId;
         r[QStringLiteral("enabled")] = rule.enabled;
+        r[QStringLiteral("activity")] = rule.activity;
         rules.append(r);
     }
     o[QStringLiteral("rules")] = rules;

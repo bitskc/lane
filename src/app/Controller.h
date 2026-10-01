@@ -11,11 +11,18 @@
 #include <QObject>
 #include <QPointer>
 #include <QQmlApplicationEngine>
+#include <QVariant>
 #include <QVariantAnimation>
 #include <QWindow>
 
 class KStatusNotifierItem;
 
+#ifdef HAVE_PLASMA_ACTIVITIES
+namespace KActivities
+{
+class Consumer;
+}
+#endif
 namespace Lane
 {
 
@@ -61,6 +68,10 @@ class Controller : public QObject
     Q_PROPERTY(QString updateErrorMessage READ updateErrorMessage NOTIFY updateStateChanged)
     Q_PROPERTY(QString updateLastChecked READ updateLastChecked NOTIFY updateStateChanged)
     Q_PROPERTY(QString pickerNotice READ pickerNotice NOTIFY pickerNoticeChanged)
+    Q_PROPERTY(bool activityRoutingEnabled READ activityRoutingEnabled WRITE setActivityRoutingEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(QString currentActivityId READ currentActivityId NOTIFY activitiesChanged)
+    Q_PROPERTY(QString currentActivityName READ currentActivityName NOTIFY activitiesChanged)
+    Q_PROPERTY(QVariantList availableActivities READ availableActivities NOTIFY activitiesChanged)
 public:
     explicit Controller(QObject *parent = nullptr);
 
@@ -75,6 +86,17 @@ public:
     QString updateErrorMessage() const { return m_updateChecker->errorMessage(); }
     QString updateLastChecked() const;
     QString pickerNotice() const { return m_pickerNotice; }
+    bool activityRoutingEnabled() const { return m_config.activityRoutingEnabled; }
+    void setActivityRoutingEnabled(bool on);
+    // The Activity the next clicked link will be attributed to. Empty on
+    // non-Plasma desktops and before the activities service answers; the
+    // picker and rule engine treat empty as "no Activity in effect".
+    QString currentActivityId() const { return m_currentActivityId; }
+    QString currentActivityName() const;
+    // [{id, name}] of every known Plasma Activity, for the per-rule
+    // Activity picker in Settings. Empty when the activities service is
+    // absent or still synchronizing.
+    QVariantList availableActivities() const;
 
     QString currentUrl() const { return m_click.openUrl; }
     QString currentHost() const { return m_click.host; }
@@ -163,6 +185,7 @@ Q_SIGNALS:
     void holdChanged();
     void updateStateChanged();
     void pickerNoticeChanged();
+    void activitiesChanged();
 private:
     void reload();
     void persist();
@@ -200,6 +223,10 @@ private:
     // prunes immediately, because that is an explicit, user-confirmed
     // action rather than an automatic side effect of reloading.
     void pruneStaleRemembered();
+    // Looks up the display name for an Activity ID. Returns an empty
+    // string when there is no Plasma activities support or the service
+    // has not described the Activity yet.
+    QString activityNameFor(const QString &id) const;
 
     Config m_config;
     QString m_configPath;
@@ -232,6 +259,14 @@ private:
     // Controller's public/QML-facing API: entries come and go purely as a
     // side effect of reload().
     QHash<QString, int> m_rememberedMissCounts;
+    // Current Plasma Activity snapshot, fed by KActivities::Consumer when
+    // Lane is built against PlasmaActivities. Left empty forever
+    // otherwise, which keeps every Activity-aware code path inert.
+    QString m_currentActivityId;
+
+#ifdef HAVE_PLASMA_ACTIVITIES
+    KActivities::Consumer *m_activities = nullptr;
+#endif
 
     PickerModel *m_pickerModel = nullptr;
     TargetModel *m_targetModel = nullptr;

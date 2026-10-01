@@ -10,6 +10,10 @@ FormCard.FormCardPage {
 
     readonly property var scopes: ["domain", "path", "any"]
     readonly property var scopeLabels: ["Domain", "Path", "Entire URL"]
+    // First entry clears a rule's Activity scope; the rest come from the
+    // running activities service (empty on non-Plasma desktops).
+    readonly property var activityIds: [""].concat(controller.availableActivities.map(function(a) { return a.id }))
+    readonly property var activityLabels: ["Any activity"].concat(controller.availableActivities.map(function(a) { return a.name }))
     property var danglingHosts: []
 
     function refreshDangling() {
@@ -34,6 +38,7 @@ FormCard.FormCardPage {
                 required property string scope
                 required property string targetId
                 required property bool enabled
+                required property string activity
                 required property bool isRegex
                 readonly property int ruleIndex: index
                 readonly property bool targetMissing: !controller.targetExists(targetId)
@@ -50,6 +55,14 @@ FormCard.FormCardPage {
                     model: page.scopeLabels
                     currentIndex: Math.max(0, page.scopes.indexOf(scope))
                     onActivated: controller.ruleModel.setScope(ruleIndex, page.scopes[currentIndex])
+                }
+                FormCard.FormComboBoxDelegate {
+                    visible: controller.activityRoutingEnabled
+                    text: "Only in Activity"
+                    description: "Restricts this rule to one Plasma Activity. With no Activity selected it applies everywhere."
+                    model: page.activityLabels
+                    currentIndex: Math.max(0, page.activityIds.indexOf(activity))
+                    onActivated: controller.ruleModel.setActivity(ruleIndex, page.activityIds[currentIndex])
                 }
                 FormCard.FormComboBoxDelegate {
                     text: "Open in"

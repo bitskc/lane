@@ -37,6 +37,8 @@ QVariant RuleModel::data(const QModelIndex &index, int role) const
         return r.targetId;
     case EnabledRole:
         return r.enabled;
+    case ActivityRole:
+        return r.activity;
     default:
         return {};
     }
@@ -67,6 +69,9 @@ bool RuleModel::setData(const QModelIndex &index, const QVariant &value, int rol
     case EnabledRole:
         r.enabled = value.toBool();
         break;
+    case ActivityRole:
+        r.activity = value.toString();
+        break;
     default:
         return false;
     }
@@ -90,6 +95,7 @@ QHash<int, QByteArray> RuleModel::roleNames() const
         {RegexRole, "isRegex"},
         {TargetIdRole, "targetId"},
         {EnabledRole, "enabled"},
+        {ActivityRole, "activity"},
     };
 }
 
@@ -147,5 +153,10 @@ void RuleModel::setScope(int row, const QString &scope)
 void RuleModel::setRegex(int row, bool regex)
 {
     setData(index(row, 0), regex, RegexRole);
+}
+
+void RuleModel::setActivity(int row, const QString &activity)
+{
+    setData(index(row, 0), activity, ActivityRole);
 }
 } // namespace Lane

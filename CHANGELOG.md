@@ -24,6 +24,17 @@ version is 0, minor releases may still contain breaking changes.
   host in the Plasma notification, since the whole point is to leave
   no trace of which site you visited privately.
 
+- Optional per-Activity routing on Plasma. A new "Enable per-Activity
+  routing" switch in Preferences (off by default) lets rules be limited
+  to a specific Plasma Activity, so a Work rule never fires while a
+  Personal Activity is on top. When a link does not match any rule,
+  remembered destination, or PWA, a per-Activity fallback target
+  (`activityDefaults` in config.json) wins over the global default.
+  The current Activity is tracked from a cached signal, so clicking a
+  link never waits on D-Bus, and on a desktop without Plasma Activities
+  the switch simply does nothing: scoped rules apply everywhere and the
+  global default still wins.
+
 ### Changed
 
 - Lane now strips common tracking parameters (`utm_*`, `fbclid`,

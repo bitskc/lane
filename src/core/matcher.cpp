@@ -29,9 +29,22 @@ static QString haystack(const Rule &rule, const Click &click)
     return click.matchUrl;
 }
 
+bool ruleActivityMatches(const Rule &rule, const QString &currentActivityId, const QString &currentActivityName)
+{
+    const QString wanted = rule.activity.trimmed();
+    if (wanted.isEmpty() || currentActivityId.isEmpty()) {
+        return true;
+    }
+    return wanted.compare(currentActivityId, Qt::CaseInsensitive) == 0
+        || (!currentActivityName.isEmpty() && wanted.compare(currentActivityName, Qt::CaseInsensitive) == 0);
+}
+
 bool ruleMatches(const Rule &rule, const Click &click)
 {
     if (!rule.enabled || rule.pattern.trimmed().isEmpty()) {
+        return false;
+    }
+    if (!ruleActivityMatches(rule, click.activityId, click.activityName)) {
         return false;
     }
     if (rule.location != MatchLocation::Url) {

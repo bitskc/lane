@@ -102,6 +102,11 @@ struct Rule {
     bool regex = false;
     QString targetId;
     bool enabled = true;
+    // Optional Plasma Activity scope: an Activity ID or name this rule is
+    // limited to. Empty means the rule applies in every Activity. Only
+    // consulted while activityRoutingEnabled is on and the desktop
+    // reports a current Activity.
+    QString activity;
 };
 
 struct Substitution {
@@ -119,6 +124,15 @@ struct Click {
     QString processName;
     QString windowTitle;
     bool forcePicker = false;
+    // Plasma Activity the click arrived under. activityId carries the
+    // Activity UUID and activityName its display name (a rule's activity
+    // filter may name either). Both stay empty when
+    // activityRoutingEnabled is off, when Lane runs on a non-Plasma
+    // desktop, or when the activities service has not answered yet; in
+    // every one of those cases routing is identical to Lane without
+    // Activity support.
+    QString activityId;
+    QString activityName;
     // Tracking-parameter keys the clean-links cleaner dropped from
     // matchUrl (see runPipeline() in pipeline.cpp). Empty when
     // stripTrackingParams is off, the URL had no query, or nothing
@@ -161,6 +175,15 @@ struct Config {
     QMap<QString, QString> targetAliases;
     QMap<QString, QString> remembered;
     QList<Target> customTargets;
+    // Off by default: Activity-scoped rules and activityDefaults only
+    // take effect when the user opts in and a current Plasma Activity is
+    // known (the Controller stamps Click::activityId/activityName only
+    // while this is on).
+    bool activityRoutingEnabled = false;
+    // Plasma Activity ID -> target ID fallback. Checked when no rule,
+    // remembered destination, or PWA matched, and takes precedence over
+    // defaultTargetId only while Activity routing is active.
+    QMap<QString, QString> activityDefaults;
     QList<Substitution> substitutions;
 };
 

@@ -19,6 +19,7 @@ public:
         RegexRole,
         TargetIdRole,
         EnabledRole,
+        ActivityRole,
     };
     explicit RuleModel(QObject *parent = nullptr);
     int rowCount(const QModelIndex &parent = {}) const override;
@@ -35,6 +36,7 @@ public:
     Q_INVOKABLE void setEnabledAt(int row, bool enabled);
     Q_INVOKABLE void setScope(int row, const QString &scope);
     Q_INVOKABLE void setRegex(int row, bool regex);
+    Q_INVOKABLE void setActivity(int row, const QString &activity);
 Q_SIGNALS:
     void rulesChanged();
 
