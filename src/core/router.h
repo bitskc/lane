@@ -8,7 +8,11 @@ namespace Lane
 Decision route(Click click, const QList<Target> &targets, const Config &config);
 QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, const Config &config);
 const Target *findTarget(const QList<Target> &targets, const QString &id);
-const Target *defaultTarget(const QList<Target> &targets, const Config &config);
+// Resolves the fallback target. When activityId names the current Plasma
+// Activity (non-empty only while Activity routing is active), an entry in
+// config.activityDefaults wins over config.defaultTargetId; with an empty
+// activityId the lookup is exactly the historic global default.
+const Target *defaultTarget(const QList<Target> &targets, const Config &config, const QString &activityId = QString());
 QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &config);
 
 // Resolves the private/incognito sibling of a target for the picker's

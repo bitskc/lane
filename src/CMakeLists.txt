@@ -31,6 +31,7 @@ set(lane_SRCS
     app/Autostart.cpp
     app/SourceInfo.cpp
     app/UpdateChecker.cpp
+    app/DefaultBrowserWatcher.cpp
 )
 
 qt_add_executable(lane ${lane_SRCS})
@@ -74,5 +75,10 @@ target_link_libraries(lane
         KF6::Crash
         LayerShellQt::Interface
 )
+
+if(PlasmaActivities_FOUND)
+    target_link_libraries(lane PRIVATE Plasma::Activities)
+    target_compile_definitions(lane PRIVATE HAVE_PLASMA_ACTIVITIES)
+endif()
 
 install(TARGETS lane ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})

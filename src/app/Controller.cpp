@@ -13,6 +13,10 @@
 #include "lane_version.h"
 
 #include <LayerShellQt/Window>
+#ifdef HAVE_PLASMA_ACTIVITIES
+#include <PlasmaActivities/Consumer>
+#include <PlasmaActivities/Info>
+#endif
 #include <KCrash>
 #include <KNotification>
 #include <KStatusNotifierItem>
@@ -71,6 +75,76 @@ Controller::Controller(QObject *parent)
         m_config.rules = m_ruleModel->rules();
         persist();
     });
+
+#ifdef HAVE_PLASMA_ACTIVITIES
+    // Long-lived read-only view of the activities service. All routing
+    // reads come from this cached state, so a link click never blocks on
+    // a D-Bus round-trip. On a desktop without kactivitymanagerd the
+    // consumer simply reports the null Activity and
+    // m_currentActivityId stays empty.
+    m_activities = new KActivities::Consumer(this);
+    connect(m_activities, &KActivities::Consumer::currentActivityChanged, this, [this](const QString &id) {
+        const QString normalized = QUuid(id).isNull() ? QString() : id;
+        if (normalized == m_currentActivityId) {
+            return;
+        }
+        m_currentActivityId = normalized;
+        Q_EMIT activitiesChanged();
+    });
+    connect(m_activities, &KActivities::Consumer::activitiesChanged, this, [this](const QStringList &) {
+        Q_EMIT activitiesChanged();
+    });
+    connect(m_activities, &KActivities::Consumer::serviceStatusChanged, this, [this](KActivities::Consumer::ServiceStatus) {
+        Q_EMIT activitiesChanged();
+    });
+#endif
+
+    // The watchdog only fires while the daemon lives; Controller is the
+    // long-lived process object, so owning it here keeps it out of the
+    // short-lived --pick/--explain invocations.
+    m_defaultWatcher = new DefaultBrowserWatcher(this);
+    connect(m_defaultWatcher, &DefaultBrowserWatcher::mimeappsChanged,
+            this, &Controller::onMimeappsChanged);
+    m_defaultWatcher->setEnabled(m_config.watchdogEnabled);
+}
+
+QString Controller::activityNameFor(const QString &id) const
+{
+#ifdef HAVE_PLASMA_ACTIVITIES
+    if (id.isEmpty()) {
+        return {};
+    }
+    return KActivities::Info(id).name();
+#else
+    Q_UNUSED(id)
+    return {};
+#endif
+}
+
+QString Controller::currentActivityName() const
+{
+    return activityNameFor(m_currentActivityId);
+}
+
+QVariantList Controller::availableActivities() const
+{
+    QVariantList out;
+#ifdef HAVE_PLASMA_ACTIVITIES
+    if (!m_activities) {
+        return out;
+    }
+    for (const QString &id : m_activities->activities()) {
+        // Keep the raw id even before the service names it; a rule bound
+        // to an unnamed id still routes correctly because rule matching
+        // compares ids first.
+        const QString name = activityNameFor(id);
+        out.append(QVariantMap{
+            {QStringLiteral("id"), id},
+            {QStringLiteral("name"), name.isEmpty() ? id : name},
+        });
+    }
+#endif
+    return out;
 }
 
 QString Controller::appVersion() const
@@ -175,6 +249,31 @@ void Controller::refreshDefaultBrowserState()
     m_isDefaultBrowser = QString::fromUtf8(p.readAllStandardOutput()).trimmed() == QLatin1String("app.lane.Lane.desktop");
 }
 
+void Controller::onMimeappsChanged()
+{
+    if (!m_config.watchdogEnabled) {
+        return;
+    }
+    const bool was = m_isDefaultBrowser;
+    refreshDefaultBrowserState();
+    // Only a real takeover is worth an interruption: Lane was the
+    // default before this write and is not now. A user who never opted
+    // in (was==false) or who made Lane the default themselves
+    // (still true after) sees nothing.
+    if (!was || m_isDefaultBrowser) {
+        return;
+    }
+    Q_EMIT defaultBrowserChanged();
+    auto *n = new KNotification(QStringLiteral("browser-takeover"), KNotification::CloseOnTimeout, this);
+    n->setComponentName(QStringLiteral("app.lane.Lane"));
+    n->setTitle(QStringLiteral("Default browser changed"));
+    n->setText(QStringLiteral("Something replaced Lane as the default browser. Restore it from here."));
+    n->setIconName(QStringLiteral("app.lane.Lane"));
+    auto *restore = n->addAction(QStringLiteral("Restore Lane"));
+    connect(restore, &KNotificationAction::activated, this, &Controller::makeDefaultBrowser);
+    n->sendEvent();
+}
+
 QString Controller::pickerPolicy() const
 {
     return pickerPolicyToString(m_config.pickerPolicy);
@@ -218,6 +317,23 @@ void Controller::setUnshorten(bool on)
 void Controller::setStripTrackingParams(bool on)
 {
     m_config.stripTrackingParams = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setActivityRoutingEnabled(bool on)
+{
+    m_config.activityRoutingEnabled = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setWatchdogEnabled(bool on)
+{
+    m_config.watchdogEnabled = on;
+    if (m_defaultWatcher) {
+        m_defaultWatcher->setEnabled(on);
+    }
     persist();
     Q_EMIT settingsChanged();
 }
@@ -398,6 +514,13 @@ void Controller::openUrl(const QString &url, bool forcePicker)
     m_click.forcePicker = forcePicker;
     m_click.processName = src.processName;
     m_click.windowTitle = src.windowTitle;
+    // Activity context rides on the click, not the config: while routing
+    // is off or no Activity is known both fields stay empty, and matcher/
+    // router treat that as "no Activity in effect".
+    if (m_config.activityRoutingEnabled) {
+        m_click.activityId = m_currentActivityId;
+        m_click.activityName = currentActivityName();
+    }
     m_alwaysForHost = false;
 
     const Decision d = route(m_click, m_targets, m_config);

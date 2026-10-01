@@ -45,7 +45,30 @@ Window {
         }
     }
 
-    Shortcut { sequence: "Escape"; onActivated: controller.cancelPicker() }
+    Shortcut {
+        sequence: "Escape"
+        // When the filter has text, Esc clears it first instead of
+        // dismissing the overlay; a second Esc on an empty filter cancels.
+        onActivated: {
+            if (filterField.text.length > 0) {
+                filterField.text = ""
+            } else {
+                controller.cancelPicker()
+            }
+        }
+    }
+    // Zero-target recovery shortcuts: only useful when nothing is
+    // discovered, so they stay disabled while a real list is showing.
+    Shortcut {
+        sequence: "Alt+S"
+        enabled: list.count === 0 && controller.targetCount === 0
+        onActivated: controller.openSettings()
+    }
+    Shortcut {
+        sequence: "Alt+R"
+        enabled: list.count === 0 && controller.targetCount === 0
+        onActivated: controller.rediscover()
+    }
     Shortcut { sequence: "Return"; onActivated: if (list.count > 0) controller.pick(list.currentIndex) }
     Shortcut { sequence: "Enter"; onActivated: if (list.count > 0) controller.pick(list.currentIndex) }
     Shortcut { sequence: "Down"; onActivated: list.incrementCurrentIndex() }
@@ -200,21 +223,58 @@ Window {
 
             Item {
                 width: parent.width
-                height: list.count === 0 ? root.rowHeight
+                height: list.count === 0 ? root.rowHeight * 2
                                          : Math.min(root.maxRows, list.count) * root.rowHeight
                                            + root.visibleSectionCount() * root.sectionHeaderHeight
 
-                QQC.Label {
-                    anchors.centerIn: parent
+                Item {
+                    id: emptyState
+                    anchors.fill: parent
                     visible: list.count === 0
-                    text: "No matching destinations"
-                    opacity: 0.5
-                    font.pixelSize: 13
-                    horizontalAlignment: Text.AlignHCenter
-                    width: parent.width
 
-                    Accessible.role: Accessible.StaticText
-                    Accessible.name: "No matching destinations"
+                    readonly property bool zeroTargets: controller.targetCount === 0
+                    readonly property bool filtering: filterField.text.length > 0
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 6
+
+                        QQC.Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: emptyState.filtering && !emptyState.zeroTargets
+                                  ? "No matching destinations"
+                                  : "No destinations found"
+                            opacity: 0.6
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.preferredWidth: emptyState.width
+
+                            Accessible.role: Accessible.StaticText
+                            Accessible.name: text
+                        }
+
+                        // Filter miss: Esc now clears the text before
+                        // dismissing, so the hint is accurate.
+                        QQC.Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: emptyState.filtering && !emptyState.zeroTargets
+                            text: "esc clear"
+                            font.pixelSize: 10
+                            font.family: "monospace"
+                            opacity: 0.4
+                        }
+
+                        // Zero targets at all: nothing to clear, so point
+                        // at the real recovery actions.
+                        QQC.Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: emptyState.zeroTargets
+                            text: "alt+s settings · alt+r rescan"
+                            font.pixelSize: 10
+                            font.family: "monospace"
+                            opacity: 0.4
+                        }
+                    }
                 }
 
                 ListView {

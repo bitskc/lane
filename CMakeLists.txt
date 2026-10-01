@@ -55,6 +55,12 @@ find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
 ecm_find_qmlmodule(org.kde.kirigami REQUIRED)
 ecm_find_qmlmodule(org.kde.kirigamiaddons.formcard REQUIRED)
 find_package(LayerShellQt REQUIRED)
+# Optional: KDE Plasma Activities integration for per-Activity rules and
+# fallback destinations. Absent on non-Plasma desktops and minimal
+# containers; src/CMakeLists.txt then skips Plasma::Activities and the
+# HAVE_PLASMA_ACTIVITIES define, so the build and runtime degrade to
+# exactly today's behavior.
+find_package(PlasmaActivities QUIET)
 
 qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)

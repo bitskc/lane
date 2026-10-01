@@ -327,6 +327,49 @@ private Q_SLOTS:
         QVERIFY(source.open(QIODevice::ReadOnly));
         QCOMPARE(source.readAll(), body);
     }
+
+    void activityKeysRoundTrip()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("config.json"));
+        Config c;
+        c.activityRoutingEnabled = true;
+        c.activityDefaults.insert(QStringLiteral("act-work"), QStringLiteral("browser:zen:work"));
+        c.activityDefaults.insert(QStringLiteral("act-fun"), QStringLiteral("browser:brave:personal"));
+        Rule r;
+        r.id = QStringLiteral("r1");
+        r.pattern = QStringLiteral("slack.com");
+        r.scope = MatchScope::Domain;
+        r.targetId = QStringLiteral("browser:zen:work");
+        r.activity = QStringLiteral("act-work");
+        c.rules = {r};
+        QVERIFY(saveConfig(path, c));
+        const Config loaded = loadConfig(path);
+        QCOMPARE(loaded.activityRoutingEnabled, true);
+        QCOMPARE(loaded.activityDefaults.value(QStringLiteral("act-work")), QStringLiteral("browser:zen:work"));
+        QCOMPARE(loaded.activityDefaults.value(QStringLiteral("act-fun")), QStringLiteral("browser:brave:personal"));
+        QCOMPARE(loaded.activityDefaults.size(), 2);
+        QCOMPARE(loaded.rules.size(), 1);
+        QCOMPARE(loaded.rules[0].activity, QStringLiteral("act-work"));
+    }
+
+    void activityKeysDefaultOffAndEmpty()
+    {
+        // Configs written before Activity routing existed carry none of
+        // the new keys; loading them must produce the off state so
+        // routing is byte-for-byte what it was before.
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("config.json"));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(QByteArrayLiteral("{\"pickerPolicy\":\"always\",\"rules\":[{\"pattern\":\"x\",\"scope\":\"any\",\"targetId\":\"a\"}]}"));
+        f.close();
+        const Config loaded = loadConfig(path);
+        QCOMPARE(loaded.activityRoutingEnabled, false);
+        QVERIFY(loaded.activityDefaults.isEmpty());
+        QCOMPARE(loaded.rules.size(), 1);
+        QVERIFY(loaded.rules[0].activity.isEmpty());
+    }
 };
 
 QTEST_MAIN(ConfigTest)

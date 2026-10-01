@@ -95,5 +95,19 @@ FormCard.FormCardPage {
             checked: controller.toastEnabled
             onToggled: controller.toastEnabled = checked
         }
+        FormCard.FormDelegateSeparator {}
+        FormCard.FormSwitchDelegate {
+            text: "Enable per-Activity routing"
+            description: "Off by default. When on, rules can be limited to a Plasma Activity and activityDefaults can name a per-Activity fallback destination. Ignored on desktops without Plasma Activities."
+            checked: controller.activityRoutingEnabled
+            onToggled: controller.activityRoutingEnabled = checked
+        }
+        FormCard.FormDelegateSeparator {}
+        FormCard.FormSwitchDelegate {
+            text: "Watch for default-browser takeover"
+            description: "Alert when another app or a browser update replaces Lane as the default handler, with one click to restore it."
+            checked: controller.watchdogEnabled
+            onToggled: controller.watchdogEnabled = checked
+        }
     }
 }

@@ -55,15 +55,18 @@ Top-level keys:
   "openUnwrapped": false,
   "preferPwa": true,
   "stripTrackingParams": true,
+  "watchdogEnabled": true,
   "holdAutoOpen": false,
   "holdMs": 1600,
   "autostart": false,
+  "activityRoutingEnabled": false,
   "defaultTargetId": "",
   "hiddenTargetIds": [],
   "targetOrder": [],
   "targetAliases": {},
   "remembered": {},
   "rules": [],
+  "activityDefaults": {},
   "customTargets": [],
   "substitutions": []
 }
@@ -102,6 +105,10 @@ Array of rule objects. Rules are checked in order. First match wins.
 }
 ```
 
+`activity` (optional, omitted above): a Plasma Activity ID or name the
+rule is limited to. Only in effect while `activityRoutingEnabled` is
+true; an empty or missing value applies the rule in every Activity.
+
 - `scope`: `"any"`, `"domain"`, or `"path"`. Path scope matches the full
   URL path, not just the host.
 - `location`: `"url"` (the only value that can match; `"title"` and
@@ -123,6 +130,28 @@ Do not point rules at custom handlers that run wild interpreter commands
 (`python -c`, `bash -c`, `sh -c`). Custom handlers run as argv, not
 through a shell, but a rule that routes to a dangerous handler is still
 dangerous.
+
+### activityRoutingEnabled / activityDefaults
+
+`activityRoutingEnabled` (default false) opts in to Plasma
+Activity-aware routing. While it is on, a rule's `activity` field
+restricts it to the named Activity, and `activityDefaults` maps an
+Activity ID to a fallback target that wins over `defaultTargetId` when
+no rule, remembered destination, or PWA matched:
+
+```json
+{
+  "activityRoutingEnabled": true,
+  "activityDefaults": {
+    "2b8f6c9e-1a2b-4c3d-9e8f-7a6b5c4d3e2f": "browser:zen:work"
+  }
+}
+```
+
+On a desktop without the Plasma activities service (Sway, GNOME, a
+minimal container) the current Activity is simply unknown, so scoped
+rules apply everywhere and `activityDefaults` is never consulted;
+routing is identical to having the toggle off.
 
 ### remembered
 

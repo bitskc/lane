@@ -9,6 +9,17 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Added
 
+- Lane now watches the default-browser association and notifies you when
+  a browser update or another app takes it over, with a one-click
+  "Restore Lane" action. It only speaks up if Lane was the default
+  before, so it never nags a setup that left it off. Turn it off in
+  Preferences (watchdogEnabled).
+
+- The picker now shows an explicit empty state instead of a blank list.
+  A filter that matches nothing explains that Esc clears the text, and
+  when no destinations exist at all the card offers Alt+S to open
+  Settings and Alt+R to rescan.
+
 - An `Alt+P` shortcut in the picker opens the highlighted destination's
   private or incognito window instead of its normal one. It matches the
   exact sibling profile Lane already discovers (a Gecko profile's
@@ -23,6 +34,17 @@ version is 0, minor releases may still contain breaking changes.
   "always use this for this site" memory and never show the site's
   host in the Plasma notification, since the whole point is to leave
   no trace of which site you visited privately.
+
+- Optional per-Activity routing on Plasma. A new "Enable per-Activity
+  routing" switch in Preferences (off by default) lets rules be limited
+  to a specific Plasma Activity, so a Work rule never fires while a
+  Personal Activity is on top. When a link does not match any rule,
+  remembered destination, or PWA, a per-Activity fallback target
+  (`activityDefaults` in config.json) wins over the global default.
+  The current Activity is tracked from a cached signal, so clicking a
+  link never waits on D-Bus, and on a desktop without Plasma Activities
+  the switch simply does nothing: scoped rules apply everywhere and the
+  global default still wins.
 
 ### Changed
 
