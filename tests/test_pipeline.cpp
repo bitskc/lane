@@ -196,6 +196,63 @@ private Q_SLOTS:
         QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?utm_source=x&id=5"));
         QVERIFY(c.removedTrackingParams.isEmpty());
     }
+
+    // Regression guards for the review fixes: a query with no tracker must
+    // come back byte-for-byte (separators, double-&, trailing '?' kept), a
+    // '?' inside the fragment is not the query start, 'ref' is functional
+    // not a tracker, and a kept segment keeps the separator that followed
+    // the dropped one.
+
+    void cleanLinksNoTrackerLeavesQueryUntouched()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?a=1;b=2"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?a=1;b=2"));
+        QVERIFY(c.removedTrackingParams.isEmpty());
+    }
+
+    void cleanLinksNoTrackerKeepsDoubleAmpersand()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?a=1&&b=2"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?a=1&&b=2"));
+    }
+
+    void cleanLinksIgnoresQueryMarkInsideFragment()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://x/#/route?utm_source=y&ref=a"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://x/#/route?utm_source=y&ref=a"));
+        QVERIFY(c.removedTrackingParams.isEmpty());
+    }
+
+    void cleanLinksKeepsRefFunctionalParam()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://github.com/bitskc/tern?ref=main&utm_source=n"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://github.com/bitskc/tern?ref=main"));
+        QCOMPARE(c.removedTrackingParams, QStringList{QStringLiteral("utm_source")});
+    }
+
+    void cleanLinksKeepsSeparatorAfterDroppedSegment()
+    {
+        // "a=1;utm=x&b=2": utm is dropped, b's surviving separator is the
+        // '&' that ended the dropped segment, so the result is a=1&b=2.
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/?a=1;utm_source=x&b=2"), cfg);
+        QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?a=1&b=2"));
+    }
+
+    void cleanLinksLeavesOpenUrlUnchangedForWrappedLink()
+    {
+        // With unwrapping on but openUnwrapped off, openUrl must keep the
+        // dirty wrapper even though matchUrl is cleaned.
+        Config cfg;
+        cfg.openUnwrapped = false;
+        const Click c = runPipeline(
+            QStringLiteral("https://nam.safelinks.protection.outlook.com/?url=https%3A%2F%2Fexample.com%2F%3Futm_source%3Dx&utm_medium=email"), cfg);
+        QVERIFY(c.openUrl.contains(QStringLiteral("utm_medium=email")));
+    }
 };
 
 QTEST_MAIN(PipelineTest)

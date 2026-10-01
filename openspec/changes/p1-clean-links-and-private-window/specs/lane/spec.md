@@ -24,13 +24,13 @@ When tracking parameter stripping is enabled (`stripTrackingParams: true`), Lane
 
 The stripping rule SHALL match:
 1. Any query parameter whose percent-decoded key starts with `utm_` (case-insensitive).
-2. Known global tracker keys (case-insensitive): `fbclid`, `gclid`, `gbraid`, `wbraid`, `msclkid`, `twclid`, `mc_eid`, `mc_cid`, `mkt_tok`, `_ga`, `_gl`, `dclid`, `yclid`, `ttclid`, `li_fat_id`, `_hsenc`, `_hsmi`, `oly_enc_id`, `oly_anon_id`, `vero_id`, `rb_clickid`, `s_cid`, `wickedid`.
+2. Known global tracker keys (case-insensitive): `fbclid`, `gclid`, `gbraid`, `wbraid`, `msclkid`, `twclid`, `mc_eid`, `mc_cid`, `mkt_tok`, `_ga`, `_gl`, `dclid`, `yclid`, `ttclid`, `li_fat_id`, `_hsenc`, `_hsmi`, `oly_enc_id`, `oly_anon_id`, `vero_id`, `rb_clickid`, `s_cid`, `wickedid`, `igshid`; plus any key with prefix `hsa_` (case-insensitive). `ref` is NOT a tracker and is never stripped.
 3. Host-scoped tracker keys: `si` SHALL be stripped only when the host is `youtube.com`, `youtu.be`, `music.youtube.com`, or `open.spotify.com`.
 
 #### Scenario: Campaign tracking parameters stripped
 - **WHEN** Lane processes a URL containing `https://example.com/article?utm_source=twitter&id=42&fbclid=xyz`
 - **AND** `stripTrackingParams` is `true`
-- **THEN** Lane sets `matchUrl` and `openUrl` to `https://example.com/article?id=42`
+- **THEN** Lane sets `matchUrl` to `https://example.com/article?id=42`; because the link is not a wrapped/shortened URL, `openUrl` equals that same clean `matchUrl`
 
 #### Scenario: Stripping must not re-encode parameters or path
 - **WHEN** Lane processes `https://bücher.de/café?token=YWJj==&utm_source=x#section?utm_source=y`

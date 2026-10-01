@@ -14,9 +14,10 @@ namespace
 
 bool isBannedTrackingKey(const QString &decodedKey)
 {
-    // High-confidence unique tracking keys. "ref" and the campaign-suite
-    // prefixes below are noisy in the wild but are exactly what surveys
-    // of newsletter/social/ad-platform links keep turning up.
+    // High-confidence unique tracking keys: the campaign-suite prefixes
+    // below plus exactly what surveys of newsletter/social/ad-platform
+    // links keep turning up. "ref" is intentionally absent; it is a real
+    // functional parameter (GitHub/GitLab branch refs), not a tracker.
     static const QSet<QString> kExactBanned = {
         QStringLiteral("fbclid"),      QStringLiteral("gclid"),      QStringLiteral("gbraid"),
         QStringLiteral("wbraid"),      QStringLiteral("msclkid"),    QStringLiteral("twclid"),

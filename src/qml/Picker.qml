@@ -53,7 +53,7 @@ Window {
     Shortcut { sequence: "Alt+A"; onActivated: controller.alwaysForHost = !controller.alwaysForHost }
     Shortcut {
         sequence: "Alt+P"
-        enabled: list.currentIndex >= 0
+        enabled: list.currentIndex >= 0 && list.currentItem !== null
         onActivated: controller.pickPrivate(list.currentItem.targetId)
     }
 
