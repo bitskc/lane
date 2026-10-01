@@ -37,6 +37,7 @@ class Controller : public QObject
     Q_PROPERTY(bool toastEnabled READ toastEnabled WRITE setToastEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool unwrapO365 READ unwrapO365 WRITE setUnwrapO365 NOTIFY settingsChanged)
     Q_PROPERTY(bool unshorten READ unshorten WRITE setUnshorten NOTIFY settingsChanged)
+    Q_PROPERTY(bool stripTrackingParams READ stripTrackingParams WRITE setStripTrackingParams NOTIFY settingsChanged)
     Q_PROPERTY(bool autostart READ autostart WRITE setAutostartEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool closeOnFocusLoss READ closeOnFocusLoss WRITE setCloseOnFocusLoss NOTIFY settingsChanged)
     Q_PROPERTY(bool showUrl READ showUrl WRITE setShowUrl NOTIFY settingsChanged)
@@ -59,6 +60,7 @@ class Controller : public QObject
     Q_PROPERTY(QString updateReleaseUrl READ updateReleaseUrl NOTIFY updateStateChanged)
     Q_PROPERTY(QString updateErrorMessage READ updateErrorMessage NOTIFY updateStateChanged)
     Q_PROPERTY(QString updateLastChecked READ updateLastChecked NOTIFY updateStateChanged)
+    Q_PROPERTY(QString pickerNotice READ pickerNotice NOTIFY pickerNoticeChanged)
 public:
     explicit Controller(QObject *parent = nullptr);
 
@@ -72,6 +74,7 @@ public:
     QString updateReleaseUrl() const { return m_updateChecker->releaseUrl(); }
     QString updateErrorMessage() const { return m_updateChecker->errorMessage(); }
     QString updateLastChecked() const;
+    QString pickerNotice() const { return m_pickerNotice; }
 
     QString currentUrl() const { return m_click.openUrl; }
     QString currentHost() const { return m_click.host; }
@@ -91,6 +94,8 @@ public:
     void setUnwrapO365(bool on);
     bool unshorten() const { return m_config.unshorten; }
     void setUnshorten(bool on);
+    bool stripTrackingParams() const { return m_config.stripTrackingParams; }
+    void setStripTrackingParams(bool on);
     bool autostart() const { return m_config.autostart; }
     void setAutostartEnabled(bool on);
     bool closeOnFocusLoss() const { return m_config.closeOnFocusLoss; }
@@ -122,6 +127,14 @@ public:
     Q_INVOKABLE void openUrl(const QString &url, bool forcePicker = false);
     Q_INVOKABLE void pick(int row);
     Q_INVOKABLE void pickId(const QString &id);
+    // Alt+P from the picker: launches the highlighted target's private
+    // counterpart (privateCounterpart() in router.cpp) instead of the
+    // target itself. Bypasses pickId() entirely so it never touches
+    // alwaysForHost/remembered persistence. Fails closed with
+    // pickerNotice set (and the picker left open) when the target has no
+    // private counterpart.
+    Q_INVOKABLE void pickPrivate(const QString &targetId);
+    Q_INVOKABLE void clearPickerNotice();
     Q_INVOKABLE void cancelPicker();
     Q_INVOKABLE void copyCurrent();
     Q_INVOKABLE void openSettings();
@@ -149,6 +162,7 @@ Q_SIGNALS:
     void holdProgressChanged();
     void holdChanged();
     void updateStateChanged();
+    void pickerNoticeChanged();
 private:
     void reload();
     void persist();
@@ -192,6 +206,11 @@ private:
     QList<Target> m_targets;
     Click m_click;
     bool m_alwaysForHost = false;
+    // Set by pickPrivate() when the highlighted target has no private
+    // counterpart (fail closed); read by Picker.qml's inline notice.
+    // Cleared on every showPicker() and whenever the QML picker list
+    // selection moves to a different target.
+    QString m_pickerNotice;
     // Cached result of the last xdg-settings default-browser check (see
     // refreshDefaultBrowserState()); isDefaultBrowser() only reads this,
     // it never spawns xdg-settings itself.

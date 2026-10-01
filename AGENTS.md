@@ -54,6 +54,7 @@ Top-level keys:
   "unshorten": true,
   "openUnwrapped": false,
   "preferPwa": true,
+  "stripTrackingParams": true,
   "holdAutoOpen": false,
   "holdMs": 1600,
   "autostart": false,
