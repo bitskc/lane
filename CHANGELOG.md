@@ -9,6 +9,11 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Added
 
+- The picker now shows an explicit empty state instead of a blank list.
+  A filter that matches nothing explains that Esc clears the text, and
+  when no destinations exist at all the card offers Alt+S to open
+  Settings and Alt+R to rescan.
+
 - An `Alt+P` shortcut in the picker opens the highlighted destination's
   private or incognito window instead of its normal one. It matches the
   exact sibling profile Lane already discovers (a Gecko profile's
