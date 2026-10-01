@@ -184,6 +184,24 @@ private Q_SLOTS:
         });
         QVERIFY(hasDev);
 
+        // The fixture carries two extra "Dev" rows (ids 7) and a lowercase
+        // "work" (id 8): same-name containers differ only in userContextId
+        // are duplicates Zen leaves behind, so discovery keeps exactly one
+        // of each name (the first/lowest id).
+        const auto devCount = std::count_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.containerName.compare(QLatin1String("Dev"), Qt::CaseInsensitive) == 0;
+        });
+        QCOMPARE(devCount, 1);
+        const auto dev = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.containerName == QLatin1String("Dev");
+        });
+        QVERIFY(dev != targets.end());
+        QCOMPARE(dev->containerId, 6);
+        const auto workCount = std::count_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.containerName.compare(QLatin1String("Work"), Qt::CaseInsensitive) == 0;
+        });
+        QCOMPARE(workCount, 1);
+
         // The internal placeholder identity (public: false) never becomes a target.
         const bool hasInternal = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
             return t.kind == Kind::Container && t.name.startsWith(QLatin1String("userContextIdInternal"));

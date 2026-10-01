@@ -46,6 +46,17 @@ version is 0, minor releases may still contain breaking changes.
   the switch simply does nothing: scoped rules apply everywhere and the
   global default still wins.
 
+### Fixed
+
+- Duplicate same-name containers in a Firefox/Zen profile's
+  containers.json (stale rows left when a container is re-created) no
+  longer flood the picker. Discovery now keeps the first of each name
+  and reports the dropped duplicates once.
+
+- The rules list delegate declared an `enabled` property that shadowed
+  Qt Quick's own `enabled` member; renamed to `ruleEnabled` to silence
+  the runtime warning and remove a possible crash trigger.
+
 ### Changed
 
 - Lane now strips common tracking parameters (`utm_*`, `fbclid`,

@@ -37,7 +37,7 @@ FormCard.FormCardPage {
                 required property string pattern
                 required property string scope
                 required property string targetId
-                required property bool enabled
+                required property bool ruleEnabled
                 required property string activity
                 required property bool isRegex
                 readonly property int ruleIndex: index
@@ -99,7 +99,7 @@ FormCard.FormCardPage {
                 }
                 FormCard.FormSwitchDelegate {
                     text: "Enabled"
-                    checked: enabled
+                    checked: ruleEnabled
                     onToggled: controller.ruleModel.setEnabledAt(ruleIndex, checked)
                 }
                 FormCard.FormButtonDelegate {
