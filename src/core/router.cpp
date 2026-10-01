@@ -5,6 +5,7 @@
 #include "urlutil.h"
 
 #include <QSet>
+#include <algorithm>
 
 namespace Lane
 {
@@ -59,8 +60,17 @@ bool shouldPruneRemembered(int missCount, int threshold)
     return missCount >= threshold;
 }
 
-const Target *defaultTarget(const QList<Target> &targets, const Config &config)
+const Target *defaultTarget(const QList<Target> &targets, const Config &config, const QString &activityId)
 {
+    // A per-Activity fallback only applies while Activity routing is in
+    // effect, which callers signal by passing the current Activity ID.
+    if (!activityId.isEmpty()) {
+        if (const Target *t = findTarget(targets, config.activityDefaults.value(activityId))) {
+            if (!t->hidden && t->kind != Kind::Action) {
+                return t;
+            }
+        }
+    }
     if (const Target *t = findTarget(targets, config.defaultTargetId)) {
         if (!t->hidden && t->kind != Kind::Action) {
             return t;
@@ -106,6 +116,22 @@ static QList<QPair<const Rule *, const Target *>> matchingRules(const Click &cli
         const Target *t = findTarget(targets, rule.targetId);
         if (t && !t->hidden) {
             out.append({&rule, t});
+        }
+    }
+    // While the click carries an Activity, a rule scoped to that
+    // Activity is a stronger statement of intent than a rule that applies
+    // everywhere, so scoped matches win and unscoped ones no longer get
+    // a vote. Rules scoped to other Activities already failed the gate
+    // in ruleMatches() before reaching this list.
+    if (!click.activityId.isEmpty()) {
+        const bool hasScoped = std::any_of(out.begin(), out.end(), [](const auto &m) {
+            return !m.first->activity.trimmed().isEmpty();
+        });
+        if (hasScoped) {
+            out.erase(std::remove_if(out.begin(), out.end(), [](const auto &m) {
+                          return m.first->activity.trimmed().isEmpty();
+                      }),
+                      out.end());
         }
     }
     return out;
@@ -239,7 +265,7 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
         break;
     }
 
-    if (const Target *t = defaultTarget(targets, config)) {
+    if (const Target *t = defaultTarget(targets, config, click.activityId)) {
         d.action = Decision::Action::Launch;
         d.target = *t;
         d.reason = QStringLiteral("default");

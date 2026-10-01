@@ -75,4 +75,9 @@ target_link_libraries(lane
         LayerShellQt::Interface
 )
 
+if(PlasmaActivities_FOUND)
+    target_link_libraries(lane PRIVATE Plasma::Activities)
+    target_compile_definitions(lane PRIVATE HAVE_PLASMA_ACTIVITIES)
+endif()
+
 install(TARGETS lane ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})

@@ -77,6 +77,61 @@ private Q_SLOTS:
         c.matchUrl = QStringLiteral("https://github.com");
         QVERIFY(!ruleMatches(r, c));
     }
+
+    void activityGate()
+    {
+        // ruleActivityMatches is the pure gate; callers pass the current
+        // Activity explicitly so no KActivities service is needed here.
+        Rule r;
+        r.pattern = QStringLiteral("github");
+        r.activity = QStringLiteral("act-work");
+
+        // Unscoped rules pass in every Activity and with none at all.
+        Rule unscoped;
+        QVERIFY(ruleActivityMatches(unscoped, QStringLiteral("act-work"), QStringLiteral("Work")));
+        QVERIFY(ruleActivityMatches(unscoped, QString(), QString()));
+
+        // Scoped rules match by ID or by name, only while an Activity is
+        // actually known; with no current Activity nothing is filtered,
+        // which is what keeps non-Plasma desktops identical to before.
+        QVERIFY(ruleActivityMatches(r, QStringLiteral("act-work"), QStringLiteral("Work")));
+        QVERIFY(ruleActivityMatches(r, QStringLiteral("act-work"), QString()));
+        // The rule value is compared against both the current Activity's
+        // ID and its name: matching either one counts, matching neither
+        // does not.
+        QVERIFY(ruleActivityMatches(r, QStringLiteral("other-id"), QStringLiteral("act-work")));
+        QVERIFY(!ruleActivityMatches(r, QStringLiteral("other-id"), QStringLiteral("Work")));
+        QVERIFY(!ruleActivityMatches(r, QStringLiteral("act-fun"), QStringLiteral("Personal")));
+        QVERIFY(ruleActivityMatches(r, QString(), QString()));
+    }
+
+    void activityScopedRuleThroughClick()
+    {
+        Rule r;
+        r.pattern = QStringLiteral("github");
+        r.scope = MatchScope::Domain;
+        r.activity = QStringLiteral("act-work");
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/foo");
+
+        // Same click, different Activity context: the rule only matches
+        // while its Activity is current.
+        c.activityId = QStringLiteral("act-work");
+        QVERIFY(ruleMatches(r, c));
+        c.activityId = QStringLiteral("act-fun");
+        QVERIFY(!ruleMatches(r, c));
+        c.activityId.clear();
+        QVERIFY(ruleMatches(r, c));
+
+        // Name matching: a rule written against the Activity's display
+        // name matches when the click carries that name.
+        r.activity = QStringLiteral("Work");
+        c.activityId = QStringLiteral("act-work");
+        c.activityName = QStringLiteral("Work");
+        QVERIFY(ruleMatches(r, c));
+        c.activityName = QStringLiteral("Personal");
+        QVERIFY(!ruleMatches(r, c));
+    }
 };
 
 QTEST_MAIN(MatcherTest)

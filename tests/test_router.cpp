@@ -408,6 +408,89 @@ private Q_SLOTS:
         QList<Target> targets{lone};
         QVERIFY(privateCounterpart(targets, lone).id.isEmpty());
     }
+
+    void activityDefaultWinsOverGlobalDefault()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:global"), QStringLiteral("Global"), true),
+                              makeBrowser(QStringLiteral("browser:brave:work"), QStringLiteral("Work"))};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::Never;
+        cfg.defaultTargetId = QStringLiteral("browser:zen:global");
+        cfg.activityDefaults.insert(QStringLiteral("act-work"), QStringLiteral("browser:brave:work"));
+
+        Click c;
+        c.matchUrl = QStringLiteral("https://example.com");
+        // No Activity context: the global default still applies.
+        const Decision d0 = route(c, targets, cfg);
+        QCOMPARE(d0.action, Decision::Action::Launch);
+        QCOMPARE(d0.target.id, QStringLiteral("browser:zen:global"));
+
+        // Under the configured Activity the per-Activity fallback wins.
+        c.activityId = QStringLiteral("act-work");
+        const Decision d1 = route(c, targets, cfg);
+        QCOMPARE(d1.action, Decision::Action::Launch);
+        QCOMPARE(d1.target.id, QStringLiteral("browser:brave:work"));
+        QCOMPARE(d1.reason, QStringLiteral("default"));
+
+        // An Activity with no entry in activityDefaults falls back to
+        // the global default.
+        c.activityId = QStringLiteral("act-fun");
+        const Decision d2 = route(c, targets, cfg);
+        QCOMPARE(d2.target.id, QStringLiteral("browser:zen:global"));
+    }
+
+    void activityScopedRuleWinsOverUnscoped()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("a"), QStringLiteral("A")),
+                              makeBrowser(QStringLiteral("b"), QStringLiteral("B"))};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::Never;
+        Rule general;
+        general.pattern = QStringLiteral("ex");
+        general.scope = MatchScope::Any;
+        general.targetId = QStringLiteral("a");
+        Rule scoped = general;
+        scoped.targetId = QStringLiteral("b");
+        scoped.activity = QStringLiteral("act-work");
+        cfg.rules = {general, scoped};
+
+        Click c;
+        c.matchUrl = QStringLiteral("https://example.com");
+        c.activityId = QStringLiteral("act-work");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.action, Decision::Action::Launch);
+        QCOMPARE(d.target.id, QStringLiteral("b"));
+        QCOMPARE(d.reason, QStringLiteral("rule"));
+    }
+
+    void activityScopedRuleFallsThroughElsewhere()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("a"), QStringLiteral("A")),
+                              makeBrowser(QStringLiteral("b"), QStringLiteral("B"))};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::Never;
+        Rule general;
+        general.pattern = QStringLiteral("ex");
+        general.scope = MatchScope::Any;
+        general.targetId = QStringLiteral("a");
+        Rule scoped = general;
+        scoped.targetId = QStringLiteral("b");
+        scoped.activity = QStringLiteral("act-work");
+        cfg.rules = {general, scoped};
+
+        Click c;
+        c.matchUrl = QStringLiteral("https://example.com");
+        // A different Activity: the scoped rule is gated out and the
+        // unscoped rule applies.
+        c.activityId = QStringLiteral("act-fun");
+        const Decision d1 = route(c, targets, cfg);
+        QCOMPARE(d1.target.id, QStringLiteral("a"));
+
+        // No Activity at all: same outcome, matching pre-feature Lane.
+        c.activityId.clear();
+        const Decision d2 = route(c, targets, cfg);
+        QCOMPARE(d2.target.id, QStringLiteral("a"));
+    }
 };
 
 QTEST_MAIN(RouterTest)
