@@ -4,6 +4,7 @@
 #include "RuleModel.h"
 #include "TargetModel.h"
 #include "UpdateChecker.h"
+#include "DefaultBrowserWatcher.h"
 #include "core/types.h"
 #include "core/pipeline.h"
 
@@ -45,6 +46,7 @@ class Controller : public QObject
     Q_PROPERTY(bool unwrapO365 READ unwrapO365 WRITE setUnwrapO365 NOTIFY settingsChanged)
     Q_PROPERTY(bool unshorten READ unshorten WRITE setUnshorten NOTIFY settingsChanged)
     Q_PROPERTY(bool stripTrackingParams READ stripTrackingParams WRITE setStripTrackingParams NOTIFY settingsChanged)
+    Q_PROPERTY(bool watchdogEnabled READ watchdogEnabled WRITE setWatchdogEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool autostart READ autostart WRITE setAutostartEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool closeOnFocusLoss READ closeOnFocusLoss WRITE setCloseOnFocusLoss NOTIFY settingsChanged)
     Q_PROPERTY(bool showUrl READ showUrl WRITE setShowUrl NOTIFY settingsChanged)
@@ -118,6 +120,8 @@ public:
     void setUnshorten(bool on);
     bool stripTrackingParams() const { return m_config.stripTrackingParams; }
     void setStripTrackingParams(bool on);
+    bool watchdogEnabled() const { return m_config.watchdogEnabled; }
+    void setWatchdogEnabled(bool on);
     bool autostart() const { return m_config.autostart; }
     void setAutostartEnabled(bool on);
     bool closeOnFocusLoss() const { return m_config.closeOnFocusLoss; }
@@ -215,6 +219,10 @@ private:
     void hideHold();
     UnshortenFn unshortenFn() const;
     void refreshDefaultBrowserState();
+    // Runs after the debounced watcher fires: compares the last-known
+    // default state against a fresh check and raises the takeover alert
+    // only on a real loss.
+    void onMimeappsChanged();
     // Automatic counterpart to the manual clearDeadRemembered() above:
     // called from reload() on every daemon start/Settings open/Rediscover,
     // so it must not delete a remembered host the first time discovery
@@ -242,6 +250,9 @@ private:
     // refreshDefaultBrowserState()); isDefaultBrowser() only reads this,
     // it never spawns xdg-settings itself.
     bool m_isDefaultBrowser = false;
+    // Watches mimeapps.list for a browser update or app that grabs the
+    // http/https handler; owned by the takeover alert it can raise.
+    DefaultBrowserWatcher *m_defaultWatcher = nullptr;
     // Whatever inbound XDG_ACTIVATION_TOKEN this click's openUrl() call
     // carried (from KDBusService relaying a caller's token, or inherited at
     // process start), consumed at most once per click. Used only for a

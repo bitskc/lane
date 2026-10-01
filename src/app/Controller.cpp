@@ -98,6 +98,14 @@ Controller::Controller(QObject *parent)
         Q_EMIT activitiesChanged();
     });
 #endif
+
+    // The watchdog only fires while the daemon lives; Controller is the
+    // long-lived process object, so owning it here keeps it out of the
+    // short-lived --pick/--explain invocations.
+    m_defaultWatcher = new DefaultBrowserWatcher(this);
+    connect(m_defaultWatcher, &DefaultBrowserWatcher::mimeappsChanged,
+            this, &Controller::onMimeappsChanged);
+    m_defaultWatcher->setEnabled(m_config.watchdogEnabled);
 }
 
 QString Controller::activityNameFor(const QString &id) const
@@ -241,6 +249,31 @@ void Controller::refreshDefaultBrowserState()
     m_isDefaultBrowser = QString::fromUtf8(p.readAllStandardOutput()).trimmed() == QLatin1String("app.lane.Lane.desktop");
 }
 
+void Controller::onMimeappsChanged()
+{
+    if (!m_config.watchdogEnabled) {
+        return;
+    }
+    const bool was = m_isDefaultBrowser;
+    refreshDefaultBrowserState();
+    // Only a real takeover is worth an interruption: Lane was the
+    // default before this write and is not now. A user who never opted
+    // in (was==false) or who made Lane the default themselves
+    // (still true after) sees nothing.
+    if (!was || m_isDefaultBrowser) {
+        return;
+    }
+    Q_EMIT defaultBrowserChanged();
+    auto *n = new KNotification(QStringLiteral("browser-takeover"), KNotification::CloseOnTimeout, this);
+    n->setComponentName(QStringLiteral("app.lane.Lane"));
+    n->setTitle(QStringLiteral("Default browser changed"));
+    n->setText(QStringLiteral("Something replaced Lane as the default browser. Restore it from here."));
+    n->setIconName(QStringLiteral("app.lane.Lane"));
+    auto *restore = n->addAction(QStringLiteral("Restore Lane"));
+    connect(restore, &KNotificationAction::activated, this, &Controller::makeDefaultBrowser);
+    n->sendEvent();
+}
+
 QString Controller::pickerPolicy() const
 {
     return pickerPolicyToString(m_config.pickerPolicy);
@@ -291,6 +324,16 @@ void Controller::setStripTrackingParams(bool on)
 void Controller::setActivityRoutingEnabled(bool on)
 {
     m_config.activityRoutingEnabled = on;
+    persist();
+    Q_EMIT settingsChanged();
+}
+
+void Controller::setWatchdogEnabled(bool on)
+{
+    m_config.watchdogEnabled = on;
+    if (m_defaultWatcher) {
+        m_defaultWatcher->setEnabled(on);
+    }
     persist();
     Q_EMIT settingsChanged();
 }

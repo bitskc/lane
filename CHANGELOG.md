@@ -9,6 +9,12 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Added
 
+- Lane now watches the default-browser association and notifies you when
+  a browser update or another app takes it over, with a one-click
+  "Restore Lane" action. It only speaks up if Lane was the default
+  before, so it never nags a setup that left it off. Turn it off in
+  Preferences (watchdogEnabled).
+
 - An `Alt+P` shortcut in the picker opens the highlighted destination's
   private or incognito window instead of its normal one. It matches the
   exact sibling profile Lane already discovers (a Gecko profile's
