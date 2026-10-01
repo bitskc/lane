@@ -139,6 +139,21 @@ static QList<QPair<const Rule *, const Target *>> matchingRules(const Click &cli
 
 QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, const Config &config)
 {
+    // The suggestion is what route() would auto-open if the picker were
+    // not in the way -- a web app whose scope covers the clicked site,
+    // else the remembered target for this host. It earns the "Suggested"
+    // badge and the initial selection, but it does NOT float to row 0:
+    // row order is the user's list from Settings (config.targetOrder)
+    // followed by unlisted targets in discovery order, so a matching PWA
+    // can sit below a browser the user dragged above it.
+    QString suggestedId;
+    const auto pwas = pwaMatches(click, targets);
+    if (!pwas.isEmpty()) {
+        suggestedId = pwas.front()->id;
+    } else if (const Target *t = findTarget(targets, lookupRemembered(click.matchUrl, config.remembered))) {
+        suggestedId = t->id;
+    }
+
     QList<Target> ranked;
     QSet<QString> seen;
 
@@ -151,15 +166,11 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
             return;
         }
         seen.insert(t.id);
-        ranked.append(t);
+        Target row = t;
+        row.suggested = (row.id == suggestedId);
+        ranked.append(row);
     };
 
-    for (const auto *t : pwaMatches(click, targets)) {
-        push(*t);
-    }
-    if (const Target *t = findTarget(targets, lookupRemembered(click.matchUrl, config.remembered))) {
-        push(*t);
-    }
     for (const auto &id : config.targetOrder) {
         if (const Target *t = findTarget(targets, id)) {
             push(*t);

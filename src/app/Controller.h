@@ -177,7 +177,7 @@ public:
     Q_INVOKABLE void clearDeadRemembered();
     Q_INVOKABLE void removeCustomTarget(const QString &id);
     Q_INVOKABLE void renameTarget(const QString &id, const QString &name);
-    Q_INVOKABLE void moveTarget(const QString &id, int newIndexInKind);
+    Q_INVOKABLE void moveTarget(const QString &id, int newIndex);
     Q_INVOKABLE void checkForUpdates();
     Q_INVOKABLE void openExternalUrl(const QString &url);
 Q_SIGNALS:

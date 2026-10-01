@@ -1,11 +1,7 @@
 #include "PickerModel.h"
 
-#include <QHash>
-
 namespace Lane
 {
-
-static QString sectionFor(const Target &t);
 
 PickerModel::PickerModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -37,11 +33,6 @@ QVariant PickerModel::data(const QModelIndex &index, int role) const
         return t.icon;
     case KindRole:
         return kindName(t.kind);
-    case SectionRole:
-        // Row 0 is the ranked leader pinned by applyFilter(); it gets its
-        // own "Suggested" header so it is not grouped under (and does not
-        // duplicate) the section it was pulled out of.
-        return index.row() == 0 ? QStringLiteral("Suggested") : sectionFor(t);
     case ColorRole:
         return t.kind == Kind::Container && t.color.isValid() ? t.color.name() : QString();
     case ShortcutRole:
@@ -49,7 +40,7 @@ QVariant PickerModel::data(const QModelIndex &index, int role) const
         // shortcuts are bound, so only that many rows may claim one.
         return index.row() < 8 ? QString::number(index.row() + 1) : QString();
     case SuggestedRole:
-        return index.row() == 0;
+        return t.suggested;
     case IncognitoRole:
         return t.incognito;
     default:
@@ -65,7 +56,6 @@ QHash<int, QByteArray> PickerModel::roleNames() const
         {SubtitleRole, "subtitle"},
         {IconRole, "iconName"},
         {KindRole, "kind"},
-        {SectionRole, "section"},
         {ColorRole, "colorName"},
         {ShortcutRole, "shortcut"},
         {SuggestedRole, "suggested"},
@@ -97,70 +87,30 @@ Target PickerModel::targetAt(int row) const
     return m_shown.at(row);
 }
 
-static QString sectionFor(const Target &t)
-{
-    switch (t.kind) {
-    case Kind::Container:
-        return QStringLiteral("Containers");
-    case Kind::Pwa:
-        return QStringLiteral("Web apps");
-    case Kind::Action:
-        return QStringLiteral("Actions");
-    case Kind::Custom:
-        return QStringLiteral("Apps");
-    case Kind::BrowserProfile:
-        return QStringLiteral("Browsers");
-    }
-    return QStringLiteral("Browsers");
-}
-
 void PickerModel::applyFilter()
 {
     beginResetModel();
-    m_shown.clear();
+    // Row order is exactly the order rankForPicker() produced -- the
+    // user's targetOrder with unlisted targets appended in discovery
+    // order. Filtering only removes rows; it never reorders or groups
+    // them, so a section-free flat list always reflects what the user
+    // arranged on the Settings page. The suggestion is carried on the
+    // Target's `suggested` flag rather than pinned to row 0.
     const QString needle = m_filter.trimmed();
-    QList<Target> matched;
+    m_shown.clear();
+    m_suggestedIndex = -1;
     for (const auto &t : m_all) {
         if (needle.isEmpty()
             || t.displayName().contains(needle, Qt::CaseInsensitive)
             || t.subtitle.contains(needle, Qt::CaseInsensitive)
             || t.browserName.contains(needle, Qt::CaseInsensitive)
             || kindName(t.kind).contains(needle, Qt::CaseInsensitive)) {
-            matched.append(t);
+            if (t.suggested && m_suggestedIndex < 0) {
+                m_suggestedIndex = m_shown.size();
+            }
+            m_shown.append(t);
         }
     }
-
-    // rankForPicker() already decided priority order (current-site PWA and
-    // remembered destination lead). Its top pick is pinned to row 0 so
-    // Enter/digit-1 always open the suggestion; the remaining rows are
-    // grouped by section for display only. Section *order* is fixed (not
-    // first-encounter order from rankForPicker) so containers are not
-    // buried below every browser profile when targetOrder lists
-    // Brave/Firefox/Edge first.
-    QHash<QString, QList<Target>> buckets;
-    for (qsizetype i = 1; i < matched.size(); ++i) {
-        buckets[sectionFor(matched.at(i))].append(matched.at(i));
-    }
-    static const QStringList kSectionOrder = {
-        QStringLiteral("Web apps"),
-        QStringLiteral("Containers"),
-        QStringLiteral("Browsers"),
-        QStringLiteral("Apps"),
-        QStringLiteral("Actions"),
-    };
-    int sections = 0;
-    if (!matched.isEmpty()) {
-        m_shown.append(matched.first());
-        ++sections; // the leader's own "Suggested" section
-    }
-    for (const auto &key : kSectionOrder) {
-        if (!buckets.contains(key)) {
-            continue;
-        }
-        m_shown += buckets.value(key);
-        ++sections;
-    }
-    m_sectionCount = sections;
 
     endResetModel();
     Q_EMIT countChanged();

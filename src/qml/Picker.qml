@@ -15,32 +15,16 @@ Window {
 
     readonly property int maxRows: 8
     readonly property int rowHeight: 48
-    readonly property int sectionHeaderHeight: 26
-
-    function visibleSectionCount() {
-        var m = controller.pickerModel
-        var c = m.count
-        if (c === 0)
-            return 0
-        var limit = Math.min(root.maxRows, c)
-        var seen = {}
-        var n = 0
-        for (var i = 0; i < limit; i++) {
-            var section = m.data(m.index(i, 0), 262)
-            if (!seen[section]) {
-                seen[section] = true
-                n++
-            }
-        }
-        return n
-    }
 
     onVisibleChanged: {
         if (visible) {
             width = Screen.width
             height = Screen.height
             filterField.text = ""
-            list.currentIndex = 0
+            // The suggestion is a flag on a row now, not the pinned head:
+            // select it so Enter still opens it even when the user's
+            // ordering put something else first.
+            list.currentIndex = Math.max(0, controller.pickerModel.suggestedIndex)
             filterField.forceActiveFocus()
         }
     }
@@ -225,7 +209,6 @@ Window {
                 width: parent.width
                 height: list.count === 0 ? root.rowHeight * 2
                                          : Math.min(root.maxRows, list.count) * root.rowHeight
-                                           + root.visibleSectionCount() * root.sectionHeaderHeight
 
                 Item {
                     id: emptyState
@@ -292,27 +275,6 @@ Window {
                 Accessible.role: Accessible.List
                 Accessible.name: "Destinations"
 
-                section.property: "section"
-                section.criteria: ViewSection.FullString
-                section.delegate: Rectangle {
-                    required property string section
-                    width: ListView.view.width
-                    height: root.sectionHeaderHeight
-                    color: "transparent"
-                    QQC.Label {
-                        anchors.left: parent.left
-                        anchors.leftMargin: 4
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: section
-                        font.pixelSize: 10
-                        font.weight: Font.DemiBold
-                        opacity: 0.5
-    
-
-                    Accessible.role: Accessible.StaticText
-                    Accessible.name: section
-                }
-                }
 
                 delegate: Rectangle {
                     required property int index
@@ -388,10 +350,10 @@ Window {
                             }
                         }
                         Rectangle {
-                            // Row 0 is the ranked leader (model role
-                            // `suggested`); badge it so the pinned pick
-                            // reads as a suggestion, not just the first
-                            // row of a section.
+                            // `suggested` travels with the target (a
+                            // matching web app or remembered destination)
+                            // wherever the user's ordering placed it, so
+                            // the badge can sit mid-list now.
                             visible: suggested
                             Layout.preferredWidth: suggestedLabel.implicitWidth + 12
                             Layout.preferredHeight: 16

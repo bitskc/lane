@@ -656,6 +656,33 @@ private Q_SLOTS:
         QCOMPARE(result, QStringList({QStringLiteral("brave"), QStringLiteral("zen-private"), QStringLiteral("zen")}));
     }
 
+    void moveIdAmongSiblingsCrossesKinds()
+    {
+        // The reorderable set is every non-incognito, non-Action target,
+        // so a browser dragged to the top lands above web apps while an
+        // Action landmark keeps its slot in the id list.
+        QList<Target> targets;
+        Target zen;
+        zen.id = QStringLiteral("zen");
+        zen.kind = Kind::BrowserProfile;
+        Target pwa;
+        pwa.id = QStringLiteral("pwa:gh");
+        pwa.kind = Kind::Pwa;
+        Target action;
+        action.id = QStringLiteral("action:copy");
+        action.kind = Kind::Action;
+        Target brave;
+        brave.id = QStringLiteral("brave");
+        brave.kind = Kind::BrowserProfile;
+        targets = {zen, pwa, action, brave};
+
+        const auto result = moveIdAmongSiblings(targets, QStringLiteral("brave"), 0);
+        QCOMPARE(result, QStringList({QStringLiteral("brave"),
+                                      QStringLiteral("zen"),
+                                      QStringLiteral("action:copy"),
+                                      QStringLiteral("pwa:gh")}));
+    }
+
     void moveIdAmongSiblingsUnknownId()
     {
         QList<Target> targets;
