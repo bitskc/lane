@@ -791,7 +791,8 @@ QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefi
     // containers.json that differ only in userContextId (a stale entry
     // left over when a container is re-created). Two targets named
     // "Dev" in one profile are indistinguishable to the user, so keep
-    // the lowest id and skip the rest by name, case-insensitively.
+    // the first in file order and skip the rest by name,
+    // case-insensitively.
     QSet<QString> seenNames;
     QStringList droppedDupes;
     for (const auto &v : identities) {

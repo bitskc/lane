@@ -158,7 +158,13 @@ Window {
                     background: Item {}
                     onTextChanged: {
                         controller.pickerModel.setFilter(text)
-                        list.currentIndex = 0
+                        // While filtering, select the first surviving row;
+                        // when the filter is cleared, put the selection back
+                        // on the suggested row so Enter keeps meaning
+                        // "open the suggestion" in the common no-filter case.
+                        list.currentIndex = text.length === 0
+                            ? Math.max(0, controller.pickerModel.suggestedIndex)
+                            : 0
                         controller.clearPickerNotice()
                     }
                     Keys.onDownPressed: list.incrementCurrentIndex()
