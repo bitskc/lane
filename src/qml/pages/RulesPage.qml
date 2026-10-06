@@ -15,6 +15,13 @@ FormCard.FormCardPage {
     readonly property var activityIds: [""].concat(controller.availableActivities.map(function(a) { return a.id }))
     readonly property var activityLabels: ["Any activity"].concat(controller.availableActivities.map(function(a) { return a.name }))
     property var danglingHosts: []
+    // Bumped on every settingsChanged so targetMissing (below) — which
+    // calls controller.targetExists(), a method, not a NOTIFYable
+    // property — re-evaluates. A QML binding only tracks property reads;
+    // without this it would freeze at whatever targetExists() returned
+    // when the delegate was created, going stale the moment a custom
+    // target is removed without a full RulesPage reload.
+    property int settingsRevision: 0
 
     function refreshDangling() {
         danglingHosts = controller.danglingRememberedHosts()
@@ -23,7 +30,10 @@ FormCard.FormCardPage {
     Component.onCompleted: refreshDangling()
     Connections {
         target: controller
-        function onSettingsChanged() { page.refreshDangling() }
+        function onSettingsChanged() {
+            page.refreshDangling()
+            page.settingsRevision++
+        }
     }
 
     FormCard.FormHeader {
@@ -41,7 +51,7 @@ FormCard.FormCardPage {
                 required property string activity
                 required property bool isRegex
                 readonly property int ruleIndex: index
-                readonly property bool targetMissing: !controller.targetExists(targetId)
+                readonly property bool targetMissing: page.settingsRevision >= 0 && !controller.targetExists(targetId)
                 spacing: 0
                 width: parent ? parent.width : 100
 
@@ -114,6 +124,35 @@ FormCard.FormCardPage {
             text: "Add rule"
             icon.name: "list-add"
             onClicked: controller.ruleModel.addRule("example.com", controller.defaultTargetId)
+        }
+    }
+
+    FormCard.FormHeader {
+        title: "Per-Activity fallbacks"
+        visible: controller.activityRoutingEnabled && controller.availableActivities.length > 0
+    }
+    FormCard.FormCard {
+        visible: controller.activityRoutingEnabled && controller.availableActivities.length > 0
+        FormCard.FormTextDelegate {
+            text: "Used instead of the overall fallback target while one of these Activities is active and no rule or remembered destination matches."
+            description: " "
+        }
+        Repeater {
+            model: controller.availableActivities
+            delegate: FormCard.FormComboBoxDelegate {
+                required property var modelData
+                text: modelData.name
+                // Index 0 is "Use default" (empty = fall through to
+                // defaultTargetId, router.cpp's own fallback order).
+                model: ["Use default"].concat(controller.targetNames)
+                currentIndex: {
+                    const _r = page.settingsRevision // force re-eval on settingsChanged
+                    const id = controller.activityDefaultTarget(modelData.id)
+                    return id.length === 0 ? 0 : Math.max(0, controller.targetIds.indexOf(id) + 1)
+                }
+                onActivated: controller.setActivityDefaultTarget(modelData.id,
+                    currentIndex === 0 ? "" : controller.targetIds[currentIndex - 1])
+            }
         }
     }
 

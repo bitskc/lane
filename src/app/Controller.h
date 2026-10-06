@@ -143,6 +143,12 @@ public:
     void setShowUrl(bool on);
     QString defaultTargetId() const { return m_config.defaultTargetId; }
     void setDefaultTargetId(const QString &id);
+    // Per-Activity fallback (config.activityDefaults): empty when the
+    // Activity has no fallback set, in which case defaultTargetId applies.
+    // Plain Q_INVOKABLE, not a Q_PROPERTY: keyed by activityId, same shape
+    // as rememberedTarget()/forgetHost() below.
+    Q_INVOKABLE QString activityDefaultTarget(const QString &activityId) const;
+    Q_INVOKABLE void setActivityDefaultTarget(const QString &activityId, const QString &targetId);
     int targetCount() const { return m_targets.size(); }
     QStringList targetIds() const;
     QStringList targetNames() const;
@@ -163,6 +169,7 @@ public:
     Q_INVOKABLE void clearPickerNotice();
     Q_INVOKABLE void cancelPicker();
     Q_INVOKABLE void copyCurrent();
+    Q_INVOKABLE void emailCurrent();
     Q_INVOKABLE void openSettings();
     Q_INVOKABLE void rediscover();
     Q_INVOKABLE void makeDefaultBrowser();
@@ -210,6 +217,7 @@ private:
     void requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window, const Click &click);
     void toast(const Target &target, const QString &reason, const QString &host);
     void notifyBlocked();
+    QWindow *ensureEngine(QQmlApplicationEngine *&engine, const QString &module, const QString &name, const QString &warnPrefix);
     void ensurePickerEngine();
     void ensureSettingsEngine();
     void ensureHoldEngine();

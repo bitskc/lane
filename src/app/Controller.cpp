@@ -367,6 +367,25 @@ void Controller::setDefaultTargetId(const QString &id)
     Q_EMIT settingsChanged();
 }
 
+QString Controller::activityDefaultTarget(const QString &activityId) const
+{
+    return m_config.activityDefaults.value(activityId);
+}
+
+void Controller::setActivityDefaultTarget(const QString &activityId, const QString &targetId)
+{
+    if (activityId.isEmpty()) {
+        return;
+    }
+    if (targetId.isEmpty()) {
+        m_config.activityDefaults.remove(activityId);
+    } else {
+        m_config.activityDefaults.insert(activityId, targetId);
+    }
+    persist();
+    Q_EMIT settingsChanged();
+}
+
 QStringList Controller::targetIds() const
 {
     QStringList ids;
@@ -527,7 +546,7 @@ void Controller::openUrl(const QString &url, bool forcePicker)
 
     m_destinationLadder = Lane::destinationLadder(m_click.matchUrl);
     const Target *suggested = d.action == Decision::Action::Launch ? &d.target : nullptr;
-    m_destinationIndex = Lane::suggestedLadderIndex(m_click.matchUrl, suggested, m_config.remembered);
+    m_destinationIndex = Lane::suggestedLadderIndex(m_click.matchUrl, suggested);
 
     Q_EMIT currentChanged();
     applyDecision(d);
@@ -630,6 +649,15 @@ void Controller::copyCurrent()
         clip->setText(safe.isEmpty() ? displayUrl(m_click.openUrl) : safe);
     }
     hidePicker();
+}
+
+void Controller::emailCurrent()
+{
+    // Footer action sibling of copyCurrent(): routes the open URL through
+    // the discovered action:email target (xdg-email) exactly as a list pick
+    // would, minus always-remember persistence (Action kind is excluded by
+    // pickId already).
+    pickId(QStringLiteral("action:email"));
 }
 
 void Controller::openSettings()
@@ -983,11 +1011,10 @@ void Controller::hidePicker()
 
 void Controller::launch(const Target &target, const QString &reason, const QString &activationToken, const Click &click)
 {
-    if (target.id.isEmpty()) {
-        m_pickerModel->reset(rankForPicker(click, m_targets, m_config));
-        showPicker();
-        return;
-    }
+    // target.id is never empty here: Decision::Action::Launch always sets
+    // d.target from an existing Target (router.cpp), and the only callers
+    // of launch() -- applyDecision() and requestActivationAndLaunch() --
+    // pass that already-resolved target through unchanged.
     if (!isSafeOpenUrl(click.openUrl)) {
         notifyBlocked();
         return;
@@ -1065,47 +1092,44 @@ void Controller::notifyBlocked()
     n->sendEvent();
 }
 
-void Controller::ensurePickerEngine()
+QWindow *Controller::ensureEngine(QQmlApplicationEngine *&engine, const QString &module, const QString &name, const QString &warnPrefix)
 {
-    if (m_pickerEngine) {
-        return;
+    if (engine) {
+        return nullptr;
     }
-    m_pickerEngine = new QQmlApplicationEngine(this);
-    connect(m_pickerEngine, &QQmlApplicationEngine::warnings, this, [](const QList<QQmlError> &warnings) {
+    engine = new QQmlApplicationEngine(this);
+    const QByteArray warnTag = (QStringLiteral("Lane %1:").arg(warnPrefix)).toUtf8();
+    connect(engine, &QQmlApplicationEngine::warnings, this, [warnTag](const QList<QQmlError> &warnings) {
         for (const auto &w : warnings) {
-            qWarning() << "Lane picker:" << w.toString();
+            qWarning() << warnTag.constData() << w.toString();
         }
     });
-    m_pickerEngine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
-    m_pickerEngine->loadFromModule(QStringLiteral("app.lane"), QStringLiteral("Picker"));
-    if (m_pickerEngine->rootObjects().isEmpty()) {
-        qWarning() << "Lane: picker QML failed to load";
+    engine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
+    engine->loadFromModule(module, name);
+    if (engine->rootObjects().isEmpty()) {
+        qWarning() << qPrintable(QStringLiteral("Lane: %1 QML failed to load").arg(warnPrefix));
+        return nullptr;
+    }
+    return qobject_cast<QWindow *>(engine->rootObjects().constFirst());
+}
+
+void Controller::ensurePickerEngine()
+{
+    QWindow *window = ensureEngine(m_pickerEngine, QStringLiteral("app.lane"), QStringLiteral("Picker"), QStringLiteral("picker"));
+    if (!window) {
         return;
     }
-    m_pickerWindow = qobject_cast<QWindow *>(m_pickerEngine->rootObjects().constFirst());
-    if (m_pickerWindow) {
-        configureLayerShell(m_pickerWindow);
-    }
+    m_pickerWindow = window;
+    configureLayerShell(m_pickerWindow);
 }
 
 void Controller::ensureSettingsEngine()
 {
-    if (m_settingsEngine) {
+    QWindow *window = ensureEngine(m_settingsEngine, QStringLiteral("app.lane"), QStringLiteral("Settings"), QStringLiteral("settings"));
+    if (!window) {
         return;
     }
-    m_settingsEngine = new QQmlApplicationEngine(this);
-    connect(m_settingsEngine, &QQmlApplicationEngine::warnings, this, [](const QList<QQmlError> &warnings) {
-        for (const auto &w : warnings) {
-            qWarning() << "Lane settings:" << w.toString();
-        }
-    });
-    m_settingsEngine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
-    m_settingsEngine->loadFromModule(QStringLiteral("app.lane"), QStringLiteral("Settings"));
-    if (m_settingsEngine->rootObjects().isEmpty()) {
-        qWarning() << "Lane: settings QML failed to load";
-        return;
-    }
-    m_settingsWindow = qobject_cast<QWindow *>(m_settingsEngine->rootObjects().constFirst());
+    m_settingsWindow = window;
 }
 
 void Controller::configureLayerShell(QWindow *window, const QString &scope)
@@ -1219,25 +1243,12 @@ void Controller::hideHold()
 
 void Controller::ensureHoldEngine()
 {
-    if (m_holdEngine) {
+    QWindow *window = ensureEngine(m_holdEngine, QStringLiteral("app.lane"), QStringLiteral("Hold"), QStringLiteral("hold"));
+    if (!window) {
         return;
     }
-    m_holdEngine = new QQmlApplicationEngine(this);
-    connect(m_holdEngine, &QQmlApplicationEngine::warnings, this, [](const QList<QQmlError> &warnings) {
-        for (const auto &w : warnings) {
-            qWarning() << "Lane hold:" << w.toString();
-        }
-    });
-    m_holdEngine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
-    m_holdEngine->loadFromModule(QStringLiteral("app.lane"), QStringLiteral("Hold"));
-    if (m_holdEngine->rootObjects().isEmpty()) {
-        qWarning() << "Lane: hold QML failed to load";
-        return;
-    }
-    m_holdWindow = qobject_cast<QWindow *>(m_holdEngine->rootObjects().constFirst());
-    if (m_holdWindow) {
-        configureLayerShell(m_holdWindow, QStringLiteral("lane-hold"));
-    }
+    m_holdWindow = window;
+    configureLayerShell(m_holdWindow, QStringLiteral("lane-hold"));
 }
 
 } // namespace Lane

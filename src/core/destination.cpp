@@ -151,12 +151,13 @@ bool destinationKeyMatches(const QString &key, const QString &url)
     if (!key.startsWith(prefix)) {
         return false;
     }
+    // keyPath is never bare "/" here for any key destinationLadder()
+    // generates (the host-only case was already returned above at
+    // `key == p.host`), so pathWithinPrefix's root-prefix shortcut is
+    // unreachable through normal remembered keys. It only matters for a
+    // hand-edited config key shaped like "host/" with nothing after.
     const QString keyPath = QLatin1Char('/') + key.mid(prefix.size());
-    QString urlPath = p.path.isEmpty() ? QStringLiteral("/") : p.path;
-    if (urlPath.size() > 1 && urlPath.endsWith(QLatin1Char('/'))) {
-        urlPath.chop(1);
-    }
-    return urlPath == keyPath || urlPath.startsWith(keyPath + QLatin1Char('/'));
+    return pathWithinPrefix(p.path, keyPath, Qt::CaseSensitive);
 }
 
 QString destinationKeyMatchesBest(const QString &url, const QMap<QString, QString> &remembered)
@@ -182,9 +183,8 @@ QString lookupRemembered(const QString &url, const QMap<QString, QString> &remem
     return remembered.value(key);
 }
 
-int suggestedLadderIndex(const QString &url, const Target *target, const QMap<QString, QString> &remembered)
+int suggestedLadderIndex(const QString &url, const Target *target)
 {
-    Q_UNUSED(remembered);
     const QStringList ladder = destinationLadder(url);
     if (ladder.isEmpty()) {
         return 0;

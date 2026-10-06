@@ -1274,15 +1274,6 @@ QList<Target> discoverTargets(const DiscoveryPaths &paths)
 QList<Target> applyConfigToTargets(QList<Target> targets, const Config &config)
 {
     QSet<QString> hidden(config.hiddenTargetIds.begin(), config.hiddenTargetIds.end());
-    // Unconditional assignment, not "set true if present": this must be
-    // idempotent under repeated calls on the same already-applied list
-    // (Controller::hideTarget()/renameTarget()/moveTarget() now reapply
-    // config onto m_targets directly instead of a freshly discovered
-    // list), so un-hiding a target has to actually clear a previously-set
-    // true, not just leave it stuck.
-    for (auto &t : targets) {
-        t.hidden = hidden.contains(t.id);
-    }
     for (const auto &custom : config.customTargets) {
         bool exists = false;
         for (const auto &t : targets) {
@@ -1294,6 +1285,20 @@ QList<Target> applyConfigToTargets(QList<Target> targets, const Config &config)
         if (!exists) {
             targets.append(custom);
         }
+    }
+
+    // Hidden is applied AFTER the custom-target merge: hidden state for a
+    // custom target lives only in config.hiddenTargetIds (Target::hidden
+    // is never serialized), and on a fresh discoverTargets() pass the
+    // custom row does not exist until the merge above — applying hidden
+    // first silently un-hid hidden custom targets on every restart.
+    // Unconditional assignment, not "set true if present": this must be
+    // idempotent under repeated calls on the same already-applied list
+    // (Controller::hideTarget()/renameTarget()/moveTarget() reapply
+    // config onto m_targets directly), so un-hiding a target has to
+    // actually clear a previously-set true, not just leave it stuck.
+    for (auto &t : targets) {
+        t.hidden = hidden.contains(t.id);
     }
 
     for (auto &t : targets) {
@@ -1330,17 +1335,6 @@ QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id,
     fullOrder.reserve(targets.size());
     for (const auto &t : targets) {
         fullOrder << t.id;
-    }
-
-    int movingIndex = -1;
-    for (int i = 0; i < targets.size(); ++i) {
-        if (targets.at(i).id == id) {
-            movingIndex = i;
-            break;
-        }
-    }
-    if (movingIndex < 0) {
-        return fullOrder;
     }
 
     // The reorderable set is exactly what the Settings "Targets" list and

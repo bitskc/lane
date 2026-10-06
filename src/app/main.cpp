@@ -143,8 +143,15 @@ int main(int argc, char **argv)
         return explainUrl(urls.first());
     }
 
-    Lane::Controller controller;
+    // Unique-instance must be claimed before Controller does its startup
+    // work (discovery scan + an xdg-settings subprocess of up to ~1.5s):
+    // a duplicate `lane <url>` invocation that reaches past this line is
+    // about to exit once the service refuses a second name, so anything
+    // spent building a Controller here is wasted. KDBusService's own
+    // idiom is "construct first; if this point is reached this process is
+    // the primary".
     KDBusService service(KDBusService::Unique);
+    Lane::Controller controller;
     QObject::connect(&service, &KDBusService::activateRequested, &controller, [&](const QStringList &args, const QString &) {
         controller.handleArgs(args);
     });

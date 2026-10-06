@@ -26,8 +26,6 @@ public:
     QVariant data(const QModelIndex &index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
     void setTargets(QList<Target> targets);
-    Q_INVOKABLE QString idAt(int row) const;
-    Q_INVOKABLE QVariantList targetsByKind(const QString &kind) const;
     Q_INVOKABLE QVariantList orderableTargets() const;
     Q_INVOKABLE QVariantList incognitoTargets() const;
 

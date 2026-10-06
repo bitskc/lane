@@ -62,6 +62,24 @@ private Q_SLOTS:
         QSignalSpy spy(&watcher, &DefaultBrowserWatcher::mimeappsChanged);
         QVERIFY(!spy.wait(2500));
     }
+
+    void fileCreatedAfterEnableFires()
+    {
+        // The candidate path does not exist when the watcher is enabled;
+        // a browser install writing it later must still be caught via the
+        // parent-directory watch.
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("mimeapps.list"));
+        QVERIFY(!QFile::exists(path));
+
+        DefaultBrowserWatcher watcher({path});
+        watcher.setEnabled(true);
+        QSignalSpy spy(&watcher, &DefaultBrowserWatcher::mimeappsChanged);
+
+        writeMimeapps(dir, QStringLiteral("x-scheme-handler/http=firefox.desktop\n"));
+        QVERIFY(spy.wait(3500));
+        QCOMPARE(spy.count(), 1);
+    }
 };
 
 QTEST_MAIN(WatchdogTest)

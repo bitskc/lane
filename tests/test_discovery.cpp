@@ -610,6 +610,29 @@ private Q_SLOTS:
         QCOMPARE(result.at(1).id, QStringLiteral("custom:second"));
     }
 
+    void applyConfigHiddenSurvivesFreshDiscoveryForCustomTargets()
+    {
+        // A hidden custom target must stay hidden after a daemon restart /
+        // Rediscover, where applyConfigToTargets runs over a freshly
+        // discovered list that does not yet contain the custom target.
+        // Regression: the hidden pass used to run before the custom-target
+        // merge, so the flag never landed and the row reappeared.
+        QList<Target> targets; // fresh discovery: no custom targets yet
+        Config cfg;
+        Target c1;
+        c1.id = QStringLiteral("custom:work");
+        c1.kind = Kind::Custom;
+        c1.name = QStringLiteral("Work thing");
+        c1.exec = QStringLiteral("/usr/bin/thing");
+        cfg.customTargets = {c1};
+        cfg.hiddenTargetIds = {QStringLiteral("custom:work")};
+
+        const auto result = applyConfigToTargets(targets, cfg);
+        QCOMPARE(result.size(), 1);
+        QCOMPARE(result.at(0).id, QStringLiteral("custom:work"));
+        QVERIFY(result.at(0).hidden);
+    }
+
     void applyConfigEmptyOrderKeepsDiscoveryOrder()
     {
         QList<Target> targets;
