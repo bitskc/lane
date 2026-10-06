@@ -196,7 +196,9 @@ private Q_SLOTS:
         QCOMPARE(d.reason, QStringLiteral("rule"));
     }
 
-    void pickerRanksPwaFirst()
+    // A matching PWA is flagged suggested, not moved: row order is the
+    // user's list, so the browser they put first stays first.
+    void pickerFlagsPwaSuggestedWithoutReordering()
     {
         QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
                               makePwa(QStringLiteral("pwa:gh"), QStringLiteral("GitHub"), QStringLiteral("https://github.com/"))};
@@ -204,7 +206,10 @@ private Q_SLOTS:
         Click c;
         c.matchUrl = QStringLiteral("https://github.com/x");
         const auto ranked = rankForPicker(c, targets, cfg);
-        QCOMPARE(ranked.first().id, QStringLiteral("pwa:gh"));
+        QCOMPARE(ranked.first().id, QStringLiteral("browser:zen:def"));
+        QCOMPARE(ranked.at(1).id, QStringLiteral("pwa:gh"));
+        QCOMPARE(ranked.at(1).suggested, true);
+        QCOMPARE(ranked.at(0).suggested, false);
     }
 
     void pickerSkipsIncognito()
@@ -238,24 +243,41 @@ private Q_SLOTS:
         QCOMPARE(ranked.at(2).id, QStringLiteral("browser:zen:def"));
     }
 
-    void pickerTargetOrderAfterPwaAndRemembered()
+    // The suggested flag follows targetOrder too: a remembered target
+    // gets the badge at whatever row the user's order puts it on.
+    void pickerSuggestedStaysInTargetOrder()
     {
         QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
                               makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal")),
                               makePwa(QStringLiteral("pwa:gh"), QStringLiteral("GitHub"), QStringLiteral("https://github.com/"))};
         Config cfg;
-        cfg.targetOrder = {QStringLiteral("browser:brave:personal"),
-                           QStringLiteral("browser:zen:def")};
-        cfg.remembered.insert(QStringLiteral("news.ycombinator.com"), QStringLiteral("browser:brave:personal"));
+        cfg.targetOrder = {QStringLiteral("browser:zen:def"),
+                           QStringLiteral("pwa:gh"),
+                           QStringLiteral("browser:brave:personal")};
         Click c;
         c.matchUrl = QStringLiteral("https://github.com/x");
         const auto ranked = rankForPicker(c, targets, cfg);
-        // PWA first
-        QCOMPARE(ranked.at(0).id, QStringLiteral("pwa:gh"));
-        // Remembered next
+        QCOMPARE(ranked.size(), 3);
+        QCOMPARE(ranked.at(0).id, QStringLiteral("browser:zen:def"));
+        QCOMPARE(ranked.at(1).id, QStringLiteral("pwa:gh"));
+        QCOMPARE(ranked.at(1).suggested, true);
+        QCOMPARE(ranked.at(2).id, QStringLiteral("browser:brave:personal"));
+    }
+
+    // With no matching PWA, a remembered destination is the suggestion.
+    void pickerRememberedIsSuggested()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal"))};
+        Config cfg;
+        cfg.remembered.insert(QStringLiteral("news.ycombinator.com"), QStringLiteral("browser:brave:personal"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://news.ycombinator.com/item?id=1");
+        const auto ranked = rankForPicker(c, targets, cfg);
+        QCOMPARE(ranked.size(), 2);
         QCOMPARE(ranked.at(1).id, QStringLiteral("browser:brave:personal"));
-        // Then targetOrder
-        QCOMPARE(ranked.at(2).id, QStringLiteral("browser:zen:def"));
+        QCOMPARE(ranked.at(1).suggested, true);
+        QCOMPARE(ranked.at(0).suggested, false);
     }
 
     // action:copy moved out of the picker list into a footer control

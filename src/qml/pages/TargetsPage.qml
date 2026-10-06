@@ -11,9 +11,6 @@ FormCard.FormCardPage {
     property int rowHeight: 48
     property string customCommandError: ""
     property string searchText: ""
-    property bool browsersExpanded: true
-    property bool containersExpanded: true
-    property bool pwasExpanded: true
     property bool privateExpanded: false
     property bool customsExpanded: true
 
@@ -38,8 +35,7 @@ FormCard.FormCardPage {
     }
 
     function totalMatchCount() {
-        return matchCount(browserModel) + matchCount(containerModel)
-            + matchCount(pwaModel) + matchCount(privateModel) + matchCount(customModel)
+        return matchCount(allModel) + matchCount(privateModel)
     }
 
     Timer {
@@ -50,17 +46,19 @@ FormCard.FormCardPage {
         onTriggered: controller.renameTarget(targetId, newName)
     }
 
-    ListModel { id: browserModel }
-    ListModel { id: containerModel }
-    ListModel { id: pwaModel }
-    ListModel { id: customModel }
+    // One flat list for every orderable target (browsers, containers,
+    // web apps, custom apps): the same set the picker shows and the same
+    // order moveTarget()/config.targetOrder persist. Private windows are
+    // not orderable (the picker never lists them), so they stay in their
+    // own collapsed section below.
+    ListModel { id: allModel }
     ListModel { id: privateModel }
 
     Component {
-        id: browserDelegate
+        id: targetDelegate
         Item {
             id: wrapper
-            width: browserList.width
+            width: allList.width
             height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
             visible: height > 0
             QQC.ItemDelegate {
@@ -71,26 +69,25 @@ FormCard.FormCardPage {
                     spacing: Kirigami.Units.smallSpacing
                     Kirigami.ListItemDragHandle {
                         listItem: listItem
-                        listView: browserList
-                        // Filtered-out rows stay in browserModel at their
+                        listView: allList
+                        // Filtered-out rows stay in allModel at their
                         // original index (only their visual height collapses
-                        // to 0, see the ListView below), so a drag computed
-                        // against the full model while a search filter is
-                        // active can persist an order different from what was
-                        // visually dragged. Disabling the handle while
-                        // filtered avoids that ambiguity outright; clearing
-                        // the search box restores dragging.
+                        // to 0), so a drag computed against the full model
+                        // while a search filter is active can persist an
+                        // order different from what was visually dragged.
+                        // Disabling the handle while filtered avoids that
+                        // ambiguity outright; clearing search restores it.
                         enabled: page.searchText.trim().length === 0
                         onMoveRequested: (oldIndex, newIndex) => {
-                            if (browserList.dragId === "")
-                                browserList.dragId = browserModel.get(oldIndex).targetId
-                            browserModel.move(oldIndex, newIndex, 1)
+                            if (allList.dragId === "")
+                                allList.dragId = allModel.get(oldIndex).targetId
+                            allModel.move(oldIndex, newIndex, 1)
                         }
                         onDropped: (oldIndex, newIndex) => {
-                            if (newIndex >= 0 && browserList.dragId !== "") {
-                                controller.moveTarget(browserList.dragId, newIndex)
+                            if (newIndex >= 0 && allList.dragId !== "") {
+                                controller.moveTarget(allList.dragId, newIndex)
                             }
-                            browserList.dragId = ""
+                            allList.dragId = ""
                         }
                     }
                     Kirigami.Icon {
@@ -129,12 +126,22 @@ FormCard.FormCardPage {
                             color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
                         }
                     }
+                    // Kind badge keeps a flattened list legible: browsers,
+                    // containers, web apps and custom apps share one column
+                    // now, so the row still says what it is.
+                    QQC.Label {
+                        text: model.kind
+                        font: Kirigami.Theme.smallFont
+                        color: Kirigami.Theme.disabledTextColor
+                        Layout.alignment: Qt.AlignVCenter
+                    }
                     QQC.Switch {
                         checked: !model.hidden
                         onToggled: controller.hideTarget(model.targetId, !checked)
                         Layout.alignment: Qt.AlignVCenter
                     }
                     QQC.Button {
+                        visible: model.kind !== "app"
                         text: "Default"
                         flat: model.targetId !== controller.defaultTargetId
                         highlighted: model.targetId === controller.defaultTargetId
@@ -146,239 +153,8 @@ FormCard.FormCardPage {
                         onClicked: controller.defaultTargetId = model.targetId
                         Layout.alignment: Qt.AlignVCenter
                     }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: containerDelegate
-        Item {
-            id: wrapper
-            width: containerList.width
-            height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
-            visible: height > 0
-            QQC.ItemDelegate {
-                id: listItem
-                width: wrapper.width
-                height: wrapper.height
-                contentItem: RowLayout {
-                    spacing: Kirigami.Units.smallSpacing
-                    Kirigami.ListItemDragHandle {
-                        listItem: listItem
-                        listView: containerList
-                        enabled: page.searchText.trim().length === 0
-                        onMoveRequested: (oldIndex, newIndex) => {
-                            if (containerList.dragId === "")
-                                containerList.dragId = containerModel.get(oldIndex).targetId
-                            containerModel.move(oldIndex, newIndex, 1)
-                        }
-                        onDropped: (oldIndex, newIndex) => {
-                            if (newIndex >= 0 && containerList.dragId !== "") {
-                                controller.moveTarget(containerList.dragId, newIndex)
-                            }
-                            containerList.dragId = ""
-                        }
-                    }
-                    Kirigami.Icon {
-                        source: model.iconName
-                        implicitWidth: 22
-                        implicitHeight: 22
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    QQC.TextField {
-                        id: renameField
-                        text: model.name
-                        placeholderText: model.discoveredName
-                        Layout.fillWidth: true
-                        background: Item {}
-                        verticalAlignment: TextInput.AlignVCenter
-                        onEditingFinished: {
-                            var id = model.targetId
-                            var nm = text.trim()
-                            if (nm !== model.name) {
-                                renameTimer.targetId = id
-                                renameTimer.newName = nm
-                                renameTimer.start()
-                            }
-                        }
-                        Keys.onEscapePressed: {
-                            text = model.name
-                            focus = false
-                        }
-                        HoverHandler { id: renameHover }
-                        Rectangle {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 1
-                            visible: renameHover.hovered && !renameField.activeFocus
-                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
-                        }
-                    }
-                    QQC.Switch {
-                        checked: !model.hidden
-                        onToggled: controller.hideTarget(model.targetId, !checked)
-                        Layout.alignment: Qt.AlignVCenter
-                    }
                     QQC.Button {
-                        text: "Default"
-                        flat: model.targetId !== controller.defaultTargetId
-                        highlighted: model.targetId === controller.defaultTargetId
-                        Accessible.name: model.targetId === controller.defaultTargetId
-                            ? "Default (currently selected)" : "Set as default"
-                        QQC.ToolTip.visible: hovered
-                        QQC.ToolTip.text: model.targetId === controller.defaultTargetId
-                            ? "This is the default target" : "Set as default target"
-                        onClicked: controller.defaultTargetId = model.targetId
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: pwaDelegate
-        Item {
-            id: wrapper
-            width: pwaList.width
-            height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
-            visible: height > 0
-            QQC.ItemDelegate {
-                id: listItem
-                width: wrapper.width
-                height: wrapper.height
-                contentItem: RowLayout {
-                    spacing: Kirigami.Units.smallSpacing
-                    Kirigami.ListItemDragHandle {
-                        listItem: listItem
-                        listView: pwaList
-                        enabled: page.searchText.trim().length === 0
-                        onMoveRequested: (oldIndex, newIndex) => {
-                            if (pwaList.dragId === "")
-                                pwaList.dragId = pwaModel.get(oldIndex).targetId
-                            pwaModel.move(oldIndex, newIndex, 1)
-                        }
-                        onDropped: (oldIndex, newIndex) => {
-                            if (newIndex >= 0 && pwaList.dragId !== "") {
-                                controller.moveTarget(pwaList.dragId, newIndex)
-                            }
-                            pwaList.dragId = ""
-                        }
-                    }
-                    Kirigami.Icon {
-                        source: model.iconName
-                        implicitWidth: 22
-                        implicitHeight: 22
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    QQC.TextField {
-                        id: renameField
-                        text: model.name
-                        placeholderText: model.discoveredName
-                        Layout.fillWidth: true
-                        background: Item {}
-                        verticalAlignment: TextInput.AlignVCenter
-                        onEditingFinished: {
-                            var id = model.targetId
-                            var nm = text.trim()
-                            if (nm !== model.name) {
-                                renameTimer.targetId = id
-                                renameTimer.newName = nm
-                                renameTimer.start()
-                            }
-                        }
-                        Keys.onEscapePressed: {
-                            text = model.name
-                            focus = false
-                        }
-                        HoverHandler { id: renameHover }
-                        Rectangle {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 1
-                            visible: renameHover.hovered && !renameField.activeFocus
-                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
-                        }
-                    }
-                    QQC.Switch {
-                        checked: !model.hidden
-                        onToggled: controller.hideTarget(model.targetId, !checked)
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: customDelegate
-        Item {
-            id: wrapper
-            width: customList.width
-            height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
-            visible: height > 0
-            QQC.ItemDelegate {
-                id: listItem
-                width: wrapper.width
-                height: wrapper.height
-                contentItem: RowLayout {
-                    spacing: Kirigami.Units.smallSpacing
-                    Kirigami.ListItemDragHandle {
-                        listItem: listItem
-                        listView: customList
-                        enabled: page.searchText.trim().length === 0
-                        onMoveRequested: (oldIndex, newIndex) => {
-                            if (customList.dragId === "")
-                                customList.dragId = customModel.get(oldIndex).targetId
-                            customModel.move(oldIndex, newIndex, 1)
-                        }
-                        onDropped: (oldIndex, newIndex) => {
-                            if (newIndex >= 0 && customList.dragId !== "") {
-                                controller.moveTarget(customList.dragId, newIndex)
-                            }
-                            customList.dragId = ""
-                        }
-                    }
-                    Kirigami.Icon {
-                        source: model.iconName
-                        implicitWidth: 22
-                        implicitHeight: 22
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    QQC.TextField {
-                        id: renameField
-                        text: model.name
-                        placeholderText: model.discoveredName
-                        Layout.fillWidth: true
-                        background: Item {}
-                        verticalAlignment: TextInput.AlignVCenter
-                        onEditingFinished: {
-                            var id = model.targetId
-                            var nm = text.trim()
-                            if (nm !== model.name) {
-                                renameTimer.targetId = id
-                                renameTimer.newName = nm
-                                renameTimer.start()
-                            }
-                        }
-                        Keys.onEscapePressed: {
-                            text = model.name
-                            focus = false
-                        }
-                        HoverHandler { id: renameHover }
-                        Rectangle {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 1
-                            visible: renameHover.hovered && !renameField.activeFocus
-                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
-                        }
-                    }
-                    QQC.Button {
+                        visible: model.kind === "app"
                         text: "Remove"
                         flat: true
                         onClicked: controller.removeCustomTarget(model.targetId)
@@ -444,37 +220,16 @@ FormCard.FormCardPage {
     }
 
     function syncModels() {
-        browserModel.clear()
-        var browsers = controller.targetModel.targetsByKind("browser")
-        for (var i = 0; i < browsers.length; i++) {
-            if (!browsers[i].incognito)
-                browserModel.append(browsers[i])
+        allModel.clear()
+        var all = controller.targetModel.orderableTargets()
+        for (var i = 0; i < all.length; i++) {
+            allModel.append(all[i])
         }
-        containerModel.clear()
-        var containers = controller.targetModel.targetsByKind("container")
-        for (var i = 0; i < containers.length; i++)
-            containerModel.append(containers[i])
-        pwaModel.clear()
-        var pwas = controller.targetModel.targetsByKind("pwa")
-        for (var i = 0; i < pwas.length; i++)
-            pwaModel.append(pwas[i])
-        customModel.clear()
-        var customs = controller.targetModel.targetsByKind("app")
-        for (var i = 0; i < customs.length; i++)
-            customModel.append(customs[i])
         privateModel.clear()
         var privates = controller.targetModel.incognitoTargets()
-        for (var i = 0; i < privates.length; i++)
-            privateModel.append(privates[i])
-    }
-
-    function hasGeckoBrowsers() {
-        var browsers = controller.targetModel.targetsByKind("browser")
-        for (var i = 0; i < browsers.length; i++) {
-            if (!browsers[i].incognito && browsers[i].engine === "gecko")
-                return true
+        for (var j = 0; j < privates.length; j++) {
+            privateModel.append(privates[j])
         }
-        return false
     }
 
     Component.onCompleted: syncModels()
@@ -526,75 +281,11 @@ FormCard.FormCardPage {
         }
     }
 
-    RowLayout {
-        Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.largeSpacing
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.smallSpacing
-        QQC.ToolButton {
-            icon.name: page.browsersExpanded ? "arrow-down" : "arrow-right"
-            flat: true
-            onClicked: page.browsersExpanded = !page.browsersExpanded
-
-            Accessible.role: Accessible.Button
-            Accessible.name: page.browsersExpanded ? "Collapse browsers section" : "Expand browsers section"
-        }
-        Kirigami.Heading {
-            level: 4
-            Layout.fillWidth: true
-            text: "Browsers (" + page.matchCount(browserModel) + ")"
-        }
+    FormCard.FormHeader {
+        title: "Destinations (" + page.matchCount(allModel) + ")"
     }
     QQC.Label {
-        visible: page.browsersExpanded || page.searchText.length > 0
-        text: "Drag to reorder. Click a name to rename."
-        font: Kirigami.Theme.smallFont
-        color: Kirigami.Theme.disabledTextColor
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        Layout.bottomMargin: Kirigami.Units.smallSpacing
-    }
-    FormCard.FormCard {
-        visible: (page.browsersExpanded || page.searchText.length > 0) && page.matchCount(browserModel) > 0
-        ListView {
-            id: browserList
-            model: browserModel
-            interactive: false
-            spacing: 0
-            Layout.fillWidth: true
-            implicitHeight: contentHeight
-            moveDisplaced: Transition {
-                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
-            }
-            property string dragId: ""
-            delegate: browserDelegate
-        }
-    }
-
-    RowLayout {
-        Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.largeSpacing
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.smallSpacing
-        QQC.ToolButton {
-            icon.name: page.containersExpanded ? "arrow-down" : "arrow-right"
-            flat: true
-            onClicked: page.containersExpanded = !page.containersExpanded
-
-            Accessible.role: Accessible.Button
-            Accessible.name: page.containersExpanded ? "Collapse containers section" : "Expand containers section"
-        }
-        Kirigami.Heading {
-            level: 4
-            Layout.fillWidth: true
-            text: "Containers (" + page.matchCount(containerModel) + ")"
-        }
-    }
-    QQC.Label {
-        visible: page.containersExpanded || page.searchText.length > 0
-        text: "Opens the link in that Firefox or Zen container. Needs a container protocol extension in the browser (Open URL in Container, or Default Container Handler)."
+        text: "This is the picker's row order. Drag to rearrange any destination past any other; click a name to rename."
         font: Kirigami.Theme.smallFont
         color: Kirigami.Theme.disabledTextColor
         wrapMode: Text.WordWrap
@@ -604,10 +295,10 @@ FormCard.FormCardPage {
         Layout.bottomMargin: Kirigami.Units.smallSpacing
     }
     FormCard.FormCard {
-        visible: (page.containersExpanded || page.searchText.length > 0) && page.matchCount(containerModel) > 0
+        visible: page.matchCount(allModel) > 0 || page.searchText.length > 0
         ListView {
-            id: containerList
-            model: containerModel
+            id: allList
+            model: allModel
             interactive: false
             spacing: 0
             Layout.fillWidth: true
@@ -616,55 +307,7 @@ FormCard.FormCardPage {
                 YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
-            delegate: containerDelegate
-        }
-    }
-    QQC.Label {
-        visible: containerModel.count === 0 && page.hasGeckoBrowsers() && page.searchText.length === 0
-        text: "No containers found. Zen and Firefox write them to containers.json in the profile folder."
-        font: Kirigami.Theme.smallFont
-        color: Kirigami.Theme.disabledTextColor
-        wrapMode: Text.WordWrap
-        Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        Layout.bottomMargin: Kirigami.Units.smallSpacing
-    }
-
-    RowLayout {
-        Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.largeSpacing
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.smallSpacing
-        QQC.ToolButton {
-            icon.name: page.pwasExpanded ? "arrow-down" : "arrow-right"
-            flat: true
-            onClicked: page.pwasExpanded = !page.pwasExpanded
-
-            Accessible.role: Accessible.Button
-            Accessible.name: page.pwasExpanded ? "Collapse web apps section" : "Expand web apps section"
-        }
-        Kirigami.Heading {
-            level: 4
-            Layout.fillWidth: true
-            text: "Installed web apps (" + page.matchCount(pwaModel) + ")"
-        }
-    }
-    FormCard.FormCard {
-        visible: (page.pwasExpanded || page.searchText.length > 0) && page.matchCount(pwaModel) > 0
-        ListView {
-            id: pwaList
-            model: pwaModel
-            interactive: false
-            spacing: 0
-            Layout.fillWidth: true
-            implicitHeight: contentHeight
-            moveDisplaced: Transition {
-                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
-            }
-            property string dragId: ""
-            delegate: pwaDelegate
+            delegate: targetDelegate
         }
     }
 
@@ -718,25 +361,11 @@ FormCard.FormCardPage {
         Kirigami.Heading {
             level: 4
             Layout.fillWidth: true
-            text: "Custom apps (" + page.matchCount(customModel) + ")"
+            text: "Custom apps"
         }
     }
     FormCard.FormCard {
         visible: page.customsExpanded || page.searchText.length > 0
-        ListView {
-            id: customList
-            model: customModel
-            interactive: false
-            spacing: 0
-            Layout.fillWidth: true
-            implicitHeight: contentHeight
-            visible: count > 0
-            moveDisplaced: Transition {
-                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
-            }
-            property string dragId: ""
-            delegate: customDelegate
-        }
         FormCard.FormTextFieldDelegate {
             id: customName
             label: "Name"

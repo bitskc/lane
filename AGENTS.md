@@ -212,10 +212,12 @@ writing a rule; just set `targetId` to the container's ID.
 
 ### targetOrder
 
-Array of target IDs in display order. The settings page and the picker
-follow this order after matching web apps and remembered targets. Empty
-or missing means discovery order. IDs not in the list keep their discovery
-order after the listed ones.
+Array of target IDs in display order. The picker shows one flat list in
+exactly this order (unlisted targets follow in discovery order); the
+matching web app or remembered destination keeps its position and only
+gets the Suggested badge and initial selection. Empty or missing means
+discovery order. Incognito/private targets are not orderable and never
+appear in this list.
 
 ### targetAliases
 

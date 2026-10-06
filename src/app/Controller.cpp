@@ -868,9 +868,9 @@ void Controller::renameTarget(const QString &id, const QString &name)
     Q_EMIT settingsChanged();
 }
 
-void Controller::moveTarget(const QString &id, int newIndexInKind)
+void Controller::moveTarget(const QString &id, int newIndex)
 {
-    m_config.targetOrder = moveIdAmongSiblings(m_targets, id, newIndexInKind);
+    m_config.targetOrder = moveIdAmongSiblings(m_targets, id, newIndex);
     persist();
     // Reordering cannot change what is installed, so reapply config onto
     // the already-discovered list instead of re-scanning everything again.

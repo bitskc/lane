@@ -91,6 +91,30 @@ QVariantList TargetModel::targetsByKind(const QString &kind) const
     return out;
 }
 
+QVariantList TargetModel::orderableTargets() const
+{
+    // The same set moveIdAmongSiblings() reorders: every non-incognito,
+    // non-Action target, in current (config-ordered) position, so the
+    // Settings list and the picker agree on one global order.
+    QVariantList out;
+    for (const auto &t : m_targets) {
+        if (t.incognito || t.kind == Kind::Action) {
+            continue;
+        }
+        QVariantMap m;
+        m[QStringLiteral("targetId")] = t.id;
+        m[QStringLiteral("name")] = t.displayName();
+        m[QStringLiteral("discoveredName")] = t.discoveredName();
+        m[QStringLiteral("iconName")] = t.icon;
+        m[QStringLiteral("kind")] = kindName(t.kind);
+        m[QStringLiteral("hidden")] = t.hidden;
+        m[QStringLiteral("isDefault")] = t.isBrowserDefault;
+        m[QStringLiteral("engine")] = engineName(t.engine);
+        out.append(m);
+    }
+    return out;
+}
+
 QVariantList TargetModel::incognitoTargets() const
 {
     QVariantList out;

@@ -787,6 +787,14 @@ QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefi
 
     const QString browserName = profile.displayName();
     QSet<int> seenIds;
+    // Zen and Firefox can accumulate duplicate identities in
+    // containers.json that differ only in userContextId (a stale entry
+    // left over when a container is re-created). Two targets named
+    // "Dev" in one profile are indistinguishable to the user, so keep
+    // the first in file order and skip the rest by name,
+    // case-insensitively.
+    QSet<QString> seenNames;
+    QStringList droppedDupes;
     for (const auto &v : identities) {
         const auto id = v.toObject();
         if (!id.value(QStringLiteral("public")).toBool()) {
@@ -803,7 +811,12 @@ QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefi
         if (name.isEmpty() || name.startsWith(QLatin1String("userContextIdInternal"))) {
             continue;
         }
+        if (seenNames.contains(name.toLower())) {
+            droppedDupes << name;
+            continue;
+        }
         seenIds.insert(userContextId);
+        seenNames.insert(name.toLower());
 
         Target t;
         t.id = profile.id + QStringLiteral(":container:") + QString::number(userContextId);
@@ -827,6 +840,10 @@ QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefi
         t.containerName = name;
         t.color = containerColor(id.value(QStringLiteral("color")).toString());
         out.append(t);
+    }
+    if (!droppedDupes.isEmpty()) {
+        qInfo() << "Lane:" << profile.displayName() << "has duplicate container names in containers.json;"
+                << "keeping the first of each and hiding" << droppedDupes;
     }
     return out;
 }
@@ -1307,7 +1324,7 @@ QList<Target> applyConfigToTargets(QList<Target> targets, const Config &config)
     return targets;
 }
 
-QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id, int newIndexInKind)
+QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id, int newIndex)
 {
     QStringList fullOrder;
     fullOrder.reserve(targets.size());
@@ -1326,13 +1343,16 @@ QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id,
         return fullOrder;
     }
 
-    const Kind kind = targets.at(movingIndex).kind;
-    const bool incognito = targets.at(movingIndex).incognito;
-
+    // The reorderable set is exactly what the Settings "Targets" list and
+    // the picker share: every non-incognito, non-Action target, so a
+    // container can sit above a browser and a web app below a custom app.
+    // Incognito targets (their own collapsible section, never in the
+    // picker) and Action targets (footer/shortcut bound, not rows) are
+    // landmarks that keep their slots while everyone else moves past.
     QList<int> siblingSlots;
     QStringList siblingIds;
     for (int i = 0; i < targets.size(); ++i) {
-        if (targets.at(i).kind == kind && targets.at(i).incognito == incognito) {
+        if (!targets.at(i).incognito && targets.at(i).kind != Kind::Action) {
             siblingSlots.append(i);
             siblingIds << targets.at(i).id;
         }
@@ -1343,7 +1363,7 @@ QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id,
         return fullOrder;
     }
 
-    siblingIds.move(oldPos, qBound(0, newIndexInKind, siblingIds.size() - 1));
+    siblingIds.move(oldPos, qBound(0, newIndex, siblingIds.size() - 1));
 
     for (int i = 0; i < siblingSlots.size(); ++i) {
         fullOrder[siblingSlots.at(i)] = siblingIds.at(i);

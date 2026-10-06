@@ -184,6 +184,24 @@ private Q_SLOTS:
         });
         QVERIFY(hasDev);
 
+        // The fixture carries two extra "Dev" rows (ids 7) and a lowercase
+        // "work" (id 8): same-name containers differ only in userContextId
+        // are duplicates Zen leaves behind, so discovery keeps exactly one
+        // of each name (the first/lowest id).
+        const auto devCount = std::count_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.containerName.compare(QLatin1String("Dev"), Qt::CaseInsensitive) == 0;
+        });
+        QCOMPARE(devCount, 1);
+        const auto dev = std::find_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.containerName == QLatin1String("Dev");
+        });
+        QVERIFY(dev != targets.end());
+        QCOMPARE(dev->containerId, 6);
+        const auto workCount = std::count_if(targets.begin(), targets.end(), [](const Target &t) {
+            return t.kind == Kind::Container && t.containerName.compare(QLatin1String("Work"), Qt::CaseInsensitive) == 0;
+        });
+        QCOMPARE(workCount, 1);
+
         // The internal placeholder identity (public: false) never becomes a target.
         const bool hasInternal = std::any_of(targets.begin(), targets.end(), [](const Target &t) {
             return t.kind == Kind::Container && t.name.startsWith(QLatin1String("userContextIdInternal"));
@@ -654,6 +672,33 @@ private Q_SLOTS:
 
         const auto result = moveIdAmongSiblings(targets, QStringLiteral("brave"), 0);
         QCOMPARE(result, QStringList({QStringLiteral("brave"), QStringLiteral("zen-private"), QStringLiteral("zen")}));
+    }
+
+    void moveIdAmongSiblingsCrossesKinds()
+    {
+        // The reorderable set is every non-incognito, non-Action target,
+        // so a browser dragged to the top lands above web apps while an
+        // Action landmark keeps its slot in the id list.
+        QList<Target> targets;
+        Target zen;
+        zen.id = QStringLiteral("zen");
+        zen.kind = Kind::BrowserProfile;
+        Target pwa;
+        pwa.id = QStringLiteral("pwa:gh");
+        pwa.kind = Kind::Pwa;
+        Target action;
+        action.id = QStringLiteral("action:copy");
+        action.kind = Kind::Action;
+        Target brave;
+        brave.id = QStringLiteral("brave");
+        brave.kind = Kind::BrowserProfile;
+        targets = {zen, pwa, action, brave};
+
+        const auto result = moveIdAmongSiblings(targets, QStringLiteral("brave"), 0);
+        QCOMPARE(result, QStringList({QStringLiteral("brave"),
+                                      QStringLiteral("zen"),
+                                      QStringLiteral("action:copy"),
+                                      QStringLiteral("pwa:gh")}));
     }
 
     void moveIdAmongSiblingsUnknownId()

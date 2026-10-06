@@ -94,7 +94,7 @@ QHash<int, QByteArray> RuleModel::roleNames() const
         {LocationRole, "location"},
         {RegexRole, "isRegex"},
         {TargetIdRole, "targetId"},
-        {EnabledRole, "enabled"},
+        {EnabledRole, "ruleEnabled"},
         {ActivityRole, "activity"},
     };
 }
