@@ -243,6 +243,25 @@ private Q_SLOTS:
         QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?a=1&b=2"));
     }
 
+    void cleanLinksCleansOpenUrlForPlainLink()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/dl?token=YWJj==&utm_source=x#f"), cfg);
+        QCOMPARE(c.openUrl, QStringLiteral("https://example.com/dl?token=YWJj==#f"));
+    }
+
+    void cleanLinksCleansOpenUrlForUnwrappedTarget()
+    {
+        // openUnwrapped + a nested target carrying tracking params must
+        // open the cleaned target, not the raw unwrapped URL.
+        Config cfg;
+        cfg.openUnwrapped = true;
+        const Click c = runPipeline(
+            QStringLiteral("https://nam.safelinks.protection.outlook.com/?url=https%3A%2F%2Fexample.com%2F%3Futm_source%3Dx%26id%3D42"), cfg);
+        QCOMPARE(c.openUrl, QStringLiteral("https://example.com/?id=42"));
+        QCOMPARE(c.matchUrl, c.openUrl);
+    }
+
     void cleanLinksLeavesOpenUrlUnchangedForWrappedLink()
     {
         // With unwrapping on but openUnwrapped off, openUrl must keep the

@@ -184,12 +184,9 @@ Click runPipeline(const QString &rawUrl, const Config &config, const UnshortenFn
         }
     }
 
-    // "working" (post-unwrap/unshorten/substitution, pre-tracker-strip) is
-    // what openUrl is built from below. Tracking-parameter stripping only
-    // ever lands in matchUrl: openUrl must stay launchable exactly as the
-    // O365/substitution stage left it, tracking junk included, so a
-    // wrapper that embeds its target in a query value never gets its
-    // encoding disturbed by the cleaner.
+    // The cleaner is byte-exact (only dropped segments change), so the
+    // browser gets the clean URL too. An O365 wrapper still opens as the
+    // untouched original below unless openUnwrapped is set.
     if (config.stripTrackingParams) {
         click.matchUrl = stripTrackingParams(working, &click.removedTrackingParams);
     } else {
@@ -200,7 +197,7 @@ Click runPipeline(const QString &rawUrl, const Config &config, const UnshortenFn
     if (wrapped && !config.openUnwrapped) {
         click.openUrl = click.originalUrl;
     } else {
-        click.openUrl = working;
+        click.openUrl = click.matchUrl;
     }
 
     click.host = hostOf(click.matchUrl);

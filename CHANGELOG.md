@@ -61,11 +61,12 @@ version is 0, minor releases may still contain breaking changes.
 
 - Lane now strips common tracking parameters (`utm_*`, `fbclid`,
   `gclid`, and friends, plus YouTube/Spotify's `si`) before matching a
-  link against rules, and this is on by default. The link that actually
-  opens is untouched byte-for-byte; only the copy used for rule
-  matching is cleaned, so base64 tokens, semicolon-separated values,
-  and non-ASCII paths or hostnames in the real URL are never at risk
-  of being mangled. Existing rules written against a tracking
+  link against rules and before the browser opens it, and this is on
+  by default. Only the tracking parameters are removed; every other
+  byte is kept, so base64 tokens, semicolon-separated values, and
+  non-ASCII paths or hostnames are never re-encoded. Outlook Safe Links
+  still open as the original wrapper unless `openUnwrapped` is set.
+  Existing rules written against a tracking
   parameter itself (matching on `utm_source=`, for example) may need
   updating, since that parameter is now gone by the time matching
   happens. Turn off the new "Clean links before routing" switch in
