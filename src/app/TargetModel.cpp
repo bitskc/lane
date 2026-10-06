@@ -111,7 +111,7 @@ QVariantList TargetModel::incognitoTargets() const
             incognitos.append(&t);
         }
     }
-    std::sort(incognitos.begin(), incognitos.end(), [&orderRank](const Target *a, const Target *b) {
+    std::stable_sort(incognitos.begin(), incognitos.end(), [&orderRank](const Target *a, const Target *b) {
         const auto parentRank = [&orderRank](const Target *t) {
             QString id = t->id;
             if (id.endsWith(QLatin1String(":private"))) {

@@ -151,6 +151,11 @@ bool destinationKeyMatches(const QString &key, const QString &url)
     if (!key.startsWith(prefix)) {
         return false;
     }
+    // keyPath is never bare "/" here for any key destinationLadder()
+    // generates (the host-only case was already returned above at
+    // `key == p.host`), so pathWithinPrefix's root-prefix shortcut is
+    // unreachable through normal remembered keys. It only matters for a
+    // hand-edited config key shaped like "host/" with nothing after.
     const QString keyPath = QLatin1Char('/') + key.mid(prefix.size());
     return pathWithinPrefix(p.path, keyPath, Qt::CaseSensitive);
 }

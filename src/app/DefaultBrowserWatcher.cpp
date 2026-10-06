@@ -71,6 +71,10 @@ void DefaultBrowserWatcher::setEnabled(bool on)
         if (!watchedDirs.isEmpty()) {
             m_watcher.removePaths(watchedDirs);
         }
+        // Keep m_watchedFiles' invariant true even while disabled (it
+        // means "currently watched and present"), not just after the
+        // next rescanPaths() reconciles it on re-enable.
+        m_watchedFiles.clear();
         m_debounce.stop();
     }
 }
