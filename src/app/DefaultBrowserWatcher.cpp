@@ -1,5 +1,6 @@
 #include "DefaultBrowserWatcher.h"
 
+#include <QFileInfo>
 #include <QStandardPaths>
 
 QStringList DefaultBrowserWatcher::mimeappsPaths()
@@ -36,6 +37,21 @@ DefaultBrowserWatcher::DefaultBrowserWatcher(const QStringList &paths, QObject *
             m_debounce.start();
         }
     });
+    // A candidate file that does not exist when we are enabled can be
+    // created later (first browser install, desktop writing the legacy
+    // path for the first time). addPath() on a missing file is a no-op
+    // and fileChanged can never fire for it, so the parent directory is
+    // watched instead and rescanPaths() re-arms the file once it shows
+    // up — and reports the change, since a new mimeapps.list is exactly
+    // the event this watcher exists for.
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] {
+        // Only a newly-appearing mimeapps.list is interesting — churn in
+        // the parent dir (unrelated file writes) must not fire the
+        // takeover check.
+        if (m_enabled && rescanPaths()) {
+            m_debounce.start();
+        }
+    });
 }
 
 void DefaultBrowserWatcher::setEnabled(bool on)
@@ -51,16 +67,37 @@ void DefaultBrowserWatcher::setEnabled(bool on)
         if (!watched.isEmpty()) {
             m_watcher.removePaths(watched);
         }
+        const QStringList watchedDirs = m_watcher.directories();
+        if (!watchedDirs.isEmpty()) {
+            m_watcher.removePaths(watchedDirs);
+        }
         m_debounce.stop();
     }
 }
 
-void DefaultBrowserWatcher::rescanPaths()
+bool DefaultBrowserWatcher::rescanPaths()
 {
     // addPath() is a no-op for paths already watched, so calling this on
     // every change both picks up files created after start and re-arms
     // ones that were atomically replaced.
+    bool appeared = false;
     for (const QString &p : m_paths) {
-        m_watcher.addPath(p);
+        if (QFileInfo::exists(p)) {
+            if (!m_watchedFiles.contains(p)) {
+                appeared = true;
+            }
+            m_watcher.addPath(p);
+            m_watchedFiles.insert(p);
+        } else {
+            // The file is not there — watch its parent directory so the
+            // first write lands as a directoryChanged and re-arms the
+            // file watch here.
+            m_watchedFiles.remove(p);
+            const QString dir = QFileInfo(p).absolutePath();
+            if (!dir.isEmpty() && QFileInfo::exists(dir)) {
+                m_watcher.addPath(dir);
+            }
+        }
     }
+    return appeared;
 }

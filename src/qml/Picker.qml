@@ -63,6 +63,7 @@ Window {
         enabled: list.currentIndex >= 0 && list.currentItem !== null
         onActivated: controller.pickPrivate(list.currentItem.targetId)
     }
+    Shortcut { sequence: "Alt+E"; onActivated: controller.emailCurrent() }
 
     Rectangle {
         id: dim
@@ -511,6 +512,42 @@ Window {
                         }
                         QQC.ToolTip.visible: copyHover.hovered
                         QQC.ToolTip.text: "Copy link"
+                    }
+                    Item {
+                        id: emailHint
+                        Layout.preferredWidth: emailRow.implicitWidth
+                        Layout.preferredHeight: 16
+
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Email link"
+                        Accessible.description: "Open the current link in your mail client, shortcut Alt E"
+
+                        RowLayout {
+                            id: emailRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 4
+                            Kirigami.Icon {
+                                source: "mail-sent"
+                                Layout.preferredWidth: 12
+                                Layout.preferredHeight: 12
+                                opacity: emailHover.hovered ? 0.7 : 0.4
+                            }
+                            QQC.Label {
+                                text: "alt+e"
+                                font.pixelSize: 10
+                                font.family: "monospace"
+                                opacity: emailHover.hovered ? 0.7 : 0.4
+                            }
+                        }
+                        HoverHandler {
+                            id: emailHover
+                            cursorShape: Qt.PointingHandCursor
+                        }
+                        TapHandler {
+                            onTapped: controller.emailCurrent()
+                        }
+                        QQC.ToolTip.visible: emailHover.hovered
+                        QQC.ToolTip.text: "Email link"
                     }
                     QQC.Label {
                         text: "esc"

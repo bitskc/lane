@@ -235,7 +235,12 @@ FormCard.FormCardPage {
     Component.onCompleted: syncModels()
     Connections {
         target: controller
-        function onSettingsChanged() { syncModels() }
+        // Qt.callLater defers the rebuild off the signal call stack: a
+        // drag's onDropped triggers moveTarget() → settingsChanged()
+        // synchronously, and clear()+rebuild inside that callback would
+        // destroy the delegate that is still executing it and eat the
+        // moveDisplaced settle animation.
+        function onSettingsChanged() { Qt.callLater(syncModels) }
     }
 
     FormCard.FormHeader {

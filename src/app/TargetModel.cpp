@@ -1,5 +1,8 @@
 #include "TargetModel.h"
 
+#include <algorithm>
+#include <limits>
+
 namespace Lane
 {
 
@@ -117,17 +120,47 @@ QVariantList TargetModel::orderableTargets() const
 
 QVariantList TargetModel::incognitoTargets() const
 {
-    QVariantList out;
+    // The Private windows list mirrors the user's Destinations order
+    // instead of m_targets' raw array order: landmark slots freeze when
+    // siblings are reordered (an incognito row keeps the slot it was
+    // discovered at while browsers move past it), so the parent id —
+    // incognito ids are always <parent>:private or <parent>:incognito —
+    // maps each row to its profile's rank among orderable targets.
+    QHash<QString, int> orderRank;
+    int rank = 0;
     for (const auto &t : m_targets) {
-        if (!t.incognito) {
-            continue;
+        if (!t.incognito && t.kind != Kind::Action) {
+            orderRank.insert(t.id, rank++);
         }
+    }
+
+    QList<const Target *> incognitos;
+    for (const auto &t : m_targets) {
+        if (t.incognito) {
+            incognitos.append(&t);
+        }
+    }
+    std::sort(incognitos.begin(), incognitos.end(), [&orderRank](const Target *a, const Target *b) {
+        const auto parentRank = [&orderRank](const Target *t) {
+            QString id = t->id;
+            if (id.endsWith(QLatin1String(":private"))) {
+                id.chop(8);
+            } else if (id.endsWith(QLatin1String(":incognito"))) {
+                id.chop(10);
+            }
+            return orderRank.value(id, std::numeric_limits<int>::max());
+        };
+        return parentRank(a) < parentRank(b);
+    });
+
+    QVariantList out;
+    for (const auto *t : incognitos) {
         QVariantMap m;
-        m[QStringLiteral("targetId")] = t.id;
-        m[QStringLiteral("name")] = t.displayName();
-        m[QStringLiteral("discoveredName")] = t.discoveredName();
-        m[QStringLiteral("iconName")] = t.icon;
-        m[QStringLiteral("hidden")] = t.hidden;
+        m[QStringLiteral("targetId")] = t->id;
+        m[QStringLiteral("name")] = t->displayName();
+        m[QStringLiteral("discoveredName")] = t->discoveredName();
+        m[QStringLiteral("iconName")] = t->icon;
+        m[QStringLiteral("hidden")] = t->hidden;
         out.append(m);
     }
     return out;

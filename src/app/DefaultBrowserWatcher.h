@@ -2,6 +2,7 @@
 
 #include <QFileSystemWatcher>
 #include <QObject>
+#include <QSet>
 #include <QStringList>
 #include <QTimer>
 
@@ -30,9 +31,13 @@ Q_SIGNALS:
     void mimeappsChanged();
 
 private:
-    void rescanPaths();
+    // Re-arms watches; returns true if a watched file just appeared
+    // (directoryChanged uses this to distinguish a new mimeapps.list
+    // from unrelated churn in the same folder).
+    bool rescanPaths();
 
     QStringList m_paths;
+    QSet<QString> m_watchedFiles;
     QFileSystemWatcher m_watcher;
     // Editor swaps mean the path can vanish and reappear, and several
     // writers can touch the file in quick succession; debounce so one

@@ -367,6 +367,25 @@ void Controller::setDefaultTargetId(const QString &id)
     Q_EMIT settingsChanged();
 }
 
+QString Controller::activityDefaultTarget(const QString &activityId) const
+{
+    return m_config.activityDefaults.value(activityId);
+}
+
+void Controller::setActivityDefaultTarget(const QString &activityId, const QString &targetId)
+{
+    if (activityId.isEmpty()) {
+        return;
+    }
+    if (targetId.isEmpty()) {
+        m_config.activityDefaults.remove(activityId);
+    } else {
+        m_config.activityDefaults.insert(activityId, targetId);
+    }
+    persist();
+    Q_EMIT settingsChanged();
+}
+
 QStringList Controller::targetIds() const
 {
     QStringList ids;
@@ -630,6 +649,15 @@ void Controller::copyCurrent()
         clip->setText(safe.isEmpty() ? displayUrl(m_click.openUrl) : safe);
     }
     hidePicker();
+}
+
+void Controller::emailCurrent()
+{
+    // Footer action sibling of copyCurrent(): routes the open URL through
+    // the discovered action:email target (xdg-email) exactly as a list pick
+    // would, minus always-remember persistence (Action kind is excluded by
+    // pickId already).
+    pickId(QStringLiteral("action:email"));
 }
 
 void Controller::openSettings()
