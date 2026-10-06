@@ -10,7 +10,7 @@ QStringList destinationLadder(const QString &url);
 QString destinationKeyMatchesBest(const QString &url, const QMap<QString, QString> &remembered);
 bool destinationKeyMatches(const QString &key, const QString &url);
 bool isAppChromeSegment(const QString &segment);
-int suggestedLadderIndex(const QString &url, const Target *target, const QMap<QString, QString> &remembered);
+int suggestedLadderIndex(const QString &url, const Target *target);
 bool pwaShouldAutoOpen(const Target &pwa, const QString &url);
 QString lookupRemembered(const QString &url, const QMap<QString, QString> &remembered);
 

@@ -217,6 +217,7 @@ private:
     void requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window, const Click &click);
     void toast(const Target &target, const QString &reason, const QString &host);
     void notifyBlocked();
+    QWindow *ensureEngine(QQmlApplicationEngine *&engine, const QString &module, const QString &name, const QString &warnPrefix);
     void ensurePickerEngine();
     void ensureSettingsEngine();
     void ensureHoldEngine();

@@ -152,11 +152,7 @@ bool destinationKeyMatches(const QString &key, const QString &url)
         return false;
     }
     const QString keyPath = QLatin1Char('/') + key.mid(prefix.size());
-    QString urlPath = p.path.isEmpty() ? QStringLiteral("/") : p.path;
-    if (urlPath.size() > 1 && urlPath.endsWith(QLatin1Char('/'))) {
-        urlPath.chop(1);
-    }
-    return urlPath == keyPath || urlPath.startsWith(keyPath + QLatin1Char('/'));
+    return pathWithinPrefix(p.path, keyPath, Qt::CaseSensitive);
 }
 
 QString destinationKeyMatchesBest(const QString &url, const QMap<QString, QString> &remembered)
@@ -182,9 +178,8 @@ QString lookupRemembered(const QString &url, const QMap<QString, QString> &remem
     return remembered.value(key);
 }
 
-int suggestedLadderIndex(const QString &url, const Target *target, const QMap<QString, QString> &remembered)
+int suggestedLadderIndex(const QString &url, const Target *target)
 {
-    Q_UNUSED(remembered);
     const QStringList ladder = destinationLadder(url);
     if (ladder.isEmpty()) {
         return 0;

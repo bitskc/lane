@@ -109,6 +109,25 @@ QStringList shortenerHosts()
     return QStringList(kShorteners.begin(), kShorteners.end());
 }
 
+bool pathWithinPrefix(const QString &urlPath, const QString &prefixPath, Qt::CaseSensitivity cs)
+{
+    QString prefix = prefixPath.isEmpty() ? QStringLiteral("/") : prefixPath;
+    if (prefix.size() > 1 && prefix.endsWith(QLatin1Char('/'))) {
+        prefix.chop(1);
+    }
+    if (prefix == QLatin1String("/")) {
+        return true;
+    }
+    QString path = urlPath.isEmpty() ? QStringLiteral("/") : urlPath;
+    if (path.size() > 1 && path.endsWith(QLatin1Char('/'))) {
+        path.chop(1);
+    }
+    if (path.compare(prefix, cs) == 0) {
+        return true;
+    }
+    return path.startsWith(prefix + QLatin1Char('/'), cs);
+}
+
 bool urlInScope(const QString &url, const QString &scope)
 {
     if (scope.isEmpty()) {
@@ -125,22 +144,7 @@ bool urlInScope(const QString &url, const QString &scope)
     if (u.host().compare(s.host(), Qt::CaseInsensitive) != 0) {
         return false;
     }
-    // Segment-aware: a trailing-slash-normalized scope path must match the
-    // URL path exactly or be followed by a '/', so a scope of "/bits" does
-    // not match "/bitskc/lane" (destination.cpp::destinationKeyMatches does
-    // the same kind of segment matching for remembered destinations).
-    QString sp = s.path().isEmpty() ? QStringLiteral("/") : s.path();
-    if (sp.size() > 1 && sp.endsWith(QLatin1Char('/'))) {
-        sp.chop(1);
-    }
-    const QString up = u.path().isEmpty() ? QStringLiteral("/") : u.path();
-    if (sp == QLatin1String("/")) {
-        return true;
-    }
-    if (up.compare(sp, Qt::CaseInsensitive) == 0) {
-        return true;
-    }
-    return up.startsWith(sp + QLatin1Char('/'), Qt::CaseInsensitive);
+    return pathWithinPrefix(u.path(), s.path(), Qt::CaseInsensitive);
 }
 
 bool isPrivateOrLocalHost(const QString &host)
@@ -160,15 +164,14 @@ bool isPrivateOrLocalHost(const QString &host)
     if (addr.isLoopback() || addr.isLinkLocal() || addr.isMulticast() || addr.isBroadcast()) {
         return true;
     }
-#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
     if (addr.isSiteLocal() || addr.isUniqueLocalUnicast()) {
         return true;
     }
-#endif
     if (addr.protocol() == QAbstractSocket::IPv4Protocol) {
         const quint32 ip = addr.toIPv4Address();
         const quint8 a = quint8(ip >> 24);
         const quint8 b = quint8(ip >> 16);
+        const quint8 c = quint8(ip >> 8);
         if (a == 10 || a == 127 || a == 0) {
             return true;
         }
@@ -184,7 +187,10 @@ bool isPrivateOrLocalHost(const QString &host)
         if (a == 192 && b == 168) {
             return true;
         }
-        if (a == 198 && (b == 18 || b == 51)) {
+        if (a == 198 && (b == 18 || b == 19)) {
+            return true;
+        }
+        if (a == 198 && b == 51 && c == 100) {
             return true;
         }
     }
