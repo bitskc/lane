@@ -62,35 +62,6 @@ void TargetModel::setTargets(QList<Target> targets)
     endResetModel();
 }
 
-QString TargetModel::idAt(int row) const
-{
-    if (row < 0 || row >= m_targets.size()) {
-        return {};
-    }
-    return m_targets.at(row).id;
-}
-
-QVariantList TargetModel::targetsByKind(const QString &kind) const
-{
-    QVariantList out;
-    for (const auto &t : m_targets) {
-        if (kindName(t.kind) != kind) {
-            continue;
-        }
-        QVariantMap m;
-        m[QStringLiteral("targetId")] = t.id;
-        m[QStringLiteral("name")] = t.displayName();
-        m[QStringLiteral("discoveredName")] = t.discoveredName();
-        m[QStringLiteral("iconName")] = t.icon;
-        m[QStringLiteral("hidden")] = t.hidden;
-        m[QStringLiteral("isDefault")] = t.isBrowserDefault;
-        m[QStringLiteral("incognito")] = t.incognito;
-        m[QStringLiteral("engine")] = engineName(t.engine);
-        out.append(m);
-    }
-    return out;
-}
-
 QVariantList TargetModel::orderableTargets() const
 {
     // The same set moveIdAmongSiblings() reorders: every non-incognito,

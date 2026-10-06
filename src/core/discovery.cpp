@@ -1332,17 +1332,6 @@ QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id,
         fullOrder << t.id;
     }
 
-    int movingIndex = -1;
-    for (int i = 0; i < targets.size(); ++i) {
-        if (targets.at(i).id == id) {
-            movingIndex = i;
-            break;
-        }
-    }
-    if (movingIndex < 0) {
-        return fullOrder;
-    }
-
     // The reorderable set is exactly what the Settings "Targets" list and
     // the picker share: every non-incognito, non-Action target, so a
     // container can sit above a browser and a web app below a custom app.

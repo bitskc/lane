@@ -67,6 +67,14 @@ private Q_SLOTS:
         QVERIFY(Lane::isPrivateOrLocalHost(QStringLiteral("nas.local")));
         QVERIFY(!Lane::isPrivateOrLocalHost(QStringLiteral("github.com")));
         QVERIFY(!Lane::isPrivateOrLocalHost(QStringLiteral("1.1.1.1")));
+        // RFC2544 benchmarking range is 198.18.0.0/15 (198.18.x and
+        // 198.19.x), not all of 198.18.x/198.51.x.
+        QVERIFY(Lane::isPrivateOrLocalHost(QStringLiteral("198.18.0.1")));
+        QVERIFY(Lane::isPrivateOrLocalHost(QStringLiteral("198.19.255.254")));
+        QVERIFY(!Lane::isPrivateOrLocalHost(QStringLiteral("198.20.0.1")));
+        // TEST-NET-2 is only the 198.51.100.0/24 slice of 198.51.x.
+        QVERIFY(Lane::isPrivateOrLocalHost(QStringLiteral("198.51.100.7")));
+        QVERIFY(!Lane::isPrivateOrLocalHost(QStringLiteral("198.51.50.7")));
     }
 
     void displayStripsUserInfo()

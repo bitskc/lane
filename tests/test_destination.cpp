@@ -167,7 +167,7 @@ private Q_SLOTS:
 
     void suggestedLadderIndexTenantPathDefaultsToPathScope()
     {
-        const int idx = suggestedLadderIndex(QStringLiteral("https://github.com/bitskc/lane"), nullptr, {});
+        const int idx = suggestedLadderIndex(QStringLiteral("https://github.com/bitskc/lane"), nullptr);
         QCOMPARE(idx, 1);
         const QStringList ladder = destinationLadder(QStringLiteral("https://github.com/bitskc/lane"));
         QCOMPARE(ladder.value(idx), QStringLiteral("github.com/bitskc"));
@@ -175,17 +175,17 @@ private Q_SLOTS:
 
     void suggestedLadderIndexChromePathStaysHost()
     {
-        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://news.ycombinator.com/item?id=1"), nullptr, {}), 0);
+        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://news.ycombinator.com/item?id=1"), nullptr), 0);
     }
 
     void suggestedLadderIndexRootPathStaysHost()
     {
-        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://example.com/"), nullptr, {}), 0);
+        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://example.com/"), nullptr), 0);
     }
 
     void suggestedLadderIndexLoginIsChrome()
     {
-        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://github.com/login"), nullptr, {}), 0);
+        QCOMPARE(suggestedLadderIndex(QStringLiteral("https://github.com/login"), nullptr), 0);
     }
 
     void configRoundTripHoldAndPathKey()
