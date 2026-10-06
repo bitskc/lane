@@ -1,17 +1,65 @@
 # Windows port plan
 
-Status: draft, pre-work. Audit basis: full dependency inventory of
-`src/`, `data/`, and `CMakeLists.txt` on main (2026-10-06).
+Status: decided — bare Qt6, no KF6. Audit basis: full dependency
+inventory of `src/`, `data/`, and `CMakeLists.txt` on main
+(2026-10-06), updated after the Kirigami/FormCard usage count.
 
 ## What the port actually is
 
 Lane's routing brain is already portable. `src/core/` is pure Qt —
 URL safety, rule matching, pipeline, router, destination ladder,
 launcher argv safety, config JSON, unshorten — with zero OS calls.
-All QML is pure QML: Kirigami + kirigami-addons have no native backends,
-and KDE already ships Kirigami apps on Windows via Craft.
 
-The port is therefore not a rewrite. It is five platform seams:
+The C++ KF6 surface is shallow: five `KNotification` calls, one
+`KStatusNotifierItem`, `KDBusService`, `KAboutData`, `KCrash`,
+`KWindowSystem`/`KWaylandExtras` for activation, `KLocalizedString`.
+Every one has a Qt6 replacement (table below).
+
+The one genuinely large piece is the QML. `src/qml/` is built on
+Kirigami + kirigami-addons FormCard: ~80 FormCard delegates across 4
+settings pages, `Kirigami.Theme` at 63 sites, `Kirigami.Units` at 22,
+`Kirigami.ShadowedRectangle`, `Kirigami.Icon`, and
+`Kirigami.ListItemDragHandle` for the Targets page drag-reorder. Bare
+Qt6 means a real UI port to Qt Quick Controls — not a find/replace.
+
+## Decision: bare Qt6, and why
+
+KF6-via-Craft was the alternative. It keeps the code diff smallest but
+ships KDE frameworks inside a Windows installer, ties the build to
+KDE's toolchain, and still doesn't solve the QML question (Kirigami
+works on Windows but the app then looks like a KDE app everywhere,
+forever).
+
+Bare Qt6 wins on results, not effort:
+
+- One dependency tree: stock Qt6 + Qt6 declarative, installable via
+  windeployqt or a static build. No Craft, no ECM in the shipped path.
+- Porting the UI to Qt Quick Controls once gives **one QML codebase for
+  both platforms** — on Plasma, `qqc2-desktop-style` renders it native
+  anyway, so Linux loses almost nothing visually.
+- Every KF6 replacement below is either a stock Qt class or a thin
+  D-Bus call we already depend on.
+
+### KF6 → bare Qt6 mapping
+
+| KF6 today | Bare Qt6 replacement | Notes |
+|---|---|---|
+| `KDBusService` (unique instance + activation) | `QLocalServer`/`QLocalSocket` for the handoff | Keep a tiny `org.freedesktop.Application`-compatible D-Bus object on Linux so `DBusActivatable=true` keeps working; Windows is QLocalServer only |
+| `KStatusNotifierItem` (tray) | `QSystemTrayIcon` | SNI has more features (context menu via D-Bus); current use is a passive icon + activate → settings, which QSystemTrayIcon covers on both OSes |
+| `KNotification` (5 sites) | Linux: `org.freedesktop.Notifications` via `QDBus` (actions supported — the "restore" button survives); Windows: `QSystemTrayIcon::showMessage` or WinRT toast | WinRT toast with an action button is ~100 lines of WinRT/COM; acceptable fallback is a settings-page banner |
+| `KCrash` | Drop, or `QMessageLogContext` + `std::set_terminate` writing a crash log | KCrash's value is the KDE crash dialog; a log file is enough for a single-binary app |
+| `KAboutData` | `QCoreApplication` metadata + a hand-rolled About page | The current About is already custom-license; a QML About card is ~40 lines |
+| `KLocalizedString` / `i18n` | `qsTr()`/`QTranslator` | QML already avoids `i18n()` (0 hits); C++ has ~1 call site |
+| `KWindowSystem`/`KWaylandExtras` (activation token) | Linux: keep `KWindowSystem` optional via `#ifdef`, or accept `requestActivate()` on X11 path; Windows: `SetForegroundWindow` rules allow it from a foreground process | Activation polish, not correctness |
+| `KIconThemes`/`KColorScheme` | `QIcon::fromTheme` (Qt honors Freedesktop icon themes on Linux), `QPalette` | Already partially used |
+| `KConfigCore` | Already unused at runtime — config is our own JSON | Drop the link |
+
+LayerShellQt stays **Linux-only**, behind `if(UNIX AND NOT APPLE)` —
+it is a plain Qt wrapper for wlr-layer-shell, no KF6 required, and the
+existing X11/Windows overlay path is already `FramelessWindowHint |
+WindowStaysOnTopHint`.
+
+## The five platform seams (unchanged)
 
 | Seam | Linux today | Windows equivalent | Effort |
 |---|---|---|---|
@@ -32,24 +80,6 @@ Plus two drops and one upgrade:
   (no portable active-window PID). On Windows `GetForegroundWindow` +
   `QueryFullProcessImageNameW` are stable APIs — per-source rules
   (ProcessName/WindowTitle match) can actually work there.
-
-## The one decision to make first
-
-**Keep KF6 via KDE Craft toolchain, or strip to bare Qt6?**
-
-- **Keep KF6 (Craft)**: KNotifications, KCrash, KIconThemes, KColorScheme
-  survive as links; only KDBusService and KStatusNotifierItem get swapped
-  (QLocalServer, QSystemTrayIcon). Smallest code diff. Cost: build system
-  is tied to KDE's Windows toolchain.
-- **Strip KF6**: every KF6 dependency becomes a real rewrite — toasts,
-  crash handler, tray, metadata. More work up front, zero KDE dependency
-  in the shipped binary, easier distribution (single Qt installer).
-
-Recommendation: **Craft/KF6 for the first working port**. Proving the
-product on Windows matters more than packaging purity; a bare-Qt fork
-can come later if distribution demands it. Flag: the live state of
-KF6::Notifications' Windows backend and KCrash's MinGW/MSVC backend
-were not verified — do one Craft test build before committing.
 
 ## The one real functionality gap
 
@@ -105,43 +135,92 @@ src/app/platform/
   platform.h           // Virtuals: singleInstance, defaultBrowser,
                        // autostart, tray, notify, overlayFlags,
                        // sourceInfo, discoveryRoots
-  platform_linux.cpp   // current KDBus/LayerShell/XDG impl, moved as-is
+  platform_linux.cpp   // current behavior, minus KF6 (QDBus, QLocalServer)
   platform_windows.cpp // QLocalServer + registry + Win32 impl
 ```
 
 `Controller` keeps one code path; each virtual has a Linux impl that is
-literally the current code. Discovery gets a `DesktopApp`-shaped
-producer per platform (registry enumerator on Windows) feeding the
-unchanged `fingerprint()`/`geckoProfiles()`/`chromiumProfiles()`.
+the current logic re-expressed on Qt APIs. Discovery gets a
+`DesktopApp`-shaped producer per platform (registry enumerator on
+Windows) feeding the unchanged `fingerprint()`/`geckoProfiles()`/
+`chromiumProfiles()`.
+
+## UI port approach (the big one)
+
+One QML codebase on Qt Quick Controls, shared by both platforms:
+
+- **Settings pages**: replace FormCard delegates with a small local
+  `ui/` module — `FormRow`, `SwitchRow`, `ComboRow`, `ButtonRow`,
+  `TextRow` — each ~30-60 lines of QQC2. ~80 call sites, but they are
+  mechanical: FormCard delegates already take `text:`/`description:`/
+  `checked:` shapes that map 1:1.
+- **`Kirigami.Theme`** → `ApplicationWindow.palette` /
+  `Material`/`Fluent`/`qqc2-desktop-style` theme colors. The 63 uses
+  are mostly text color and highlight — sed-able, then hand-checked.
+- **`Kirigami.Units`** → fixed dp constants or `Application.font`
+  metrics.
+- **`Kirigami.ShadowedRectangle`** → `Rectangle` + `DropShadow`
+  (Qt6 `MultiEffect` or `layer.effect`).
+- **`Kirigami.Icon`** → `IconImage` (Qt 6.8+ supports themed icons on
+  Linux) or `Image` + `QIcon::fromTheme` provider.
+- **`ListItemDragHandle`** → no QQC2 equivalent; port the Kirigami
+  source pattern (a MouseArea-driven drag that moves the delegate in
+  the ListView) — self-contained, ~100 lines.
+- Style selection: `Fusion` everywhere, or `qqc2-desktop-style` on
+  Linux (Plasma-native look) + `Fluent`/`Fusion` on Windows. Decide by
+  screenshot comparison in milestone 2 — pick whichever keeps Plasma
+  look acceptable; do not ship two QML trees.
 
 ## Milestones
 
-1. **Build skeleton** — CMake `if(WIN32)` guards for LayerShellQt /
-   DBusAddons / StatusNotifierItem; Craft toolchain build that links.
-   No behavior yet.
-2. **Single instance + settings** — QLocalServer handoff, `--settings`
-   window renders on Windows, config round-trips at `%APPDATA%\lane`.
-3. **Discovery** — registry browser enumeration + Gecko/Chromium path
+1. **De-KF6 the C++** — swap every KF6 call site per the mapping table
+   while still on Linux; CI + `ctest` stay green the whole time. This
+   is the largest code-touching milestone but is fully testable on
+   Linux with zero Windows access.
+2. **UI port to Qt Quick Controls** — build the `ui/` delegate module,
+   migrate the 7 QML files, screenshot-compare settings/picker/hold
+   against current Kirigami renders, keep Plasma look via
+   `qqc2-desktop-style` if it holds up.
+3. **Windows build skeleton** — CMake `if(WIN32)` guards for
+   LayerShellQt/DBus paths; MSVC or llvm-mingw build that links; config
+   round-trips at `%APPDATA%\lane`.
+4. **Single instance + settings** — QLocalServer handoff, `--settings`
+   window renders on Windows.
+5. **Discovery** — registry browser enumeration + Gecko/Chromium path
    tables; `lane --list` shows real Windows browsers/profiles.
-4. **Picker + launch** — overlay shows on URL handoff, launches browsers
+6. **Picker + launch** — overlay shows on URL handoff, launches browsers
    via `QProcess::startDetached` (already portable).
-5. **Default-browser registration + takeover watch** — registry
+7. **Default-browser registration + takeover watch** — registry
    capabilities, `ms-settings` deep link, `RegNotifyChangeKeyValue`
    watcher.
-6. **Autostart + tray** — Run-key toggle, `QSystemTrayIcon`.
-7. **Polish** — crash handler decision, notifications fallback,
-   installer (MSIX or Inno), update feed per-OS.
+8. **Autostart + tray + notifications** — Run-key toggle,
+   `QSystemTrayIcon`, toast path.
+9. **Polish** — crash log decision, installer (MSIX or Inno),
+   update feed per-OS.
 
 Out of scope: mailto/PDF (unchanged — never intercepted), browser
 extensions, macOS.
 
 ## Risks
 
-- Craft/KF6-on-Windows viability for Notifications/KCrash — verify
-  before milestone 1 is called done.
+- **QQC2 settings pages will not be pixel-identical** to FormCard.
+  Budget real design time in milestone 2; the risk is a functional but
+  bland settings window. Mitigation: build the `ui/` delegate module to
+  mimic FormCard's grouped-card look.
+- **`ListItemDragHandle` port** — Kirigami's implementation is
+  battle-tested; a hand-rolled replacement must handle auto-scroll,
+  section boundaries, and the kind+incognito sibling rules. Tests on
+  `moveIdAmongSiblings` already cover the model side.
+- **Notification action on Windows** — WinRT toast-with-button is the
+  only way to keep the "restore default" action; if that proves fragile,
+  degrade to a banner inside settings (flagged, acceptable).
+- **Single-instance without KDBusService** — `DBusActivatable=true`
+  needs either a kept `org.freedesktop.Application` D-Bus object or a
+  `.desktop` rewrite to plain `Exec=`. Verify gtk-launch still works
+  end-to-end; this bit us before.
 - Windows overlay keyboard-focus behavior differs from layer-shell
   exclusive grabs; `WindowStaysOnTopHint` + `requestActivate` is close
   but needs real testing on Windows 11.
 - Zen on Windows profile location unverified.
-- Per-Activity UI stays permanently empty on Windows — consider hiding
-  it when `HAVE_PLASMA_ACTIVITIES` is absent (also a Linux cleanup).
+- Per-Activity UI stays permanently empty on Windows — hide it when
+  `HAVE_PLASMA_ACTIVITIES` is absent (also a Linux cleanup).
