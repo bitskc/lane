@@ -162,3 +162,11 @@ These claims were approved without checking the code:
 - Proposal: `zen-private` / `brave-incognito` ids. Real ids are `browser:<app>:<key>:private` / `:incognito`.
 
 Also: `gstack-full-analysis.md` makes the AUR publish (Phase 0) a **hard gate before any Phase 1 code**. The Phase 1 proposal doesn't mention the gate. Restate it in `proposal.md` or record that it has been lifted.
+
+## Status (2026-10-06)
+
+Phase 1 shipped and was archived (`openspec/changes/archive/2026-09-30-p1-clean-links-and-private-window/`). Re-checked against `main` @ 96ba9e0:
+
+- **Fixed in shipped code:** C1, C2, C3, C5, C6, C7, C9, P1, P2, P3, P4, P5, P6, P7, P8, P9. Includes the byte-exact splice, `utm_`/`hsa_` prefixes, host-scoped `si`, exact-id `privateCounterpart()` with `test_router` coverage, fail-closed notice, and host-free notifications for private launches.
+- **Regression found and fixed on `fix/clean-links-open-url`:** `runPipeline` set `openUrl` to the *unstripped* URL, so the browser still got trackers. This contradicted the spec scenario "`openUrl` equals that same clean `matchUrl`". `openUrl` now uses the clean `matchUrl` for non-wrapped links; O365 behavior is unchanged. Added test `cleanLinksCleansOpenUrlForPlainLink`, and updated the CHANGELOG and Preferences copy.
+- **Still open:** P10 (no Alt+P on hold HUD or silent launches) is an accepted non-goal. The AUR gate question is for the owner.

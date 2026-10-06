@@ -243,6 +243,13 @@ private Q_SLOTS:
         QCOMPARE(c.matchUrl, QStringLiteral("https://example.com/?a=1&b=2"));
     }
 
+    void cleanLinksCleansOpenUrlForPlainLink()
+    {
+        Config cfg;
+        const Click c = runPipeline(QStringLiteral("https://example.com/dl?token=YWJj==&utm_source=x#f"), cfg);
+        QCOMPARE(c.openUrl, QStringLiteral("https://example.com/dl?token=YWJj==#f"));
+    }
+
     void cleanLinksLeavesOpenUrlUnchangedForWrappedLink()
     {
         // With unwrapping on but openUnwrapped off, openUrl must keep the
