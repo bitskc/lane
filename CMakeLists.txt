@@ -54,18 +54,7 @@ if(LANE_KDE_DESKTOP)
         DBus
         Svg
     )
-    find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
-        I18n
-        CoreAddons
-        Config
-        DBusAddons
-        Notifications
-        WindowSystem
-        IconThemes
-        ColorScheme
-        StatusNotifierItem
-        Crash
-    )
+    find_package(KF6WindowSystem ${KF_MIN_VERSION} QUIET)
     ecm_find_qmlmodule(org.kde.kirigami REQUIRED)
     ecm_find_qmlmodule(org.kde.kirigamiaddons.formcard REQUIRED)
     find_package(LayerShellQt REQUIRED)
@@ -112,7 +101,6 @@ if(LANE_KDE_DESKTOP)
 
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.lane.Lane.desktop DESTINATION ${KDE_INSTALL_APPDIR})
     install(FILES data/app.lane.Lane.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
-    install(FILES data/app.lane.Lane.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/app.lane.Lane.service DESTINATION ${KDE_INSTALL_DBUSSERVICEDIR})
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/lane.service DESTINATION ${CMAKE_INSTALL_DATADIR}/systemd/user)
     install(FILES data/icons/app.lane.Lane.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)

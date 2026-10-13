@@ -16,7 +16,7 @@
 #include <QVariantAnimation>
 #include <QWindow>
 
-class KStatusNotifierItem;
+class QSystemTrayIcon;
 
 #ifdef HAVE_PLASMA_ACTIVITIES
 namespace KActivities
@@ -298,7 +298,7 @@ private:
     QPointer<QWindow> m_pickerWindow;
     QPointer<QWindow> m_settingsWindow;
     QPointer<QWindow> m_holdWindow;
-    KStatusNotifierItem *m_tray = nullptr;
+    QSystemTrayIcon *m_tray = nullptr;
 
     QVariantAnimation *m_holdAnimation = nullptr;
     Target m_holdTarget;

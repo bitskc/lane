@@ -13,7 +13,7 @@ Lane SHALL build its full application from source using Qt6 plus LayerShellQt on
 - **THEN** configure and build complete successfully
 
 #### Scenario: Optional activation-token dependency
-- **WHEN** KF6GuiAddons is absent at configure time
+- **WHEN** KF6WindowSystem is absent at configure time
 - **THEN** Lane still builds and runs, degrading only the Wayland activation-token handoff to launched browsers
 
 ### Requirement: Platform backend seam
@@ -21,7 +21,7 @@ OS-specific behavior (desktop notifications, autostart, activation-token product
 
 #### Scenario: Linux backend parity
 - **WHEN** Lane runs on Linux
-- **THEN** the Linux platform backend supplies the behavior previously provided by KF6 services, with no feature lost beyond the documented exceptions (activation token when KF6GuiAddons is absent; tray Passive status)
+- **THEN** the Linux platform backend supplies the behavior previously provided by KF6 services, with no feature lost beyond the documented exceptions (activation token when KF6WindowSystem is absent; tray Passive status)
 
 ### Requirement: Single instance without D-Bus activation dependency
 Exactly one Lane process SHALL own the user session's click routing at a time; a second invocation SHALL forward its request (URL to route, or `--settings`) to the running instance and exit. On Linux, D-Bus-activatable launch SHALL continue to work via the freedesktop Application interface on the documented object paths.

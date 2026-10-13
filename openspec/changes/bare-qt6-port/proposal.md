@@ -13,9 +13,9 @@ The routing brain (`src/core/`) is already pure Qt6 and proven portable: it buil
 - **Notifications**: `KNotification` → `org.freedesktop.Notifications` over `QDBus` via a `platform()->notify()` seam, preserving action buttons (watchdog "Restore Lane"), per-site icons, and the `desktop-entry` hint. Service-absent degradation: no-op + the Overview restore path.
 - **Crash handling**: `KCrash` → `qInstallMessageHandler` ring buffer + `std::set_terminate` + fatal-signal handlers writing a crash log under the app data dir.
 - **Metadata**: `KAboutData` + `KLocalizedString` → `QCoreApplication` setters (already present) + `tr()`. No About page — Overview already shows version + PolyForm notice.
-- **Activation token**: `KWaylandExtras` → `KF6::GuiAddons` as an **optional** link (`HAVE_KWAYLANDEXTRAS`); absent → immediate empty token (300ms fallback path already exists).
+- **Activation token**: `KWaylandExtras` → `KF6::WindowSystem` as an **optional** link (`HAVE_KWAYLANDEXTRAS`); absent → immediate empty token (300ms fallback path already exists).
 - **Platform seam**: `src/app/platform/` — `Platform` interface (notify, autostart, `requestActivationToken` async producer) + `platform_linux.cpp`.
-- **Build**: all KF6 link entries removed except optional GuiAddons; dead links (`WindowSystem`, `ConfigCore`, `IconThemes`, `ColorScheme`) confirmed zero-call-site; `notifyrc` file deleted; CI/packaging/docs dependency lists shrink — CI becomes the KF6-free proof.
+- **Build**: all KF6 link entries removed except optional WindowSystem; dead links (`ConfigCore`, `IconThemes`, `ColorScheme`) confirmed zero-call-site; `notifyrc` file deleted; CI/packaging/docs dependency lists shrink — CI becomes the KF6-free proof.
 
 ## Capabilities
 
@@ -31,4 +31,4 @@ The routing brain (`src/core/`) is already pure Qt6 and proven portable: it buil
 - `CMakeLists.txt`, `src/CMakeLists.txt`, `.github/workflows/ci.yml`, `packaging/PKGBUILD`, `CONTRIBUTING.md`, `CLAUDE.md`, `README.md` — dependency lists updated.
 - `data/app.lane.Lane.notifyrc` — deleted.
 - No config schema changes. User-visible deltas on Linux: tray icon always-visible (no Passive), crash dialog → crash log file, everything else identical.
-- **BREAKING** (build only): building Lane requires Qt6 + LayerShellQt on Linux; KF6 dev packages optional (kguiaddons only, for the activation token).
+- **BREAKING** (build only): building Lane requires Qt6 + LayerShellQt on Linux; KF6 dev packages optional (kwindowsystem only, for the activation token).

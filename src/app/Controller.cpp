@@ -2,6 +2,7 @@
 
 #include "Autostart.h"
 #include "SourceInfo.h"
+#include "Localization.h"
 #include "core/config.h"
 #include "core/destination.h"
 #include "core/discovery.h"
@@ -11,16 +12,13 @@
 #include "core/unshorten.h"
 #include "core/urlutil.h"
 #include "lane_version.h"
+#include "platform/platform.h"
 
 #include <LayerShellQt/Window>
 #ifdef HAVE_PLASMA_ACTIVITIES
 #include <PlasmaActivities/Consumer>
 #include <PlasmaActivities/Info>
 #endif
-#include <KCrash>
-#include <KNotification>
-#include <KStatusNotifierItem>
-#include <KWaylandExtras>
 
 #include <QClipboard>
 #include <QDateTime>
@@ -28,6 +26,7 @@
 #include <QDesktopServices>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QLocale>
 #include <QMenu>
 #include <QProcess>
@@ -37,7 +36,7 @@
 #include <QScreen>
 #include <QSet>
 #include <QSharedPointer>
-#include <QTimer>
+#include <QSystemTrayIcon>
 #include <QUrl>
 #include <QUuid>
 
@@ -53,21 +52,18 @@ Controller::Controller(QObject *parent)
 {
     m_configPath = defaultConfigPath();
     reload();
-    m_tray = new KStatusNotifierItem(QStringLiteral("lane"), this);
-    m_tray->setTitle(QStringLiteral("Lane"));
-    m_tray->setToolTipTitle(QStringLiteral("Lane"));
-    m_tray->setToolTipSubTitle(QStringLiteral("Link router"));
-    m_tray->setIconByName(QStringLiteral("app.lane.Lane"));
-    m_tray->setStatus(KStatusNotifierItem::Passive);
-    m_tray->setCategory(KStatusNotifierItem::ApplicationStatus);
-    m_tray->setStandardActionsEnabled(false);
+    m_tray = new QSystemTrayIcon(QIcon::fromTheme(QStringLiteral("app.lane.Lane")), this);
+    m_tray->setToolTip(QStringLiteral("Lane\nLink router"));
     auto *menu = new QMenu();
     menu->addAction(QStringLiteral("Settings"), this, &Controller::openSettings);
     menu->addAction(QStringLiteral("Rediscover browsers"), this, &Controller::rediscover);
     m_tray->setContextMenu(menu);
-    connect(m_tray, &KStatusNotifierItem::activateRequested, this, [this](bool, const QPoint &) {
-        openSettings();
+    connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger) {
+            openSettings();
+        }
     });
+    m_tray->show();
 
     connect(m_updateChecker, &UpdateChecker::statusChanged, this, &Controller::updateStateChanged);
 
@@ -264,14 +260,12 @@ void Controller::onMimeappsChanged()
         return;
     }
     Q_EMIT defaultBrowserChanged();
-    auto *n = new KNotification(QStringLiteral("browser-takeover"), KNotification::CloseOnTimeout, this);
-    n->setComponentName(QStringLiteral("app.lane.Lane"));
-    n->setTitle(QStringLiteral("Default browser changed"));
-    n->setText(QStringLiteral("Something replaced Lane as the default browser. Restore it from here."));
-    n->setIconName(QStringLiteral("app.lane.Lane"));
-    auto *restore = n->addAction(QStringLiteral("Restore Lane"));
-    connect(restore, &KNotificationAction::activated, this, &Controller::makeDefaultBrowser);
-    n->sendEvent();
+    platform()->notify(QStringLiteral("Default browser changed"),
+                        QStringLiteral("Something replaced Lane as the default browser. Restore it from here."),
+                        QStringLiteral("app.lane.Lane"),
+                        QStringLiteral("restore"),
+                        QStringLiteral("Restore Lane"),
+                        [this]() { makeDefaultBrowser(); });
 }
 
 QString Controller::pickerPolicy() const
@@ -950,12 +944,9 @@ void Controller::persist()
         // tell the user their change was not actually saved instead of
         // silently discarding the failure and letting them believe it
         // was, only to find it gone on the next restart.
-        auto *n = new KNotification(QStringLiteral("save-failed"), KNotification::CloseOnTimeout, this);
-        n->setComponentName(QStringLiteral("app.lane.Lane"));
-        n->setTitle(QStringLiteral("Could not save settings"));
-        n->setText(QStringLiteral("Lane could not write its config file. This change may be lost on restart."));
-        n->setIconName(QStringLiteral("dialog-error"));
-        n->sendEvent();
+        platform()->notify(QStringLiteral("Could not save settings"),
+                            QStringLiteral("Lane could not write its config file. This change may be lost on restart."),
+                            QStringLiteral("dialog-error"));
     }
 }
 
@@ -1020,16 +1011,13 @@ void Controller::launch(const Target &target, const QString &reason, const QStri
         return;
     }
     if (!launchTarget(target, click.openUrl, activationToken)) {
-        auto *n = new KNotification(QStringLiteral("launch-failed"), KNotification::CloseOnTimeout, this);
-        n->setComponentName(QStringLiteral("app.lane.Lane"));
-        n->setTitle(QStringLiteral("Could not open in %1").arg(target.displayName()));
+        const bool suppressHost = reason == QLatin1String("picker-private");
         // picker-private launches never surface the host, so a failure
         // for one does not leak it into Plasma's notification history
         // either.
-        const bool suppressHost = reason == QLatin1String("picker-private");
-        n->setText(!suppressHost && !click.host.isEmpty() ? click.host : QStringLiteral("The launch failed."));
-        n->setIconName(QStringLiteral("dialog-error"));
-        n->sendEvent();
+        platform()->notify(QStringLiteral("Could not open in %1").arg(target.displayName()),
+                            !suppressHost && !click.host.isEmpty() ? click.host : QStringLiteral("The launch failed."),
+                            QStringLiteral("dialog-error"));
         return;
     }
     if (m_config.toast) {
@@ -1061,35 +1049,26 @@ void Controller::requestActivationAndLaunch(const Target &target, const QString 
         *resolved = true;
         launch(target, reason, token, click);
     };
-    KWaylandExtras::xdgActivationToken(window, QString()).then(this, finish);
-    // Guard against a compositor that never answers (no xdg-activation
-    // support, or a stalled request): the launch must never wait on a
-    // token forever. A real Wayland round-trip is sub-millisecond; 300ms
-    // is generous headroom before falling back to an unraised launch.
-    QTimer::singleShot(300, this, [finish]() { finish(QString()); });
+    // The 300ms fallback against a compositor that never answers lives in
+    // the platform implementation now (see Platform::requestActivationToken).
+    platform()->requestActivationToken(window, finish, 300);
 }
 
 void Controller::toast(const Target &target, const QString &reason, const QString &host)
 {
-    auto *n = new KNotification(QStringLiteral("opened"), KNotification::CloseOnTimeout, this);
-    n->setComponentName(QStringLiteral("app.lane.Lane"));
-    n->setTitle(QStringLiteral("Opened in %1").arg(target.displayName()));
+    const bool suppressHost = reason == QLatin1String("picker-private");
     // picker-private launches are ephemeral by design: the host must
     // never land in Plasma's notification history for one of them.
-    const bool suppressHost = reason == QLatin1String("picker-private");
-    n->setText(!suppressHost && !host.isEmpty() ? host : QStringLiteral("Link opened"));
-    n->setIconName(target.icon.isEmpty() ? QStringLiteral("app.lane.Lane") : target.icon);
-    n->sendEvent();
+    platform()->notify(QStringLiteral("Opened in %1").arg(target.displayName()),
+                        !suppressHost && !host.isEmpty() ? host : QStringLiteral("Link opened"),
+                        target.icon.isEmpty() ? QStringLiteral("app.lane.Lane") : target.icon);
 }
 
 void Controller::notifyBlocked()
 {
-    auto *n = new KNotification(QStringLiteral("opened"), KNotification::CloseOnTimeout, this);
-    n->setComponentName(QStringLiteral("app.lane.Lane"));
-    n->setTitle(QStringLiteral("Lane blocked this link"));
-    n->setText(QStringLiteral("Only http and https links can be opened."));
-    n->setIconName(QStringLiteral("security-high"));
-    n->sendEvent();
+    platform()->notify(QStringLiteral("Lane blocked this link"),
+                        QStringLiteral("Only http and https links can be opened."),
+                        QStringLiteral("security-high"));
 }
 
 QWindow *Controller::ensureEngine(QQmlApplicationEngine *&engine, const QString &module, const QString &name, const QString &warnPrefix)
@@ -1105,6 +1084,9 @@ QWindow *Controller::ensureEngine(QQmlApplicationEngine *&engine, const QString 
         }
     });
     engine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
+    // Kirigami/kirigami-addons resolve i18n* on the context object;
+    // KLocalizedContext used to supply it before the de-KF6 port.
+    engine->rootContext()->setContextObject(new I18nContext(engine));
     engine->loadFromModule(module, name);
     if (engine->rootObjects().isEmpty()) {
         qWarning() << qPrintable(QStringLiteral("Lane: %1 QML failed to load").arg(warnPrefix));

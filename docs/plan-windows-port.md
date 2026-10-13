@@ -185,6 +185,13 @@ One QML codebase on Qt Quick Controls, shared by both platforms:
    while still on Linux; CI + `ctest` stay green the whole time. This
    is the largest code-touching milestone but is fully testable on
    Linux with zero Windows access.
+   **Done 2026-10-13.** Exceptions: `KF6::WindowSystem` kept as an
+   optional link for `KWaylandExtras::xdgActivationToken` (absent →
+   empty token, documented in the spec); `Plasma::Activities` stays
+   Linux-only; `libKF6*` can still appear in `/proc/PID/maps` at
+   runtime because the `org.kde.desktop` QQC2 style and Kirigami load
+   KF6 transitively — the link-time surface is one lib until
+   milestone 2.
 2. **UI port to Qt Quick Controls** — build the `ui/` delegate module,
    migrate the 7 QML files, screenshot-compare settings/picker/hold
    against current Kirigami renders, keep Plasma look via

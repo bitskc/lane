@@ -33,7 +33,23 @@ if(LANE_KDE_DESKTOP)
         app/SourceInfo.cpp
         app/UpdateChecker.cpp
         app/DefaultBrowserWatcher.cpp
+        app/Localization.h
     )
+    # SingleInstance/DBusActivation/CrashLog/platform_linux/ThemeIconProvider
+    # land as part of the same bare-qt6-port change in sibling slices; guard
+    # with EXISTS so this file configures standalone before they land, and
+    # so a fresh `cmake -S . -B build` picks each one up once it appears.
+    foreach(_lane_optional_src
+        app/SingleInstance.cpp
+        app/DBusActivation.cpp
+        app/CrashLog.cpp
+        app/platform/platform_linux.cpp
+        app/ThemeIconProvider.cpp
+    )
+        if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${_lane_optional_src})
+            list(APPEND lane_SRCS ${_lane_optional_src})
+        endif()
+    endforeach()
 
     qt_add_executable(lane ${lane_SRCS})
     target_include_directories(lane PRIVATE ${CMAKE_BINARY_DIR})
@@ -64,18 +80,13 @@ if(LANE_KDE_DESKTOP)
             Qt6::DBus
             Qt6::Network
             Qt6::Svg
-            KF6::I18n
-            KF6::CoreAddons
-            KF6::ConfigCore
-            KF6::DBusAddons
-            KF6::Notifications
-            KF6::WindowSystem
-            KF6::IconThemes
-            KF6::ColorScheme
-            KF6::StatusNotifierItem
-            KF6::Crash
             LayerShellQt::Interface
     )
+
+    if(KF6WindowSystem_FOUND)
+        target_link_libraries(lane PRIVATE KF6::WindowSystem)
+        target_compile_definitions(lane PRIVATE HAVE_KWAYLANDEXTRAS)
+    endif()
 
     if(PlasmaActivities_FOUND)
         target_link_libraries(lane PRIVATE Plasma::Activities)

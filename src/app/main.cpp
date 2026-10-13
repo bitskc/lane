@@ -1,17 +1,18 @@
 #include "app/Controller.h"
+#include "app/CrashLog.h"
+#include "app/DBusActivation.h"
+#include "app/SingleInstance.h"
 #include "core/config.h"
 #include "core/discovery.h"
 #include "core/pipeline.h"
 #include "core/router.h"
 #include "lane_version.h"
 
-#include <KAboutData>
-#include <KDBusService>
-#include <KCrash>
-#include <KLocalizedString>
-
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QQuickStyle>
 
 #include <cstdio>
@@ -59,6 +60,8 @@ static int explainUrl(const QString &url)
 
 int main(int argc, char **argv)
 {
+    Lane::CrashLog::install();
+
     QApplication app(argc, argv);
     Lane::migrateLegacyConfig();
     app.setApplicationName(QStringLiteral("Lane"));
@@ -67,28 +70,6 @@ int main(int argc, char **argv)
     app.setDesktopFileName(QStringLiteral("app.lane.Lane"));
     app.setApplicationVersion(QStringLiteral(LANE_VERSION_STRING));
     QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
-    KCrash::initialize();
-
-    KLocalizedString::setApplicationDomain("lane");
-    KAboutData about(QStringLiteral("lane"),
-                     QStringLiteral("Lane"),
-                     QStringLiteral(LANE_VERSION_STRING),
-                     QStringLiteral("Open links in the right browser, profile, or app"),
-                     KAboutLicense::Custom,
-                     QStringLiteral("© 2026 Andy Hayes"));
-    about.setLicenseText(QStringLiteral(
-        "PolyForm Noncommercial License 1.0.0\n\n"
-        "Personal and hobby use is free. Using Lane as part of a product "
-        "you sell, or any other commercial use, needs a separate "
-        "commercial license from Andy Hayes (andy@boundlessitsystems.com).\n\n"
-        "See LICENSE and COMMERCIAL.md in the source repository for the "
-        "full terms."));
-    about.setOrganizationDomain(QByteArrayLiteral("lane.app"));
-    about.setDesktopFileName(QStringLiteral("app.lane.Lane"));
-    KAboutData::setApplicationData(about);
-    app.setOrganizationDomain(QStringLiteral("lane.app"));
-    app.setApplicationName(QStringLiteral("Lane"));
-    app.setDesktopFileName(QStringLiteral("app.lane.Lane"));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Lane — Plasma link router"));
@@ -146,20 +127,40 @@ int main(int argc, char **argv)
     // Unique-instance must be claimed before Controller does its startup
     // work (discovery scan + an xdg-settings subprocess of up to ~1.5s):
     // a duplicate `lane <url>` invocation that reaches past this line is
-    // about to exit once the service refuses a second name, so anything
-    // spent building a Controller here is wasted. KDBusService's own
-    // idiom is "construct first; if this point is reached this process is
-    // the primary".
-    KDBusService service(KDBusService::Unique);
+    // about to exit once the socket refuses a second listener, so
+    // anything spent building a Controller here is wasted.
+    Lane::SingleInstance instance;
+    if (!instance.claim()) {
+        return 0;
+    }
+
     Lane::Controller controller;
-    QObject::connect(&service, &KDBusService::activateRequested, &controller, [&](const QStringList &args, const QString &) {
-        controller.handleArgs(args);
-    });
-    QObject::connect(&service, &KDBusService::openRequested, &controller, [&](const QList<QUrl> &urls) {
-        for (const auto &u : urls) {
-            controller.openUrl(u.toString());
+
+    instance.onMessage = [&controller](const QJsonObject &payload) {
+        const QString token = payload.value(QStringLiteral("activationToken")).toString();
+        if (!token.isEmpty()) {
+            qputenv("XDG_ACTIVATION_TOKEN", token.toUtf8());
         }
-    });
+        QStringList args;
+        for (const QJsonValue &v : payload.value(QStringLiteral("args")).toArray()) {
+            args << v.toString();
+        }
+        controller.handleArgs(args);
+        if (!token.isEmpty()) {
+            qunsetenv("XDG_ACTIVATION_TOKEN");
+        }
+    };
+
+    // Bus-name acquisition is the systemd Type=dbus readiness signal and
+    // the only way a launcher's gtk-launch/Open call can reach a running
+    // daemon; a failure here is as fatal as KDBusService::Unique's used
+    // to be.
+    if (!Lane::registerActivation(
+            [&controller](const QStringList &args) { controller.handleArgs(args); },
+            [&controller](const QString &url) { controller.openUrl(url); })) {
+        std::fprintf(stderr, "lane: could not register D-Bus activation; exiting\n");
+        return 1;
+    }
 
     controller.handleArgs(QCoreApplication::arguments());
 

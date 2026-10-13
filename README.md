@@ -182,8 +182,7 @@ To install under `$HOME/.local` instead:
 
 ```bash
 sudo pacman -S --needed cmake extra-cmake-modules ninja qt6-base qt6-declarative qt6-svg \
-  kirigami kirigami-addons ki18n kcoreaddons kconfig kdbusaddons knotifications \
-  kwindowsystem kiconthemes kcolorscheme kcrash kstatusnotifieritem layer-shell-qt \
+  kirigami kirigami-addons kwindowsystem layer-shell-qt \
   qqc2-desktop-style
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
 cmake --build build
@@ -191,6 +190,10 @@ cmake --install build
 ctest --test-dir build --output-on-failure
 update-desktop-database "$HOME/.local/share/applications"
 ```
+
+`kwindowsystem` is optional: without it, Lane still works, it just skips the
+xdg-activation token handoff when launching a browser on Wayland (the
+launched browser may open unfocused instead of raised).
 
 `appstreamtest` only runs after `cmake --install`; before that it reports
 "Not installed yet, skipping". Install to the same prefix you passed to

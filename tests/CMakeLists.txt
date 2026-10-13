@@ -30,3 +30,11 @@ add_test(NAME test_pickermodel COMMAND test_pickermodel)
 add_executable(test_watchdog test_watchdog.cpp ${CMAKE_SOURCE_DIR}/src/app/DefaultBrowserWatcher.cpp)
 target_link_libraries(test_watchdog PRIVATE lane-core Qt6::Test)
 add_test(NAME test_watchdog COMMAND test_watchdog)
+
+# SingleInstance is Linux-only (XDG_RUNTIME_DIR socket) and lives in the
+# lane executable, so its test compiles the source directly.
+if(LANE_KDE_DESKTOP)
+    add_executable(test_singleinstance test_singleinstance.cpp ${CMAKE_SOURCE_DIR}/src/app/SingleInstance.cpp)
+    target_link_libraries(test_singleinstance PRIVATE lane-core Qt6::Test Qt6::Network)
+    add_test(NAME test_singleinstance COMMAND test_singleinstance)
+endif()

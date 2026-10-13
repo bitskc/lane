@@ -21,10 +21,7 @@ README.md. On openSUSE Tumbleweed:
 sudo zypper install cmake extra-cmake-modules ninja gcc-c++ \
   qt6-base-devel qt6-declarative-devel qt6-svg-devel \
   kirigami-addons6-devel kirigami-addons6 \
-  kf6-kirigami-imports kf6-ki18n-devel kf6-kcoreaddons-devel \
-  kf6-kconfig-devel kf6-kdbusaddons-devel kf6-knotifications-devel \
-  kf6-kwindowsystem-devel kf6-kiconthemes-devel kf6-kcolorscheme-devel \
-  kf6-kstatusnotifieritem-devel kf6-kcrash-devel \
+  kf6-kirigami-imports kf6-kwindowsystem-devel \
   layer-shell-qt6-imports
 ```
 
