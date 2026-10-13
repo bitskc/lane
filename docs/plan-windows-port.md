@@ -4,6 +4,14 @@ Status: decided — bare Qt6, no KF6. Audit basis: full dependency
 inventory of `src/`, `data/`, and `CMakeLists.txt` on main
 (2026-10-06), updated after the Kirigami/FormCard usage count.
 
+Proof on macOS already landed: `LANE_KDE_DESKTOP` (UNIX AND NOT APPLE)
+in CMakeLists.txt gates every KDE-only find and target. On
+andys-macbook-pro (arm64, macOS 26.6, Qt 6.11.2 via brew)
+`lane-core` + all 13 tests build and pass — routing, launcher argv
+safety, config, unshorten, update logic, PickerModel, and
+DefaultBrowserWatcher are confirmed portable. The same guard gives
+Windows its lane-core build for free.
+
 ## What the port actually is
 
 Lane's routing brain is already portable. `src/core/` is pure Qt —
@@ -199,7 +207,10 @@ One QML codebase on Qt Quick Controls, shared by both platforms:
    update feed per-OS.
 
 Out of scope: mailto/PDF (unchanged — never intercepted), browser
-extensions, macOS.
+extensions. macOS: the core already builds and tests there (header
+note); the app layer shares this plan's seam list, with discovery +
+default-browser registration being its own design (LaunchServices,
+`open -a`, no `xdg-*`) and not scheduled here.
 
 ## Risks
 
