@@ -1,35 +1,35 @@
 # Tasks: qqc2-ui-port
 
-Apply after `bare-qt6-port` merges (both touch CMake). Each task leaves the app runnable.
+Apply after `bare-qt6-port` merges (shared CMake). App must stay runnable after each task.
 
-## 1. `ui/` module skeleton
-- [ ] Create `src/qml/ui/qmldir` + `Theme.qml` singleton (spacing/radius/color tokens from `ApplicationWindow.palette`).
-- [ ] `FormCard.qml`, `FormHeader.qml`, `FormDelegateSeparator.qml` with the grouped-card look.
-- [ ] Six delegate components: `SwitchRow`, `ComboRow`, `ButtonRow`, `TextRow`, `TextFieldRow`, `SpinBoxRow` — FormCard-compatible property names (`text`, `description`, `checked`, `model`, etc.).
-- [ ] `ThemedShadow.qml` (Rectangle + offset-shadow Rectangle, no Qt 6.8 dependency) and `DragHandle.qml` (MouseArea-driven reorder with edge auto-scroll).
-- [ ] Register the `ui` module in `qt_add_qml_module`.
+## 1. `ui/` module
+- [ ] `laneui` STATIC target + `qt_add_qml_module(laneui URI app.lane.ui)` in `src/CMakeLists.txt`, linked into `lane`; NO hand-written qmldir.
+- [ ] `Theme.qml` singleton: metrics + semantic colors only (no window/palette access — call sites use attached `palette`).
+- [ ] `ScrollableFormPage.qml` (Flickable + centered card-width column + ensureVisible on focus), `FormCard.qml`, `FormHeader.qml`, `FormDelegateSeparator.qml`.
+- [ ] `SwitchRow`, `ComboRow`, `ButtonRow`, `TextRow`, `TextFieldRow`, `SpinBoxRow` — FormCard property-shape parity.
+- [ ] `ThemedShadow.qml` (Rectangle + `QtQuick.Effects.MultiEffect`, Qt 6.5+ OK) matching picker's shadow.size 32/yOffset 10/alpha .42.
+- [ ] `DragHandle.qml`: disabled while filtering, captures dragId before first move, edge auto-scroll, release → `controller.moveTarget`.
 
-## 2. Port settings pages
-- [ ] `pages/OverviewPage.qml` → QQC2 + `ui` delegates.
-- [ ] `pages/PreferencesPage.qml` → QQC2 + `ui` delegates.
-- [ ] `pages/RulesPage.qml` → QQC2 + `ui` delegates.
-- [ ] `pages/TargetsPage.qml` → QQC2 + `ui` delegates + `DragHandle` for reorder.
-- [ ] `pages/AboutPage.qml` (from bare-qt6-port) → `ui` delegates.
-- [ ] `Settings.qml` shell → QQC2 (`ApplicationWindow` + `StackView`/`SplitView` sidebar layout replacing Kirigami page routing).
-- [ ] Manual check: open Settings, verify all 5 pages render, drag-reorder + rename work, sections correct.
+## 2. Icon provider (C++)
+- [ ] `src/app/ThemeIconProvider.*`: `image://laneicon/<name>?size=N` → `QIcon::fromTheme` pixmap @ size × devicePixelRatio, fallback `application-x-executable`.
+- [ ] Register in `Controller::ensureEngine` for all three engines.
 
-## 3. Port overlays
-- [ ] `Picker.qml` → QQC2/`ui`: 440px card, type-to-filter, 1-9, Alt+A/Alt+P, `,`/`.` destination widening, Always checkbox.
-- [ ] `Hold.qml` → QQC2/`ui`: 360px card + `controller.holdProgress` progress bar.
-- [ ] Manual check on Wayland: layer-shell scope + exclusive keyboard still work; Esc cancels; Enter confirms.
+## 3. Port settings pages + shell
+- [ ] `pages/OverviewPage.qml`, `PreferencesPage.qml`, `RulesPage.qml`, `TargetsPage.qml` → `ScrollableFormPage` + `ui` delegates; `DragHandle` on TargetsPage.
+- [ ] `Settings.qml`: keep existing QQC2 ApplicationWindow/RowLayout/StackLayout shell — replace only Kirigami colors/icons. No layout rewrite.
+- [ ] Manual: all pages render, scroll on small windows, drag-reorder + rename + private-section invariants hold.
 
-## 4. Style + build cleanup
-- [ ] Add `qtquickcontrols2.conf` to qrc: `Style=org.kde.desktop`, `FallbackStyle=Fusion`.
-- [ ] Remove `ecm_find_qmlmodule(org.kde.kirigami...)` and `org.kde.kirigamiaddons.formcard` from CMakeLists.txt.
-- [ ] Verify zero `import org.kde` remains in `src/qml/` (`grep -r "org.kde" src/qml` → 0).
-- [ ] `cmake --build build` + full `ctest`; `--settings` renders with no QML warnings (offscreen run greps for TypeError/ReferenceError).
+## 4. Port overlays
+- [ ] `Picker.qml` → QQC2/`ui` + palette colors + ThemedShadow. FULL keyboard parity: digits 1-8 in TextField.Keys.onPressed, `,`/`.`, Esc-clear-then-cancel, Alt+A/P/E, Ctrl+C, Alt+S/Alt+R zero-target strings per spec, maxRows 8.
+- [ ] `Hold.qml` → QQC2/`ui` + `controller.holdProgress` ProgressBar.
+- [ ] Manual on Wayland: layer-shell scope + exclusive keyboard work; Esc cancels; Enter confirms.
 
-## 5. Visual verification
-- [ ] Screenshot pass (existing docs/screenshots workflow): picker, hold, settings on Plasma — compare against `docs/screenshots/*.png` for glaring regressions.
-- [ ] macOS rebuild sanity: lane-core + tests still green on andys-macbook-pro (UI code is qrc-embedded; the lane target doesn't build there anyway — record expected state).
-- [ ] `openspec validate qqc2-ui-port --strict` clean; docs updated (README deps: Kirigami no longer required).
+## 5. Style + build cleanup
+- [ ] Delete `QQuickStyle::setStyle` in `main.cpp`; add `:/qtquickcontrols2.conf` (Style=Fusion) to qrc.
+- [ ] Remove `ecm_find_qmlmodule(org.kde.kirigami…)` + `…formcard` checks; verify `grep -r "org.kde" src/qml` → 0 AND `grep -c kirigami /proc/$(pidof lane)/maps` → 0 at runtime (style modules can load KF6 without imports).
+- [ ] `cmake --build build` + `ctest` regression gate; `--settings` offscreen run greps for TypeError/ReferenceError/binding-loop warnings.
+- [ ] Deps/docs: PKGBUILD, CONTRIBUTING, CLAUDE.md, README, CI pacman list — drop kirigami/kirigami-addons (+ KF6 leftovers per bare-qt6-port).
+
+## 6. Visual verification
+- [ ] Screenshot pass vs `docs/screenshots/*.png` on Plasma (picker, hold, settings) — flag visual deltas to user.
+- [ ] `openspec validate qqc2-ui-port --strict` clean.

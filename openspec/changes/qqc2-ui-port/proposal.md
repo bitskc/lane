@@ -2,30 +2,28 @@
 
 ## Why
 
-The picker, hold HUD, and settings window are built on Kirigami + kirigami-addons FormCard (~80 delegates, `Kirigami.Theme` at 63 sites, `Kirigami.Units` at 22, `ListItemDragHandle`, `ShadowedRectangle`). Kirigami keeps the entire UI inside the KDE framework stack — the single largest remaining blocker to shipping Lane on Windows and macOS, and a guarantee the app would look like a KDE app everywhere else forever.
+The picker, hold HUD, and settings window are built on Kirigami + kirigami-addons FormCard (~80 delegates, `Kirigami.Theme` at 63 sites, `Kirigami.Units` at 22, `ListItemDragHandle`, `ShadowedRectangle`, `FormCardPage` as every settings page's root). Kirigami keeps the entire UI inside the KDE framework stack — the single largest remaining blocker to shipping Lane on Windows and macOS, and a guarantee the app would look like a KDE app everywhere else forever.
 
-Qt Quick Controls 2 renders natively on Plasma via `qqc2-desktop-style` and natively on Windows/macOS via Fusion/Fluent styles — one QML codebase instead of per-OS UI trees.
+Qt Quick Controls 2 in Fusion style plus the platform theme (colors/fonts/icons — which on Plasma comes from KDE's own platformtheme plugin, no QML runtime) renders acceptably on Plasma and natively on Windows/macOS — one QML codebase instead of per-OS UI trees. (`qqc2-desktop-style` itself imports Kirigami, so it cannot be the style: it would violate this change's no-KDE-QML-runtime contract. Verified: missing primary style also means no usable fallback — programmatic setStyle must go.)
 
 ## What Changes
 
-- **New `ui/` QML module** (`src/qml/ui/`): local replacements for FormCard's grouped-card settings delegates — `FormCard` (grouped container), `FormHeader`, `FormDelegateSeparator`, `SwitchRow`, `ComboRow`, `ButtonRow`, `TextRow`, `TextFieldRow`, `SpinBoxRow` — plus `ThemedShadow` (drop-shadow card) and `DragHandle` (list drag reorder).
-- **All 7 QML files ported**: `Picker.qml`, `Hold.qml`, `Settings.qml`, `pages/{Overview,Targets,Rules,Preferences,About}Page.qml` to Qt Quick Controls + the local `ui` module.
-- **`Kirigami.Theme`** → application palette / style-attached colors; **`Kirigami.Units`** → fixed dp constants; **`Kirigami.Icon`** → `IconImage`/`Image` with a `QIcon::fromTheme` provider on Linux; **`ListItemDragHandle`** → hand-ported MouseArea-driven reorder honoring existing sibling rules (kind + incognito); **`ShadowedRectangle`** → `Rectangle` + `MultiEffect`/`DropShadow`.
-- **Style policy**: `qqc2-desktop-style` on Linux when available (Plasma-native look), Fusion as universal fallback; Windows/macOS select Fusion/Fluent. No second QML tree.
-- **Build**: `ecm_find_qmlmodule(org.kde.kirigami...)` checks and Kirigami imports removed; `qt_add_qml_module` gains the `ui` module files.
+- **New `ui/` QML module** (`src/qml/ui/`, URI `app.lane.ui`, separate `qt_add_qml_module` static target): `ScrollableFormPage` (FormCardPage replacement — scroll flickable, centered max card width, ensure-visible-on-focus), `FormCard`, `FormHeader`, `FormDelegateSeparator`, `SwitchRow`, `ComboRow`, `ButtonRow`, `TextRow`, `TextFieldRow`, `SpinBoxRow`, `ThemedShadow` (`QtQuick.Effects.MultiEffect`, Qt 6.5 — under the 6.6 floor), `DragHandle`, `Theme` singleton (metrics + semantic colors).
+- **All 8 QML files ported**: `Picker.qml`, `Hold.qml`, `Settings.qml` (keep its existing QQC2 ApplicationWindow/RowLayout shell — only replace Kirigami colors/icons), `pages/{Overview,Targets,Rules,Preferences,About}Page.qml` (About lands via bare-qt6-port? No — Overview already covers metadata/license; no About page).
+- **`Kirigami.Theme`** → attached `palette` colors + `ui.Theme` semantic colors (positive/negative/neutral text — QPalette lacks them); **`Kirigami.Units`** → `ui.Theme` metrics that still scale with font size where spacing is font-relative; **`Kirigami.Icon`** → `image://laneicon/` `QQuickImageProvider` (C++ — `QIcon::fromTheme` pixmap; replaces IconImage which is private `QtQuick.Controls.impl`); **`ListItemDragHandle`** → `DragHandle` preserving the captured-id + disabled-while-filtering invariants; **`FormCardPage`** → `ScrollableFormPage`; **`ShadowedRectangle`** → `Rectangle` + `MultiEffect`.
+- **Style**: delete `QQuickStyle::setStyle("org.kde.desktop")` in `main.cpp`; `qtquickcontrols2.conf` ships `Style=Fusion` — Plasma gets its platform colors via the KDE platformtheme plugin, Windows/macOS get Fusion/Fluent via the same conf.
+- **Small C++ surface**: `ThemeIconProvider` registered in `Controller::ensureEngine` (the only C++ change — supersedes the earlier no-C++ claim).
+- **Build**: `ecm_find_qmlmodule(org.kde.kirigami...)` checks removed; `qt_add_qml_module` gains the `ui` target.
 
 ## Capabilities
 
 ### Modified Capabilities
-- `lane`: picker overlay, hold HUD, and settings window are re-specified against Qt Quick Controls; all user-visible behavior (layout intent, keyboard model, drag reorder, hold progress) is unchanged.
-
-### New Capabilities
-- None — this is a rendering-layer port of existing behavior. (Opted to keep spec deltas in `lane` rather than invent a UI-framework capability.)
+- `lane`: Picker overlay and Hold HUD requirements keep all existing normative text/scenarios verbatim, re-pinning "Wayland layer-shell" and "exclusive keyboard", plus the QQC2 rendering clause. New ADDED requirements pin settings-window behavior (drag reorder; private windows not orderable) and platform styling (Fusion + platform theme, no KDE QML runtime).
 
 ## Impact
 
-- `src/qml/` — all files rewritten; `src/qml/ui/` added (~10 new files).
-- `src/CMakeLists.txt`, `CMakeLists.txt` — Kirigami runtime checks dropped.
-- No config, model, or C++ API changes: `Controller`/`TargetModel`/`RuleModel`/`PickerModel` contracts untouched — this keeps the C++ port (`bare-qt6-port`) independent.
-- **BREAKING** (build/runtime): Kirigami and kirigami-addons are no longer runtime requirements.
-- Depends on nothing in `bare-qt6-port` for its QML work, but both changes touch `src/CMakeLists.txt` and `CMakeLists.txt` — apply `bare-qt6-port` first, then rebase.
+- `src/qml/` — all files rewritten; `src/qml/ui/` added (~12 new files); `src/app/ThemeIconProvider.*` + `ensureEngine` registration.
+- `CMakeLists.txt`, `src/CMakeLists.txt`, `packaging/PKGBUILD`, `CONTRIBUTING.md`, `CLAUDE.md`, `README.md`, `.github/workflows/ci.yml` — Kirigami deps dropped (lands after bare-qt6-port's own edits; apply order matters).
+- No config, model, or API contract changes; C++ delta is one image provider + one setStyle deletion.
+- **BREAKING** (runtime): Kirigami and kirigami-addons are no longer runtime requirements; the process loads zero KDE QML modules.
+- Depends on `bare-qt6-port` merged first (shared CMake files; Overview/about strategy settled there).

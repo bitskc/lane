@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Picker overlay
-The picker SHALL be a screen-edge overlay sized to the active screen, with exclusive keyboard where the platform windowing system permits and a 440px card. Type SHALL filter; 1-8 SHALL pick when the filter is empty; Enter, Esc, Alt+A, and Alt+P SHALL confirm, cancel, remember, and open in a private window. The overlay SHALL render using Qt Quick Controls with no Kirigami runtime dependency.
+The picker SHALL be a Wayland layer-shell overlay sized to the active screen, with exclusive keyboard and a 440px card. Type SHALL filter; 1-8 SHALL pick when the filter is empty; Enter, Esc, Alt+A, and Alt+P SHALL confirm, cancel, remember, and open in a private window. The overlay SHALL render using Qt Quick Controls with no Kirigami runtime dependency.
 
 #### Scenario: Number pick
 - **WHEN** the filter is empty and the user presses 1 through 8
@@ -32,24 +32,26 @@ Silent opens (remembered, PWA, default) SHALL show a hold HUD for `holdMs` unles
 - **WHEN** `holdAutoOpen` is off
 - **THEN** Lane opens immediately with no hold HUD
 
+## ADDED Requirements
+
 ### Requirement: Settings window
-The settings window SHALL present the same two-pane page model (Overview, Browsers & apps, Rules, Preferences, About) implemented with Qt Quick Controls and grouped card delegates, without Kirigami or kirigami-addons at runtime.
+The settings window SHALL present the same page model (Overview, Browsers & apps, Rules, Preferences) implemented with Qt Quick Controls and grouped card delegates inside scrollable pages, without Kirigami or kirigami-addons at runtime.
 
 #### Scenario: Drag reorder persists
-- **WHEN** the user drags a browser row to a new position in Browsers & apps
+- **WHEN** the user drags a browser row to a new position in Browsers & apps while not filtering
 - **THEN** `targetOrder` updates in config.json and the picker order follows
 
-#### Scenario: Private windows stay siblings
-- **WHEN** the user drags a row in the Private windows section
-- **THEN** only incognito targets reorder; normal browser order is untouched
+#### Scenario: Private windows are not orderable
+- **WHEN** the Private windows section is shown in Browsers & apps
+- **THEN** its rows show no drag handle and cannot be reordered
 
-### Requirement: Native desktop styling
-The UI SHALL use the platform's native Qt Quick Controls style: `qqc2-desktop-style` where present (Plasma), with a universal Fusion fallback, and SHALL NOT require a KDE QML runtime.
+### Requirement: Platform styling without KDE QML runtime
+The UI SHALL use the Fusion Qt Quick Controls style for its widgets and SHALL take its colors, fonts, and icons from the platform theme; it SHALL NOT require any KDE QML module at runtime.
 
 #### Scenario: Plasma appearance
-- **WHEN** Lane runs on Plasma with `qqc2-desktop-style` installed
-- **THEN** controls use the Plasma color scheme and widget styling
+- **WHEN** Lane runs on Plasma with the KDE platformtheme plugin
+- **THEN** controls render in Fusion with the user's Plasma colors and fonts
 
-#### Scenario: Style absent
-- **WHEN** `qqc2-desktop-style` is absent
-- **THEN** the UI falls back to Fusion and remains fully usable
+#### Scenario: No KDE modules loaded
+- **WHEN** Lane runs on any host without Kirigami installed
+- **THEN** the UI renders fully usable with zero `org.kde` imports resolved at runtime

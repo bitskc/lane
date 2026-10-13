@@ -2,35 +2,33 @@
 
 ## Why
 
-Lane ships as a KDE Plasma app with KF6 woven through the app layer: `KDBusService` for single instance, `KStatusNotifierItem` for tray, `KNotification` for toasts, `KCrash`, `KAboutData`, `KWindowSystem`/`KWaylandExtras` for activation, `KLocalizedString` for i18n. That makes the daemon unbuildable anywhere KF6 does not ship cleanly — Windows, macOS — and pins distribution to KDE's toolchain.
+Lane ships as a KDE Plasma app with KF6 woven through the app layer: `KDBusService` for single instance, `KStatusNotifierItem` for tray, `KNotification` for toasts, `KCrash`, `KAboutData`, `KWaylandExtras` for activation-token handoff, `KLocalizedString` for i18n. That makes the daemon unbuildable anywhere KF6 does not ship cleanly — Windows, macOS — and pins distribution to KDE's toolchain.
 
-The routing brain (`src/core/`) is already pure Qt6 and proven portable: it builds and passes all tests on macOS arm64 today. The KF6 surface in `src/app/` is shallow (~20 call sites) and every one has a stock Qt6 or thin D-Bus replacement. Removing KF6 converts the port from "impossible without Craft" to "write per-OS backend files."
+The routing brain (`src/core/`) is already pure Qt6 and proven portable: it builds and passes all tests on macOS arm64 today. Every KF6 use in `src/app/` has a stock Qt6 or thin D-Bus replacement; the two that don't (`KWaylandExtras`, `KActivities`) resolve to "optional link when present" and "Linux-only Plasma::Activities (not KF6)".
 
 ## What Changes
 
-- **Single instance**: `KDBusService` replaced by `QLocalServer`/`QLocalSocket` for the unique-instance handoff, plus a small `org.freedesktop.Application`-compatible `QDBusObject` on Linux so `DBusActivatable=true` desktop launch keeps working.
-- **Tray**: `KStatusNotifierItem` → `QSystemTrayIcon` (passive icon, activate opens settings — the only two features used today).
-- **Notifications**: `KNotification` → new `PlatformNotify` helper. Linux talks to `org.freedesktop.Notifications` over `QDBus` and keeps action buttons (the watchdog "Restore Lane" action survives). Other platforms degrade to `QSystemTrayIcon::showMessage` or a settings-page banner.
-- **Crash handling**: `KCrash` removed; replaced by a `qInstallMessageHandler` + `std::set_terminate` crash log written under `QStandardPaths::AppDataLocation`.
-- **About**: `KAboutData` removed; application metadata set directly on `QCoreApplication`; About UI becomes a small QML card reading the same values (also fixes the missing PolyForm license text — `KAboutLicense::Custom` never rendered it).
-- **Activation**: `KWindowSystem`/`KWaylandExtras` xdg-activation moved behind a `platform/` seam; Linux keeps the existing Wayland token path guarded by feature check, other platforms get `requestActivate()`.
-- **i18n**: `KLocalizedString`/`i18n()` → `QObject::tr()`/`qsTr()`.
-- **Build**: `find_package(KF6 ...)` reduced to what the platform seam still needs per-OS; LayerShellQt stays (plain Qt wrapper, not KF6). ECM stays on Linux for install dirs and the version header.
-- **Platform seam**: `src/app/platform/` introduced with a small virtual interface (singleInstance, defaultBrowser, autostart, tray, notify, overlay, sourceInfo) and `platform_linux.cpp` implementing today's behavior.
+- **Single instance**: `KDBusService` → `QLocalServer`/`QLocalSocket` on a `$XDG_RUNTIME_DIR` socket (`UserAccessOption`, stale-socket recovery) for the unique-instance + argv/token handoff, plus a `QDBusAbstractAdaptor` on `/app/lane/Lane` **and** `/MainApplication` exposing `org.freedesktop.Application` (`Activate`/`Open`/`ActivateAction`) and `org.kde.KDBusService.CommandLine` — `DBusActivatable=true` launch, `gtk-launch`, and systemd `Type=dbus` readiness all preserved, including the `platform_data` activation-token relay.
+- **Tray**: `KStatusNotifierItem` → `QSystemTrayIcon` with exact-parity menu (Settings, Rediscover browsers; no Quit). Passive status has no Qt equivalent — icon becomes always-visible.
+- **Notifications**: `KNotification` → `org.freedesktop.Notifications` over `QDBus` via a `platform()->notify()` seam, preserving action buttons (watchdog "Restore Lane"), per-site icons, and the `desktop-entry` hint. Service-absent degradation: no-op + the Overview restore path.
+- **Crash handling**: `KCrash` → `qInstallMessageHandler` ring buffer + `std::set_terminate` + fatal-signal handlers writing a crash log under the app data dir.
+- **Metadata**: `KAboutData` + `KLocalizedString` → `QCoreApplication` setters (already present) + `tr()`. No About page — Overview already shows version + PolyForm notice.
+- **Activation token**: `KWaylandExtras` → `KF6::GuiAddons` as an **optional** link (`HAVE_KWAYLANDEXTRAS`); absent → immediate empty token (300ms fallback path already exists).
+- **Platform seam**: `src/app/platform/` — `Platform` interface (notify, autostart, `requestActivationToken` async producer) + `platform_linux.cpp`.
+- **Build**: all KF6 link entries removed except optional GuiAddons; dead links (`WindowSystem`, `ConfigCore`, `IconThemes`, `ColorScheme`) confirmed zero-call-site; `notifyrc` file deleted; CI/packaging/docs dependency lists shrink — CI becomes the KF6-free proof.
 
 ## Capabilities
 
 ### New Capabilities
-- `cross-platform`: Lane builds and runs its full app feature set without KDE Frameworks; per-OS behavior is supplied by a platform backend, not compile-time KDE assumptions.
+- `cross-platform`: Lane builds and runs its full app without required KDE Frameworks; per-OS behavior comes from a platform backend, including single-instance transports, notification actions, crash logging, and activation-token relay across every handoff path.
 
 ### Modified Capabilities
-- `lane`: single-instance handoff, tray, notification actions, crash handling, and activation are re-specified against Qt primitives instead of KDE services. User-visible behavior is unchanged on Linux; `DBusActivatable` launch continues to work.
+- `lane`: adds spec'd requirements for tray presence/menu, application metadata, and crash log (previously unspecced behaviors now pinned as the implementation swaps).
 
 ## Impact
 
-- `src/app/`: `main.cpp`, `Controller.cpp/h`, `Autostart.cpp`, `DefaultBrowserWatcher` wiring — KF6 includes removed.
-- `src/app/platform/`: new directory and interface.
-- `CMakeLists.txt` / `src/CMakeLists.txt`: KF6 `find_package`/`target_link_libraries` lists shrink on Linux and disappear elsewhere.
-- `docs/plan-windows-port.md`, `AGENTS.md`, `README.md`: build instructions and dependency lists updated.
-- No config schema changes. No behavior changes on Linux beyond crash-dialog → crash-log.
-- **BREAKING** (build only): building Lane now requires only Qt6 + LayerShellQt on Linux; KF6 development packages are no longer needed.
+- `src/app/`: `main.cpp`, `Controller.cpp/h` — all KF6 includes/callsites replaced; new `SingleInstance`, `DBusActivation`, `CrashLog`, `platform/` files.
+- `CMakeLists.txt`, `src/CMakeLists.txt`, `.github/workflows/ci.yml`, `packaging/PKGBUILD`, `CONTRIBUTING.md`, `CLAUDE.md`, `README.md` — dependency lists updated.
+- `data/app.lane.Lane.notifyrc` — deleted.
+- No config schema changes. User-visible deltas on Linux: tray icon always-visible (no Passive), crash dialog → crash log file, everything else identical.
+- **BREAKING** (build only): building Lane requires Qt6 + LayerShellQt on Linux; KF6 dev packages optional (kguiaddons only, for the activation token).

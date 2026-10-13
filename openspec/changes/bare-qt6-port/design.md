@@ -2,93 +2,94 @@
 
 ## Context
 
-`src/core/` is pure Qt6 and already builds + tests on macOS (`LANE_KDE_DESKTOP` gate). The app layer (`src/app/`) carries the entire KF6 surface. Full inventory (verified by grep at commit `7552c5f`):
+`src/core/` is pure Qt6 and already builds + tests on macOS (`LANE_KDE_DESKTOP` gate). The app layer (`src/app/`) carries the KDE surface. Full inventory (verified by grep + qdbus6 introspection of the live daemon, post-review corrections applied):
 
-- `main.cpp`: `KAboutData` (3 call sites incl. license enum), `KCrash::initialize()`, `KLocalizedString::setApplicationDomain`, `KDBusService` (unique instance + `activateRequested`/`activateActionRequested` handoff), `#include <QDBusConnection>` already present.
-- `Controller.cpp/h`: `KStatusNotifierItem` tray (5 sites: ctor, Passive status, ApplicationStatus category, icon, `activateRequested` → settings), `KNotification` ×3 sites (browser-takeover with `KNotificationAction` restore, save-failed, launch-failed, opened ×2 = 5 `KNotification` ctor sites total), `KWaylandExtras::xdgActivationToken()` for launch activation, `KWindowSystem` for window activation, `KCrash` include.
-- `Autostart.cpp`: XDG `.desktop` writer — pure Qt already.
-- `DefaultBrowserWatcher.cpp/h`, `PickerModel.cpp`, `TargetModel.cpp`, `RuleModel.cpp`, `SourceInfo.cpp`: already KF6-free.
+- `main.cpp`: `KAboutData` block incl. `setLicenseText` (the text exists but no UI ever displays it — OverviewPage already shows the PolyForm notice), `KCrash::initialize()`, `KLocalizedString::setApplicationDomain`, `KDBusService(Unique)` with `activateRequested`/`openRequested` handoffs, `QQuickStyle::setStyle("org.kde.desktop")` (line 69 — see qqc2-ui-port for its removal). No `QDBusConnection` include today.
+- `Controller.cpp/h`: `KStatusNotifierItem` tray with **title, tooltip title+subtitle, Passive status, `setStandardActionsEnabled(false)` (Quit deliberately suppressed), and a context menu of "Settings" + "Rediscover browsers"** (Controller.cpp:56-70); 5 `KNotification` sites each with `setIconName` + `setComponentName("app.lane.Lane")` (desktop-entry hint drives Plasma grouping/icon/DND); `KWaylandExtras::xdgActivationToken` (sole KGuiAddons use, Controller.cpp:1064 — token is produced for Lane's own surface then exported to the **launched child's** environment via `launchTarget`); `KActivities::Consumer`+`Info` under `HAVE_PLASMA_ACTIVITIES` (Plasma::Activities, not KF6, stays Linux-only); a stray unused `#include <KCrash>` (Controller.cpp:20).
+- Live D-Bus contract (qdbus6 on running daemon): name `app.lane.Lane` owns object path `/app/lane/Lane` exposing `org.freedesktop.Application` (`Activate`/`Open`/`ActivateAction` with `platform_data`) **and** `org.kde.KDBusService.CommandLine(as, s, a{sv})`, plus `/MainApplication` with the same interfaces. `XDG_ACTIVATION_TOKEN` is read out of Lane's own env during dispatch (Controller.cpp:493-504) because KDBusService sets it from `platform_data["activation-token"]`/`desktop-startup-id`.
+- systemd unit is `Type=dbus` `BusName=app.lane.Lane` `Restart=on-failure` — bus-name acquisition is the readiness signal; failure must stay fatal or the unit restart-loops.
+- Dead KF6 links with zero call sites: `KF6::ConfigCore`, `KF6::IconThemes`, `KF6::ColorScheme`, `KF6::WindowSystem` (KWaylandExtras lives in KF6::GuiAddons — WindowSystem was never used).
 
 ## Goals / Non-Goals
 
-**Goals**: `lane` binary links zero KF6 libraries on Linux; identical user-visible behavior; platform seam exists for future Windows/macOS backends; `DBusActivatable` keeps working; notification actions preserved on Linux; every KF6 removal is verifiable via `ldd bin/lane | grep -c libKF6` → 0.
+**Goals**: on Linux, `lane` links **no KF6 module except optionally `KF6::GuiAddons`** (documented exception for the xdg-activation token — see Decision 7); identical user-visible behavior; `DBusActivatable`, systemd Type=dbus readiness, notification actions, and the activation-token relay all preserved; platform seam shaped for future Windows/macOS backends.
 
-**Non-Goals**: QML stays Kirigami (separate change `qqc2-ui-port`); no Windows/macOS backend implementation yet — only the seam; no behavior/feature additions; LayerShellQt stays (Qt wrapper, not KF6); ECM stays on Linux (install dirs, version header, qmlmodule checks).
+**Non-Goals**: no feature additions (no About page — Overview's Information card already covers metadata + license; no tray Quit — it is deliberately disabled today); QML stays Kirigami (separate change `qqc2-ui-port`); no Windows/macOS backends; LayerShellQt stays (verified: links only Qt6 + libwayland, no KF6); ECM stays on Linux; PlasmaActivities stays optional-Linux.
 
 ## Decisions
 
-### 1. Platform seam: thin interface, not deep abstraction
+### 1. Platform seam: async token producer, not raiseWindow
 
-`src/app/platform/platform.h` — a small struct of function pointers / virtual interface:
+`src/app/platform/platform.h`:
 
 ```cpp
-namespace Lane {
 struct Platform {
     virtual ~Platform() = default;
-    virtual void notify(const QString &event, const QString &title,
-                        const QString &body, const QString &actionId = {},
+    virtual void notify(const QString &summary, const QString &body,
+                        const QString &iconName,
+                        const QString &actionId = {},
+                        const QString &actionLabel = {},
                         std::function<void()> action = {}) = 0;
     virtual void autostartSet(bool on) = 0;
     virtual bool autostartEnabled() const = 0;
-    virtual void raiseWindow(QWindow *w) = 0;   // activation incl. Wayland token
-    // discovery/default-browser seams land in later changes; declared
-    // now so backends exist for them from day one
+    // Produces an xdg-activation token asynchronously for export into a
+    // spawned child's environment. Not for raising Lane's own windows
+    // (that stays plain QWindow::requestActivate()).
+    virtual void requestActivationToken(QWindow *source,
+                                        std::function<void(QString)> done,
+                                        int timeoutMs = 300) = 0;
 };
-Platform *platform(); // returns the per-OS singleton
-}
+Platform *platform();
 ```
 
-`platform_linux.cpp` (compiled under `LANE_KDE_DESKTOP`) implements everything with today's Linux code re-expressed on Qt APIs. `Controller` calls `platform()->...`. Alternative considered: per-feature `#ifdef` scatter — rejected, it is what makes porting painful later.
+Lane's self-raise sites (Controller.cpp:684, 999, 1194) are already plain `requestActivate()` — they stay as-is. The seam exists for: notify, autostart, activation-token. Discovery/default-browser/sourceInfo seams land with their respective port changes, not preemptively.
 
-### 2. Single instance: QLocalServer + kept org.freedesktop.Application D-Bus object
+### 2. Single instance: two transports, ordered claim, token-carrying payloads
 
-Two mechanisms, both needed on Linux:
+**Uniqueness & failure contract** (resolves the two-tokens split-brain):
+1. `QLocalServer` on a filesystem socket under `$XDG_RUNTIME_DIR/lane-instance.sock` (falls back to `QStandardPaths::RuntimeLocation`), `setSocketOptions(QLocalServer::UserAccessOption)` — no `/tmp`, no other-UID access.
+2. If `listen()` fails with `AddressInUseError`: attempt `QLocalSocket` connect. Connect succeeds → forward payload `{args, workingDir, activationToken}` (JSON; `activationToken` = `qEnvironmentVariable("XDG_ACTIVATION_TOKEN")` of the client) and exit 0. Connect fails → stale socket from a crashed daemon: `QLocalServer::removeServer`, retry `listen()` once. Still fails → hard error, exit nonzero.
+3. Then register D-Bus name `app.lane.Lane`. Registration failure in daemon/activation mode is fatal (same semantic as `KDBusService::Unique`, and it is the systemd readiness signal). CLI modes that never daemonize (`--list`, `--explain`, `--config-path`) skip all of this exactly as today.
 
-- **`QLocalServer` at key `app.lane.Lane`**: second instance connects, writes its argv payload (URL or `--settings`), running instance reads and routes. Works on every OS including Windows/macOS later.
-- **D-Bus `org.freedesktop.Application` object on `app.lane.Lane`**: the installed `.desktop` declares `DBusActivatable=true`; removing KDBusService means nothing registers `Activate`/`Open`/`ActivateAction`. We implement `QDBusAbstractAdaptor`-style handlers directly on `QDBusConnection::sessionBus()` — ~120 lines, no KF6 needed. `gtk-launch app.lane.Lane` must keep working (this exact path broke once before; there is a real regression risk).
+**D-Bus adaptor**: a `QDBusAbstractAdaptor` registered on `/app/lane/Lane` **and** `/MainApplication` (parity with KDBusService's live export — verified via qdbus6), exposing `org.freedesktop.Application` (`Activate`, `Open`, `ActivateAction`) and `org.kde.KDBusService.CommandLine`. Each handler reads `platform_data["activation-token"]`/`["desktop-startup-id"]` and sets `XDG_ACTIVATION_TOKEN` in the process env for the duration of the `handleArgs`/`openUrl` dispatch, unsetting after — mirroring KDBusService's documented behavior (Controller.cpp:493-504 depends on it).
 
-Order at startup: claim `QLocalServer` first (cheapest), then register D-Bus name. If `QLocalServer` fails to listen → forward argv over `QLocalSocket` and exit. This preserves the KDBusService ordering fix from the audit (claim uniqueness before paying discovery cost).
+### 3. Tray: QSystemTrayIcon, exact-parity menu
 
-### 3. Tray: QSystemTrayIcon
+`QSystemTrayIcon` with `QIcon::fromTheme("app.lane.Lane")`, `Activated` → `openSettings()`, `setContextMenu(QMenu{ "Settings" → openSettings, "Rediscover browsers" → rediscover })`. No Quit (deliberately disabled today via `setStandardActionsEnabled(false)`). Tooltip "Lane / Link router" parity. Loss acknowledged in spec: `QSystemTrayIcon` has no Passive status — the icon is permanently visible instead of Passive-eligible; accepted (SNI-Passive only affects tray auto-hide grouping).
 
-`m_tray` becomes `QSystemTrayIcon` with `QIcon::fromTheme("app.lane.Lane")`, `Activated` → open settings, a small `QMenu` (Settings, Quit) as a parity bonus since SNI had a menu path. On Plasma, `QSystemTrayIcon` renders through StatusNotifier anyway.
+### 4. Notifications: org.freedesktop.Notifications over QDBus
 
-### 4. Notifications: org.freedesktop.Notifications over QDBus, fallback showMessage
+`Platform::notify` on Linux: `Notify` call with app_name `"Lane"`, icon (from call-site `iconName` — all 5 sites set it), `actions` array `["restore", "Restore Lane"]`, hints including `desktop-entry: "app.lane.Lane"` (replaces `setComponentName`; preserves Plasma grouping/DND), expire timeout ~10s. `ActionInvoked`/`NotificationClosed` signals dispatch the stored lambda by notification id. No session bus → no-op with a qWarning: `QSystemTrayIcon::showMessage` routes through the *same* notification service so it is not a real fallback; the watchdog's restore path is the existing Overview-page default-browser button (already in Settings, no new UI needed — spec states this).
 
-`platform()->notify()`: Linux implementation calls `org.freedesktop.Notifications.Notify` via `QDBusMessage` — params: app name, replaces-id 0, icon, summary, body, actions array `["restore", "Restore Lane"]`, hints, expire timeout `CloseOnTimeout` equivalent (~10s). Connect `ActionInvoked`/`NotificationClosed` signals to dispatch the action lambda keyed by notification id. This is the only notification API that preserves buttons. Fallback when D-Bus absent: `QSystemTrayIcon::showMessage` (loses the action — then surface restore as a settings banner; spec already requires the fallback path).
+### 5. Crash log: message handler + terminate + fatal signals
 
-### 5. Crash log: message handler + terminate handler
+`qInstallMessageHandler` ring buffer (~200 lines) mirrored to stderr; `std::set_terminate` flushes to `QStandardPaths::AppDataLocation/crash-<epoch>.log`. Also `signal()` handlers for SIGSEGV/SIGABRT/SIGBUS/SIGILL/SIGFPE: write best-effort, restore default, re-raise (no core suppression). Log content inherits whatever was logged — same as stderr today.
 
-`qInstallMessageHandler` keeps a bounded ring buffer (~200 lines) in memory and mirrors to stderr; `std::set_terminate` + the handler's `QtFatalMsg` path flush the buffer to `QStandardPaths::AppDataLocation/crash-<timestamp>.log`. No dialog, no symbols — acceptable for a resident daemon; KCrash's real value was the KDE dialog.
+### 6. Metadata: QCoreApplication only
 
-### 6. About/metadata: QCoreApplication + QML About card
+Delete the `KAboutData` block + `KLocalizedString`; `app.setApplicationName/Version/OrganizationName/Domain/DesktopFileName` are already set and stay. No About page (Overview Information card already shows version + PolyForm notice; KAboutData's license text was dead — nobody renders it). `i18n()`→`tr()` sweep (only `KLocalizedString` remains in main.cpp).
 
-`app.setApplicationName/Version/OrganizationName/Domain` + a `license` property on Controller returning a short PolyForm notice string. A new `AboutPage.qml` in the settings sidebar (kirigami FormCard page for now; QQC2 migration inherits it). Fixes the "Custom"-only label gap without touching KAboutData.
+### 7. Activation token: optional KF6::GuiAddons, raw-protocol fallback out of scope
 
-### 7. Activation: Wayland token behind the seam
+The token exists only on Wayland and only preserves the focus-handoff nicety (300ms fallback already covers its absence). `find_package(KF6GuiAddons)` — **present → link + `HAVE_KWAYLANDEXTRAS`, identical behavior; absent → `done("")` immediately** (launched browser opens unfocused, same as every non-KDE platform will get permanently). Hand-rolling xdg-activation-v1 via `QNativeInterface::QWaylandApplication` + wayland-scanner is deferred: it needs a build-time wayland-scanner + wayland-client dependency chain for a nicety; record as a follow-up. Spec wording: "no required KF6 dev package; GuiAddons MAY be linked when present for the activation-token feature."
 
-`KWaylandExtras::xdgActivationToken`/`KWindowSystem::updateXdgActivationToken` move into `platform_linux.cpp` `raiseWindow()`. KWindowSystem is KF6 → it must go too: the xdg-activation token path is reimplemented via `QDBusMessage` to `org.kde.KWin` / or simpler: keep the Wayland branch behind `QGuiApplication::platformName()=="wayland"` using the existing `KWaylandExtras` — **no**, KWaylandExtras is also KF6-adjacent (KF6::WindowSystem). Reimplementation: xdg_activation_v1 needs a serial/token negotiation through the Wayland connection — nontrivial. **Decision**: call `QWindow::requestActivate()` and additionally run the token request through the raw Wayland interface only if trivially available via `QNativeInterface::QWaylandApplication`. Spike task in tasks.md; worst case Linux loses the focus token and launched browsers open behind the picker — regression risk flagged below. If the spike fails, keep `KF6::WindowSystem` + `KWaylandExtras` as the single permitted KF6 link with a comment, deferring full removal — a documented exception, not silent scope creep.
+### 8. Build changes
 
-### 8. i18n
-
-`KLocalizedString::setApplicationDomain` + any `i18n()` → `QObject::tr()` / `QCoreApplication::translate`. QML has zero `i18n()` uses today.
-
-### 9. Build changes
-
-`src/CMakeLists.txt`: drop KF6::* links entirely except the possible WindowSystem exception above; add `platform/platform_linux.cpp` under `LANE_KDE_DESKTOP`; Qt6::DBus stays Linux-only. `CMakeLists.txt`: KF6 find guarded/removed accordingly; ECM retained.
+`src/CMakeLists.txt`: drop `KF6::I18n/CoreAddons/ConfigCore/DBusAddons/Notifications/WindowSystem/IconThemes/ColorScheme/StatusNotifierItem/Crash`; conditionally `KF6::GuiAddons` + `HAVE_KWAYLANDEXTRAS`; add `platform/platform_linux.cpp`, `app/SingleInstance.cpp`, `app/CrashLog.cpp` under `LANE_KDE_DESKTOP`; drop `data/app.lane.Lane.notifyrc` install + file. `CMakeLists.txt`: `find_package(KF6)` replaced by per-module finds (GuiAddons QUIET). Delete `#include <KCrash>` in Controller.cpp. CI: shrink pacman list to qt6 + layershellqt (+ kguiaddons) — the CI build itself becomes the KF6-free check. Docs: PKGBUILD deps, CONTRIBUTING, CLAUDE.md, README build section all updated.
 
 ## Risks / Trade-offs
 
-- `DBusActivatable` regression → keep `qdbus6`-based manual test in tasks; re-verify `gtk-launch` end-to-end; the prior bug (hang with no Exec fallback) is exactly this path.
-- xdg-activation token loss on Wayland → spike first (task 2); if infeasible without KF6, keep `KF6::WindowSystem` as documented exception rather than degrade UX.
-- Notification action loss if D-Bus notifications daemon is absent → settings-page banner fallback in spec; low probability on Plasma.
-- `QSystemTrayIcon` requires a system tray on Wayland — same caveat SNI had; no behavior change.
-- Wayland-only QML imports untouched — Kirigami remains until `qqc2-ui-port`.
+- `DBusActivatable` regression → task pins both object paths and both interfaces; verification includes `qdbus6` introspection AND `gtk-launch` + a real click end-to-end (this exact path broke once before).
+- Wayland token without GuiAddons → degraded to no-token; documented in spec.
+- Plasma notification action rendering of hand-built Notify → UNVERIFIABLE from repo; live-test on Plasma in verification sweep.
+- `QSystemTrayIcon` Passive-status loss → documented spec acceptance.
+- QLocalSocket payload injection by same-UID processes → same trust boundary as session D-Bus today; accepted.
 
 ## Migration Plan
 
-Single branch, ordered commits per task below. Build + full `ctest` after each KF6 removal lands. Install to `~/.local` at the end; restart daemon; verify `gtk-launch` and a real click. Rollback: revert the branch — no config or data changes exist.
+Single branch; ordered commits per tasks.md; build + tests green after each task. Install to `~/.local`, restart daemon (`systemctl --user restart lane` — note: `pkill -x lane` triggers Restart=on-failure anyway), verify `gtk-launch` + real click. **Rollback**: git revert + rebuild + `cmake --install` + restart daemon; the D-Bus service file and autostart entry keep pointing at the installed binary — they need no edits. Plasma notification-settings residue under app.lane.Lane is harmless.
 
 ## Open Questions
 
-- Whether `QSystemTrayIcon` on Plasma 6.7 Wayland exposes context menus equivalently to SNI (cosmetic; does not block).
+- Whether Plasma 6.7 renders a hand-built `Notify` actions array identically to KNotification (live-test in verification; fallback is the Overview restore path).
+- Whether launchers send `activation-token` vs `desktop-startup-id` in practice (adaptor handles both).
