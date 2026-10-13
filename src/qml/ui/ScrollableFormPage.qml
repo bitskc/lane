@@ -8,6 +8,8 @@ import QtQuick.Layouts
 QQC.Control {
     id: root
 
+    // Kirigami.Page parity: pages declare a title for the sidebar/header.
+    property string title
     default property alias pageContent: column.data
     property real contentWidth: Theme.cardWidth
 
@@ -23,10 +25,7 @@ QQC.Control {
         contentWidth: width
         contentHeight: column.implicitHeight + Theme.largeSpacing * 2
 
-        ScrollIndicator.vertical: QQC.ScrollIndicator {}
-
-        // Auto-scroll so the focused delegate stays visible.
-        onContentYChanged: internalFlickable.contentYChanged()
+        QQC.ScrollIndicator.vertical: QQC.ScrollIndicator {}
 
         function scrollFocusedIntoView() {
             const focused = column.children.find(c => c.activeFocus);

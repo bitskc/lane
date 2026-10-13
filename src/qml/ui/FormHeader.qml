@@ -7,6 +7,9 @@ import QtQuick.Controls as QQC
 QQC.Label {
     id: root
 
+    // Kirigami FormHeader parity: callers pass `title`.
+    property alias title: root.text
+
     topPadding: Theme.smallSpacing * 2
     leftPadding: Theme.largeSpacing
     bottomPadding: Theme.smallSpacing

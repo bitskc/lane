@@ -6,7 +6,7 @@ Apply after `bare-qt6-port` merges (shared CMake). App must stay runnable after 
 - [x] `laneui` STATIC target + `qt_add_qml_module(laneui URI app.lane.ui)` in `src/CMakeLists.txt`, linked into `lane`; NO hand-written qmldir.
 - [x] `Theme.qml` singleton: metrics + semantic colors only (no window/palette access — call sites use attached `palette`).
 - [x] `ScrollableFormPage.qml` (Flickable + centered card-width column + ensureVisible on focus), `FormCard.qml`, `FormHeader.qml`, `FormDelegateSeparator.qml`.
-- [x] `SwitchRow`, `ComboRow`, `ButtonRow`, `TextRow`, `TextFieldRow`, `SpinBoxRow` — FormCard property-shape parity.
+- [x] `FormSwitchDelegate`, `FormComboBoxDelegate`, `FormButtonDelegate`, `FormTextDelegate`, `FormTextFieldDelegate`, `FormSpinBoxDelegate` — FormCard property-shape parity.
 - [x] `ThemedShadow.qml` (Rectangle + `QtQuick.Effects.MultiEffect`, Qt 6.5+ OK) matching picker's shadow.size 32/yOffset 10/alpha .42.
 - [x] `DragHandle.qml`: disabled while filtering, captures dragId before first move, edge auto-scroll, release → `controller.moveTarget`.
 

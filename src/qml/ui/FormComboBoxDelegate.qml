@@ -57,8 +57,8 @@ QQC.ItemDelegate {
                 text: root.statusMessage
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                color: root.status === QQCEnums.Information ? root.palette.link
-                    : root.status === QQCEnums.Error ? "#db241c" : root.palette.windowText
+                color: root.status === 0 ? root.palette.link
+                    : root.status === 2 ? "#db241c" : root.palette.windowText
                 font.pointSize: 12
             }
         }

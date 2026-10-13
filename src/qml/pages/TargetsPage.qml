@@ -376,7 +376,7 @@ LaneUi.ScrollableFormPage {
             id: customCommand
             label: "Command"
             placeholderText: "firefox -P work $url"
-            textEdited: (text) => page.customCommandError = ""
+            onTextEdited: page.customCommandError = ""
         }
         LaneUi.FormButtonDelegate {
             text: "Add custom app"

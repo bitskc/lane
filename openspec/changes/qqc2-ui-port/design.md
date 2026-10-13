@@ -33,7 +33,7 @@ Style verdict (verified by probe + package contents): `qqc2-desktop-style` impor
 
 - `ScrollableFormPage.qml` — FormCardPage replacement: `Flickable` + centered `ColumnLayout` capped at card width, `ensureVisible` on active-focus changes (matches FormCardPage semantics so tall pages like Preferences still scroll).
 - `FormCard`, `FormHeader`, `FormDelegateSeparator` — grouped-card look.
-- `SwitchRow`, `ComboRow`, `ButtonRow`, `TextRow`, `TextFieldRow`, `SpinBoxRow` — FormCard-compatible property names so ~80 call sites are mechanical.
+- `FormSwitchDelegate`, `FormComboBoxDelegate`, `FormButtonDelegate`, `FormTextDelegate`, `FormTextFieldDelegate`, `FormSpinBoxDelegate` — FormCard-compatible property names so ~80 call sites are mechanical.
 - `Theme.qml` singleton — metrics + semantic colors ONLY (a singleton has no window/palette; colors at call sites use the attached `palette` property). Semantic colors `positiveTextColor`/`negativeTextColor`/`neutralTextColor` mapped to palette-aware constants (QPalette has no semantic roles). Font-relative metrics where the original is `gridUnit`-based so Plasma font scaling still works.
 - `ThemedShadow.qml` — `Rectangle` + `QtQuick.Effects.MultiEffect` shadow (available Qt 6.5, under our 6.6 floor; picker uses shadow.size 32, yOffset 10, alpha .42 — must reproduce to avoid a flatter look).
 - `DragHandle.qml` — MouseArea-driven reorder honoring the existing invariants: **disabled while filtering** (collapsed height-0 rows make index math wrong), **capture dragId once** before the first model move, auto-scroll at edges; release → `controller.moveTarget(id, index)` (sibling rules live in `moveIdAmongSiblings`, already tested).

@@ -45,6 +45,10 @@ if(LANE_KDE_DESKTOP)
         qml/ui/FormRadioDelegate.qml
         qml/ui/FormSectionText.qml
     )
+    # pragma Singleton alone is not enough: the generated qmldir only
+    # exports Theme as a singleton when this source property is set,
+    # and it must be set before qt_add_qml_module consumes the file list.
+    set_source_files_properties(qml/ui/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
     qt_add_library(laneui STATIC)
     qt_add_qml_module(laneui
         URI app.lane.ui
