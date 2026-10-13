@@ -22,63 +22,65 @@ target_link_libraries(lane-core
         Qt6::Network
 )
 
-set(lane_SRCS
-    app/main.cpp
-    app/Controller.cpp
-    app/PickerModel.cpp
-    app/TargetModel.cpp
-    app/RuleModel.cpp
-    app/Autostart.cpp
-    app/SourceInfo.cpp
-    app/UpdateChecker.cpp
-    app/DefaultBrowserWatcher.cpp
-)
+if(LANE_KDE_DESKTOP)
+    set(lane_SRCS
+        app/main.cpp
+        app/Controller.cpp
+        app/PickerModel.cpp
+        app/TargetModel.cpp
+        app/RuleModel.cpp
+        app/Autostart.cpp
+        app/SourceInfo.cpp
+        app/UpdateChecker.cpp
+        app/DefaultBrowserWatcher.cpp
+    )
 
-qt_add_executable(lane ${lane_SRCS})
-target_include_directories(lane PRIVATE ${CMAKE_BINARY_DIR})
+    qt_add_executable(lane ${lane_SRCS})
+    target_include_directories(lane PRIVATE ${CMAKE_BINARY_DIR})
 
-qt_add_qml_module(lane
-    URI app.lane
-    VERSION 1.0
-    QML_FILES
-        qml/Picker.qml
-        qml/Hold.qml
-        qml/Settings.qml
-        qml/pages/OverviewPage.qml
-        qml/pages/TargetsPage.qml
-        qml/pages/RulesPage.qml
-        qml/pages/PreferencesPage.qml
-    RESOURCE_PREFIX /qt/qml
-)
+    qt_add_qml_module(lane
+        URI app.lane
+        VERSION 1.0
+        QML_FILES
+            qml/Picker.qml
+            qml/Hold.qml
+            qml/Settings.qml
+            qml/pages/OverviewPage.qml
+            qml/pages/TargetsPage.qml
+            qml/pages/RulesPage.qml
+            qml/pages/PreferencesPage.qml
+        RESOURCE_PREFIX /qt/qml
+    )
 
-target_link_libraries(lane
-    PRIVATE
-        lane-core
-        Qt6::Core
-        Qt6::Gui
-        Qt6::Qml
-        Qt6::Quick
-        Qt6::QuickControls2
-        Qt6::Widgets
-        Qt6::DBus
-        Qt6::Network
-        Qt6::Svg
-        KF6::I18n
-        KF6::CoreAddons
-        KF6::ConfigCore
-        KF6::DBusAddons
-        KF6::Notifications
-        KF6::WindowSystem
-        KF6::IconThemes
-        KF6::ColorScheme
-        KF6::StatusNotifierItem
-        KF6::Crash
-        LayerShellQt::Interface
-)
+    target_link_libraries(lane
+        PRIVATE
+            lane-core
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Qml
+            Qt6::Quick
+            Qt6::QuickControls2
+            Qt6::Widgets
+            Qt6::DBus
+            Qt6::Network
+            Qt6::Svg
+            KF6::I18n
+            KF6::CoreAddons
+            KF6::ConfigCore
+            KF6::DBusAddons
+            KF6::Notifications
+            KF6::WindowSystem
+            KF6::IconThemes
+            KF6::ColorScheme
+            KF6::StatusNotifierItem
+            KF6::Crash
+            LayerShellQt::Interface
+    )
 
-if(PlasmaActivities_FOUND)
-    target_link_libraries(lane PRIVATE Plasma::Activities)
-    target_compile_definitions(lane PRIVATE HAVE_PLASMA_ACTIVITIES)
+    if(PlasmaActivities_FOUND)
+        target_link_libraries(lane PRIVATE Plasma::Activities)
+        target_compile_definitions(lane PRIVATE HAVE_PLASMA_ACTIVITIES)
+    endif()
+
+    install(TARGETS lane ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 endif()
-
-install(TARGETS lane ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
