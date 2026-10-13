@@ -23,6 +23,41 @@ target_link_libraries(lane-core
 )
 
 if(LANE_KDE_DESKTOP)
+    # UI module: local FormCard/Kirigami replacements, no KDE QML at
+    # runtime. Static target so the app links it without a separate
+    # plugin; qt_add_qml_module generates the qmldir for URI app.lane.ui.
+    set(laneui_SRCS
+        qml/ui/Theme.qml
+        qml/ui/ScrollableFormPage.qml
+        qml/ui/FormCard.qml
+        qml/ui/FormHeader.qml
+        qml/ui/FormDelegateSeparator.qml
+        qml/ui/ThemedShadow.qml
+        qml/ui/LaneIcon.qml
+        qml/ui/DragHandle.qml
+        qml/ui/AbstractFormDelegate.qml
+        qml/ui/FormSwitchDelegate.qml
+        qml/ui/FormComboBoxDelegate.qml
+        qml/ui/FormButtonDelegate.qml
+        qml/ui/FormTextDelegate.qml
+        qml/ui/FormTextFieldDelegate.qml
+        qml/ui/FormSpinBoxDelegate.qml
+        qml/ui/FormRadioDelegate.qml
+        qml/ui/FormSectionText.qml
+    )
+    qt_add_library(laneui STATIC)
+    qt_add_qml_module(laneui
+        URI app.lane.ui
+        VERSION 1.0
+        CLASS_NAME LaneUiPlugin
+        PLUGIN_TARGET laneuiplugin
+        QML_FILES ${laneui_SRCS}
+        RESOURCE_PREFIX /qt/qml
+    )
+    target_link_libraries(laneui PUBLIC Qt6::Quick Qt6::QuickControls2)
+endif()
+
+if(LANE_KDE_DESKTOP)
     set(lane_SRCS
         app/main.cpp
         app/Controller.cpp
@@ -34,6 +69,8 @@ if(LANE_KDE_DESKTOP)
         app/UpdateChecker.cpp
         app/DefaultBrowserWatcher.cpp
         app/Localization.h
+        app/ThemeIconProvider.cpp
+        app/ThemeIconProvider.h
     )
     # SingleInstance/DBusActivation/CrashLog/platform_linux/ThemeIconProvider
     # land as part of the same bare-qt6-port change in sibling slices; guard
@@ -44,7 +81,6 @@ if(LANE_KDE_DESKTOP)
         app/DBusActivation.cpp
         app/CrashLog.cpp
         app/platform/platform_linux.cpp
-        app/ThemeIconProvider.cpp
     )
         if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${_lane_optional_src})
             list(APPEND lane_SRCS ${_lane_optional_src})
@@ -53,6 +89,7 @@ if(LANE_KDE_DESKTOP)
 
     qt_add_executable(lane ${lane_SRCS})
     target_include_directories(lane PRIVATE ${CMAKE_BINARY_DIR})
+    target_link_libraries(lane PRIVATE laneuiplugin)
 
     qt_add_qml_module(lane
         URI app.lane
@@ -66,6 +103,12 @@ if(LANE_KDE_DESKTOP)
             qml/pages/RulesPage.qml
             qml/pages/PreferencesPage.qml
         RESOURCE_PREFIX /qt/qml
+    )
+
+    # Fusion style defaults: zero KDE QML runtime imports anywhere.
+    qt_add_resources(lane "qtquickcontrols2conf"
+        PREFIX "/"
+        FILES qtquickcontrols2.conf
     )
 
     target_link_libraries(lane

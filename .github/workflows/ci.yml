@@ -73,8 +73,8 @@ jobs:
           pacman -S --noconfirm --needed \
             base-devel cmake extra-cmake-modules ninja \
             qt6-base qt6-declarative qt6-svg \
-            kirigami kirigami-addons kwindowsystem \
-            layer-shell-qt qqc2-desktop-style \
+            kwindowsystem \
+            layer-shell-qt \
             appstream
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

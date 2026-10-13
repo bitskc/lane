@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls as QQC
 import QtQuick.Layouts
 import QtQuick.Window
-import org.kde.kirigami as Kirigami
+import app.lane.ui as LaneUi
 
 Window {
     id: root
@@ -77,18 +77,18 @@ Window {
         }
     }
 
-    Kirigami.ShadowedRectangle {
+    LaneUi.ThemedShadow {
         id: card
         width: 440
         height: content.implicitHeight + 32
         anchors.centerIn: parent
         radius: 16
-        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.97)
-        border.width: 1
-        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
-        shadow.size: 32
-        shadow.yOffset: 10
-        shadow.color: Qt.rgba(0, 0, 0, 0.42)
+        fillColor: Qt.rgba(root.palette.window.r, root.palette.window.g, root.palette.window.b, 0.97)
+        // Border drawn by the wrapper's inner rectangle.
+        shadowColor: "#000000"
+        shadowSize: 32
+        shadowYOffset: 10
+        shadowAlpha: 0.42
         scale: root.visible ? 1 : 0.98
         opacity: root.visible ? 1 : 0
         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
@@ -100,6 +100,16 @@ Window {
                                  ? "Choose where to open " + controller.currentHost
                                  : "Choose where to open this link"
 
+        // Border overlay, since ThemedShadow fills a Rectangle.
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 0
+            radius: 16
+            color: "transparent"
+            border.width: 1
+            border.color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.08)
+        }
+
         Column {
             id: content
             width: parent.width - 32
@@ -110,11 +120,10 @@ Window {
             RowLayout {
                 width: parent.width
                 spacing: 10
-                Kirigami.Icon {
-                    source: controller.currentSecure ? "lock" : "internet-services"
+                LaneUi.LaneIcon {
+                    iconName: controller.currentSecure ? "lock" : "internet-services"
                     Layout.preferredWidth: 18
                     Layout.preferredHeight: 18
-                    color: controller.currentSecure ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.disabledTextColor
                 }
                 Column {
                     Layout.fillWidth: true
@@ -141,7 +150,7 @@ Window {
                 width: parent.width
                 height: 36
                 radius: 10
-                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.06)
+                color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.06)
                 QQC.Label {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
@@ -272,132 +281,131 @@ Window {
                     anchors.fill: parent
                     visible: count > 0
                     model: controller.pickerModel
-                clip: true
-                spacing: 0
-                currentIndex: 0
-                boundsBehavior: Flickable.StopAtBounds
-                highlightMoveDuration: 80
-                onCurrentItemChanged: controller.clearPickerNotice()
+                    clip: true
+                    spacing: 0
+                    currentIndex: 0
+                    boundsBehavior: Flickable.StopAtBounds
+                    highlightMoveDuration: 80
+                    onCurrentItemChanged: controller.clearPickerNotice()
 
-                Accessible.role: Accessible.List
-                Accessible.name: "Destinations"
+                    Accessible.role: Accessible.List
+                    Accessible.name: "Destinations"
 
 
-                delegate: Rectangle {
-                    required property int index
-                    required property string targetId
-                    required property string name
-                    required property string subtitle
-                    required property string iconName
-                    required property string shortcut
-                    required property bool suggested
-                    required property string kind
-                    required property string colorName
+                    delegate: Rectangle {
+                        required property int index
+                        required property string targetId
+                        required property string name
+                        required property string subtitle
+                        required property string iconName
+                        required property string shortcut
+                        required property bool suggested
+                        required property string kind
+                        required property string colorName
 
-                    width: ListView.view.width
-                    height: root.rowHeight
-                    radius: 10
-                    color: ListView.isCurrentItem
-                           ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.36)
-                           : "transparent"
+                        width: ListView.view.width
+                        height: root.rowHeight
+                        radius: 10
+                        color: ListView.isCurrentItem
+                               ? Qt.rgba(root.palette.highlight.r, root.palette.highlight.g, root.palette.highlight.b, 0.36)
+                               : "transparent"
 
-                    Accessible.role: Accessible.ListItem
-                    Accessible.name: name + (shortcut.length > 0 && filterField.text.length === 0 ? ", shortcut " + shortcut : "")
-                    Accessible.description: kind === "pwa" ? "App" : (kind === "action" ? "Action" : subtitle)
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: name + (shortcut.length > 0 && filterField.text.length === 0 ? ", shortcut " + shortcut : "")
+                        Accessible.description: kind === "pwa" ? "App" : (kind === "action" ? "Action" : subtitle)
 
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onEntered: list.currentIndex = index
-                        onClicked: controller.pick(index)
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: list.currentIndex = index
+                            onClicked: controller.pick(index)
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            spacing: 10
+                            LaneUi.LaneIcon {
+                                iconName: iconName
+                                Layout.preferredWidth: 28
+                                Layout.preferredHeight: 28
+                            }
+                            Rectangle {
+                                // Container rows carry a color from the browser's
+                                // own container definition; an unmapped color name
+                                // (containerColor() returning an invalid QColor)
+                                // falls back to a neutral dot rather than black,
+                                // and this is never the only way a container row
+                                // is told apart (its kind/subtitle text still says
+                                // so too).
+                                visible: kind === "container"
+                                Layout.preferredWidth: 8
+                                Layout.preferredHeight: 8
+                                radius: 4
+                                color: colorName.length > 0
+                                       ? colorName
+                                       : Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.35)
+                            }
+                            Column {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                QQC.Label {
+                                    width: parent.width
+                                    text: name
+                                    font.pixelSize: 13
+                                    font.weight: Font.Medium
+                                    elide: Text.ElideRight
+                                }
+                                QQC.Label {
+                                    width: parent.width
+                                    text: kind === "pwa" ? "App" : (kind === "action" ? "Action" : subtitle)
+                                    font.pixelSize: 11
+                                    opacity: 0.5
+                                    elide: Text.ElideRight
+                                }
+                            }
+                            Rectangle {
+                                // `suggested` travels with the target (a
+                                // matching web app or remembered destination)
+                                // wherever the user's ordering placed it, so
+                                // the badge can sit mid-list now.
+                                visible: suggested
+                                Layout.preferredWidth: suggestedLabel.implicitWidth + 12
+                                Layout.preferredHeight: 16
+                                radius: 8
+                                color: Qt.rgba(root.palette.highlight.r, root.palette.highlight.g, root.palette.highlight.b, 0.15)
+                                QQC.Label {
+                                    id: suggestedLabel
+                                    anchors.centerIn: parent
+                                    text: "Suggested"
+                                    font.pixelSize: 9
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                            Rectangle {
+                                visible: shortcut.length > 0 && filterField.text.length === 0
+                                width: 20
+                                height: 20
+                                radius: 5
+                                color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.08)
+                                QQC.Label {
+                                    anchors.centerIn: parent
+                                    text: shortcut
+                                    font.pixelSize: 10
+                                    font.weight: Font.DemiBold
+                                    opacity: 0.75
+                                }
+                            }
+                        }
                     }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        spacing: 10
-                        Kirigami.Icon {
-                            source: iconName
-                            Layout.preferredWidth: 28
-                            Layout.preferredHeight: 28
-                        }
-                        Rectangle {
-                            // Container rows carry a color from the browser's
-                            // own container definition; an unmapped color name
-                            // (containerColor() returning an invalid QColor)
-                            // falls back to a neutral dot rather than black,
-                            // and this is never the only way a container row
-                            // is told apart (its kind/subtitle text still says
-                            // so too).
-                            visible: kind === "container"
-                            Layout.preferredWidth: 8
-                            Layout.preferredHeight: 8
-                            radius: 4
-                            color: colorName.length > 0
-                                   ? colorName
-                                   : Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.35)
-                        }
-                        Column {
-                            Layout.fillWidth: true
-                            spacing: 0
-                            QQC.Label {
-                                width: parent.width
-                                text: name
-                                font.pixelSize: 13
-                                font.weight: Font.Medium
-                                elide: Text.ElideRight
-                            }
-                            QQC.Label {
-                                width: parent.width
-                                text: kind === "pwa" ? "App" : (kind === "action" ? "Action" : subtitle)
-                                font.pixelSize: 11
-                                opacity: 0.5
-                                elide: Text.ElideRight
-                            }
-                        }
-                        Rectangle {
-                            // `suggested` travels with the target (a
-                            // matching web app or remembered destination)
-                            // wherever the user's ordering placed it, so
-                            // the badge can sit mid-list now.
-                            visible: suggested
-                            Layout.preferredWidth: suggestedLabel.implicitWidth + 12
-                            Layout.preferredHeight: 16
-                            radius: 8
-                            color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.15)
-                            QQC.Label {
-                                id: suggestedLabel
-                                anchors.centerIn: parent
-                                text: "Suggested"
-                                font.pixelSize: 9
-                                font.weight: Font.DemiBold
-                                color: Kirigami.Theme.highlightColor
-                            }
-                        }
-                        Rectangle {
-                            visible: shortcut.length > 0 && filterField.text.length === 0
-                            width: 20
-                            height: 20
-                            radius: 5
-                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
-                            QQC.Label {
-                                anchors.centerIn: parent
-                                text: shortcut
-                                font.pixelSize: 10
-                                font.weight: Font.DemiBold
-                                opacity: 0.75
-                            }
-                        }
-                    }
-                }
                 }
             }
 
             Rectangle {
                 width: parent.width
                 height: 1
-                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
+                color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.08)
             }
 
             QQC.Label {
@@ -405,7 +413,7 @@ Window {
                 width: parent.width
                 visible: controller.pickerNotice.length > 0
                 text: controller.pickerNotice
-                color: Kirigami.Theme.negativeTextColor
+                color: LaneUi.Theme.negativeTextColor
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -490,8 +498,8 @@ Window {
                             id: copyRow
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 4
-                            Kirigami.Icon {
-                                source: "edit-copy"
+                            LaneUi.LaneIcon {
+                                iconName: "edit-copy"
                                 Layout.preferredWidth: 12
                                 Layout.preferredHeight: 12
                                 opacity: copyHover.hovered ? 0.7 : 0.4
@@ -526,8 +534,8 @@ Window {
                             id: emailRow
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 4
-                            Kirigami.Icon {
-                                source: "mail-sent"
+                            LaneUi.LaneIcon {
+                                iconName: "mail-sent"
                                 Layout.preferredWidth: 12
                                 Layout.preferredHeight: 12
                                 opacity: emailHover.hovered ? 0.7 : 0.4

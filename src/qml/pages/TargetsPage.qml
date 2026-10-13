@@ -1,10 +1,9 @@
 import QtQuick
 import QtQuick.Controls as QQC
 import QtQuick.Layouts
-import org.kde.kirigami as Kirigami
-import org.kde.kirigamiaddons.formcard as FormCard
+import app.lane.ui as LaneUi
 
-FormCard.FormCardPage {
+LaneUi.ScrollableFormPage {
     id: page
     title: "Browsers & apps"
 
@@ -46,11 +45,6 @@ FormCard.FormCardPage {
         onTriggered: controller.renameTarget(targetId, newName)
     }
 
-    // One flat list for every orderable target (browsers, containers,
-    // web apps, custom apps): the same set the picker shows and the same
-    // order moveTarget()/config.targetOrder persist. Private windows are
-    // not orderable (the picker never lists them), so they stay in their
-    // own collapsed section below.
     ListModel { id: allModel }
     ListModel { id: privateModel }
 
@@ -66,10 +60,8 @@ FormCard.FormCardPage {
                 width: wrapper.width
                 height: wrapper.height
                 contentItem: RowLayout {
-                    spacing: Kirigami.Units.smallSpacing
-                    Kirigami.ListItemDragHandle {
-                        listItem: listItem
-                        listView: allList
+                    spacing: LaneUi.Theme.smallSpacing
+                    LaneUi.DragHandle {
                         // Filtered-out rows stay in allModel at their
                         // original index (only their visual height collapses
                         // to 0), so a drag computed against the full model
@@ -78,22 +70,24 @@ FormCard.FormCardPage {
                         // Disabling the handle while filtered avoids that
                         // ambiguity outright; clearing search restores it.
                         enabled: page.searchText.trim().length === 0
-                        onMoveRequested: (oldIndex, newIndex) => {
-                            if (allList.dragId === "")
-                                allList.dragId = allModel.get(oldIndex).targetId
-                            allModel.move(oldIndex, newIndex, 1)
+                        listItem: listItem
+                        flickable: page.flickable
+                        onDragStarted: {
+                            if (allList.dragId === "") {
+                                allList.dragId = model.targetId
+                            }
                         }
-                        onDropped: (oldIndex, newIndex) => {
+                        onDragFinished: (id, newIndex) => {
                             if (newIndex >= 0 && allList.dragId !== "") {
                                 controller.moveTarget(allList.dragId, newIndex)
                             }
                             allList.dragId = ""
                         }
                     }
-                    Kirigami.Icon {
-                        source: model.iconName
-                        implicitWidth: 22
-                        implicitHeight: 22
+                    LaneUi.LaneIcon {
+                        iconName: model.iconName
+                        Layout.preferredWidth: 22
+                        Layout.preferredHeight: 22
                         Layout.alignment: Qt.AlignVCenter
                     }
                     QQC.TextField {
@@ -123,7 +117,7 @@ FormCard.FormCardPage {
                             anchors.bottom: parent.bottom
                             height: 1
                             visible: renameHover.hovered && !renameField.activeFocus
-                            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
+                            color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.25)
                         }
                     }
                     // Kind badge keeps a flattened list legible: browsers,
@@ -131,8 +125,8 @@ FormCard.FormCardPage {
                     // now, so the row still says what it is.
                     QQC.Label {
                         text: model.kind
-                        font: Kirigami.Theme.smallFont
-                        color: Kirigami.Theme.disabledTextColor
+                        font.pointSize: 12
+                        opacity: 0.8
                         Layout.alignment: Qt.AlignVCenter
                     }
                     QQC.Switch {
@@ -172,12 +166,12 @@ FormCard.FormCardPage {
             height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
             visible: height > 0
             contentItem: RowLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Item { width: Kirigami.Units.iconSizes.smallMedium }
-                Kirigami.Icon {
-                    source: model.iconName
-                    implicitWidth: 22
-                    implicitHeight: 22
+                spacing: LaneUi.Theme.smallSpacing
+                Item { width: 22 }
+                LaneUi.LaneIcon {
+                    iconName: model.iconName
+                    Layout.preferredWidth: 22
+                    Layout.preferredHeight: 22
                     Layout.alignment: Qt.AlignVCenter
                 }
                 QQC.TextField {
@@ -207,7 +201,7 @@ FormCard.FormCardPage {
                         anchors.bottom: parent.bottom
                         height: 1
                         visible: renameHover.hovered && !renameField.activeFocus
-                        color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
+                        color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.25)
                     }
                 }
                 QQC.Switch {
@@ -243,11 +237,11 @@ FormCard.FormCardPage {
         function onSettingsChanged() { Qt.callLater(syncModels) }
     }
 
-    FormCard.FormHeader {
+    LaneUi.FormHeader {
         title: "Search"
     }
-    FormCard.FormCard {
-        FormCard.AbstractFormDelegate {
+    LaneUi.FormCard {
+        LaneUi.AbstractFormDelegate {
             background: Item {}
             contentItem: QQC.TextField {
                 id: searchField
@@ -263,21 +257,21 @@ FormCard.FormCardPage {
     QQC.Label {
         visible: page.searchText.trim().length > 0 && page.totalMatchCount() === 0
         text: "No matches"
-        font: Kirigami.Theme.smallFont
-        color: Kirigami.Theme.disabledTextColor
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        Layout.bottomMargin: Kirigami.Units.smallSpacing
+        font.pointSize: 12
+        opacity: 0.8
+        Layout.leftMargin: LaneUi.Theme.largeSpacing
+        Layout.rightMargin: LaneUi.Theme.largeSpacing
+        Layout.bottomMargin: LaneUi.Theme.smallSpacing
 
         Accessible.role: Accessible.StaticText
         Accessible.name: "No matches"
     }
 
-    FormCard.FormHeader {
+    LaneUi.FormHeader {
         title: "Default"
     }
-    FormCard.FormCard {
-        FormCard.FormComboBoxDelegate {
+    LaneUi.FormCard {
+        LaneUi.FormComboBoxDelegate {
             text: "Fallback target"
             description: "Used when Lane does not ask and no rule matches"
             model: controller.targetNames
@@ -286,20 +280,20 @@ FormCard.FormCardPage {
         }
     }
 
-    FormCard.FormHeader {
+    LaneUi.FormHeader {
         title: "Destinations (" + page.matchCount(allModel) + ")"
     }
     QQC.Label {
         text: "This is the picker's row order. Drag to rearrange any destination past any other; click a name to rename."
-        font: Kirigami.Theme.smallFont
-        color: Kirigami.Theme.disabledTextColor
+        font.pointSize: 12
+        opacity: 0.8
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        Layout.bottomMargin: Kirigami.Units.smallSpacing
+        Layout.leftMargin: LaneUi.Theme.largeSpacing
+        Layout.rightMargin: LaneUi.Theme.largeSpacing
+        Layout.bottomMargin: LaneUi.Theme.smallSpacing
     }
-    FormCard.FormCard {
+    LaneUi.FormCard {
         visible: page.matchCount(allModel) > 0 || page.searchText.length > 0
         ListView {
             id: allList
@@ -309,7 +303,7 @@ FormCard.FormCardPage {
             Layout.fillWidth: true
             implicitHeight: contentHeight
             moveDisplaced: Transition {
-                YAnimator { duration: Kirigami.Units.longDuration; easing.type: Easing.InOutQuad }
+                YAnimator { duration: LaneUi.Theme.longDuration; easing.type: Easing.InOutQuad }
             }
             property string dragId: ""
             delegate: targetDelegate
@@ -318,10 +312,10 @@ FormCard.FormCardPage {
 
     RowLayout {
         Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.largeSpacing
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.smallSpacing
+        Layout.topMargin: LaneUi.Theme.largeSpacing
+        Layout.leftMargin: LaneUi.Theme.largeSpacing
+        Layout.rightMargin: LaneUi.Theme.largeSpacing
+        spacing: LaneUi.Theme.smallSpacing
         QQC.ToolButton {
             icon.name: page.privateExpanded ? "arrow-down" : "arrow-right"
             flat: true
@@ -330,13 +324,14 @@ FormCard.FormCardPage {
             Accessible.role: Accessible.Button
             Accessible.name: page.privateExpanded ? "Collapse private windows section" : "Expand private windows section"
         }
-        Kirigami.Heading {
-            level: 4
+        QQC.Label {
             Layout.fillWidth: true
             text: "Private windows (" + page.matchCount(privateModel) + ")"
+            font.pointSize: 15
+            font.weight: Font.DemiBold
         }
     }
-    FormCard.FormCard {
+    LaneUi.FormCard {
         visible: (page.privateExpanded || page.searchText.length > 0) && page.matchCount(privateModel) > 0
         ListView {
             id: privateList
@@ -351,10 +346,10 @@ FormCard.FormCardPage {
 
     RowLayout {
         Layout.fillWidth: true
-        Layout.topMargin: Kirigami.Units.largeSpacing
-        Layout.leftMargin: Kirigami.Units.largeSpacing
-        Layout.rightMargin: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.smallSpacing
+        Layout.topMargin: LaneUi.Theme.largeSpacing
+        Layout.leftMargin: LaneUi.Theme.largeSpacing
+        Layout.rightMargin: LaneUi.Theme.largeSpacing
+        spacing: LaneUi.Theme.smallSpacing
         QQC.ToolButton {
             icon.name: page.customsExpanded ? "arrow-down" : "arrow-right"
             flat: true
@@ -363,30 +358,29 @@ FormCard.FormCardPage {
             Accessible.role: Accessible.Button
             Accessible.name: page.customsExpanded ? "Collapse custom apps section" : "Expand custom apps section"
         }
-        Kirigami.Heading {
-            level: 4
+        QQC.Label {
             Layout.fillWidth: true
             text: "Custom apps"
+            font.pointSize: 15
+            font.weight: Font.DemiBold
         }
     }
-    FormCard.FormCard {
+    LaneUi.FormCard {
         visible: page.customsExpanded || page.searchText.length > 0
-        FormCard.FormTextFieldDelegate {
+        LaneUi.FormTextFieldDelegate {
             id: customName
             label: "Name"
             placeholderText: "Work Slack"
         }
-        FormCard.FormTextFieldDelegate {
+        LaneUi.FormTextFieldDelegate {
             id: customCommand
             label: "Command"
             placeholderText: "firefox -P work $url"
-            status: page.customCommandError.length > 0 ? Kirigami.MessageType.Error : Kirigami.MessageType.Information
-            statusMessage: page.customCommandError
-            onTextEdited: page.customCommandError = ""
+            textEdited: (text) => page.customCommandError = ""
         }
-        FormCard.FormButtonDelegate {
+        LaneUi.FormButtonDelegate {
             text: "Add custom app"
-            icon.name: "list-add"
+            iconName: "list-add"
             onClicked: {
                 const error = controller.addCustomTarget(customName.text, customCommand.text)
                 if (error.length > 0) {
@@ -397,6 +391,11 @@ FormCard.FormCardPage {
                 customName.text = ""
                 customCommand.text = ""
             }
+        }
+        LaneUi.FormTextDelegate {
+            visible: page.customCommandError.length > 0
+            text: page.customCommandError
+            description: ""
         }
     }
 }

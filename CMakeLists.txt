@@ -55,8 +55,6 @@ if(LANE_KDE_DESKTOP)
         Svg
     )
     find_package(KF6WindowSystem ${KF_MIN_VERSION} QUIET)
-    ecm_find_qmlmodule(org.kde.kirigami REQUIRED)
-    ecm_find_qmlmodule(org.kde.kirigamiaddons.formcard REQUIRED)
     find_package(LayerShellQt REQUIRED)
     # Optional: KDE Plasma Activities integration for per-Activity rules and
     # fallback destinations. Absent on non-Plasma desktops and minimal

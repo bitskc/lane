@@ -7,8 +7,7 @@ url="https://github.com/bitskc/lane"
 license=('custom:PolyForm-Noncommercial-1.0.0')
 depends=(
   qt6-base qt6-declarative qt6-svg
-  kirigami kirigami-addons
-  layer-shell-qt qqc2-desktop-style
+  layer-shell-qt
 )
 makedepends=(cmake extra-cmake-modules ninja appstream kwindowsystem)
 optdepends=('kwindowsystem: xdg-activation token handoff when launching a browser on Wayland')

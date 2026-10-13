@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls as QQC
 import QtQuick.Layouts
 import QtQuick.Window
-import org.kde.kirigami as Kirigami
+import app.lane.ui as LaneUi
 
 Window {
     id: root
@@ -32,18 +32,17 @@ Window {
         }
     }
 
-    Kirigami.ShadowedRectangle {
+    LaneUi.ThemedShadow {
         id: card
         width: 360
         height: content.implicitHeight + 32
         anchors.centerIn: parent
         radius: 16
-        color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g, Kirigami.Theme.backgroundColor.b, 0.97)
-        border.width: 1
-        border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
-        shadow.size: 32
-        shadow.yOffset: 10
-        shadow.color: Qt.rgba(0, 0, 0, 0.42)
+        fillColor: Qt.rgba(root.palette.window.r, root.palette.window.g, root.palette.window.b, 0.97)
+        shadowColor: "#000000"
+        shadowSize: 32
+        shadowYOffset: 10
+        shadowAlpha: 0.42
         scale: root.visible ? 1 : 0.96
         opacity: root.visible ? 1 : 0
         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
@@ -52,6 +51,14 @@ Window {
         Accessible.role: Accessible.AlertMessage
         Accessible.name: "Opening in " + controller.holdTargetName
         Accessible.description: "Press Enter to open now, or Escape or Space to pick a different destination instead"
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 16
+            color: "transparent"
+            border.width: 1
+            border.color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.08)
+        }
 
         Column {
             id: content
@@ -63,11 +70,10 @@ Window {
             RowLayout {
                 width: parent.width
                 spacing: 10
-                Kirigami.Icon {
-                    source: "launch"
+                LaneUi.LaneIcon {
+                    iconName: "launch"
                     Layout.preferredWidth: 22
                     Layout.preferredHeight: 22
-                    color: Kirigami.Theme.highlightColor
                 }
                 Column {
                     Layout.fillWidth: true
@@ -101,7 +107,7 @@ Window {
             Rectangle {
                 width: parent.width
                 height: 1
-                color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
+                color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.08)
             }
 
             RowLayout {

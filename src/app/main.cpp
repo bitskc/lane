@@ -13,7 +13,6 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QQuickStyle>
 
 #include <cstdio>
 
@@ -62,6 +61,14 @@ int main(int argc, char **argv)
 {
     Lane::CrashLog::install();
 
+    // Plasma's platformtheme plugin calls QQuickStyle::setStyle("org.kde.desktop")
+    // from inside QApplication's init, which drags Kirigami and
+    // qqc2-desktop-style into the process. The env var outranks that
+    // hook, so it is set here, before QGuiApplication constructs the
+    // platform theme. The qtquickcontrols2.conf resource covers hosts
+    // that do not run a KDE platformtheme plugin.
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Fusion");
+
     QApplication app(argc, argv);
     Lane::migrateLegacyConfig();
     app.setApplicationName(QStringLiteral("Lane"));
@@ -69,7 +76,6 @@ int main(int argc, char **argv)
     app.setOrganizationDomain(QStringLiteral("lane.app"));
     app.setDesktopFileName(QStringLiteral("app.lane.Lane"));
     app.setApplicationVersion(QStringLiteral(LANE_VERSION_STRING));
-    QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Lane — Plasma link router"));

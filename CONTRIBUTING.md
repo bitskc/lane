@@ -20,8 +20,7 @@ README.md. On openSUSE Tumbleweed:
 ```bash
 sudo zypper install cmake extra-cmake-modules ninja gcc-c++ \
   qt6-base-devel qt6-declarative-devel qt6-svg-devel \
-  kirigami-addons6-devel kirigami-addons6 \
-  kf6-kirigami-imports kf6-kwindowsystem-devel \
+  kf6-kwindowsystem-devel \
   layer-shell-qt6-imports
 ```
 

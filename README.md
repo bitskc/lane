@@ -7,7 +7,7 @@ handler.
 If you run Zen for personal stuff, Firefox for work, and a GitHub PWA
 for repos, Lane sorts that out without you thinking about it.
 
-It is a Qt 6 + Kirigami app that stays running in the background, so the
+It is a Qt 6 Quick app that stays running in the background, so the
 picker shows up instantly on Wayland. Same idea as Browser Tamer, Choosy,
 or Velja, but native to Plasma.
 
@@ -182,8 +182,7 @@ To install under `$HOME/.local` instead:
 
 ```bash
 sudo pacman -S --needed cmake extra-cmake-modules ninja qt6-base qt6-declarative qt6-svg \
-  kirigami kirigami-addons kwindowsystem layer-shell-qt \
-  qqc2-desktop-style
+  kwindowsystem layer-shell-qt
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
 cmake --build build
 cmake --install build

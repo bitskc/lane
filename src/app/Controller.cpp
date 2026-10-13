@@ -3,6 +3,7 @@
 #include "Autostart.h"
 #include "SourceInfo.h"
 #include "Localization.h"
+#include "ThemeIconProvider.h"
 #include "core/config.h"
 #include "core/destination.h"
 #include "core/discovery.h"
@@ -1087,6 +1088,8 @@ QWindow *Controller::ensureEngine(QQmlApplicationEngine *&engine, const QString 
     // Kirigami/kirigami-addons resolve i18n* on the context object;
     // KLocalizedContext used to supply it before the de-KF6 port.
     engine->rootContext()->setContextObject(new I18nContext(engine));
+    // Theme icons without Kirigami.Icon.
+    engine->addImageProvider(QStringLiteral("laneicon"), new ThemeIconProvider());
     engine->loadFromModule(module, name);
     if (engine->rootObjects().isEmpty()) {
         qWarning() << qPrintable(QStringLiteral("Lane: %1 QML failed to load").arg(warnPrefix));

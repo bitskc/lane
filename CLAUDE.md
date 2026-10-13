@@ -1,6 +1,6 @@
 # Lane
 
-Plasma-native link router (Qt 6 / Kirigami).
+Plasma-native link router (plain Qt 6).
 
 ## Skill routing
 
@@ -10,7 +10,7 @@ When the user's request matches an available skill, invoke it via the Skill tool
 
 - `src/core` — discovery, pipeline, matcher, router, launcher. No UI. Covered by `tests/`.
 - `src/app` — resident controller, D-Bus unique instance, picker/settings engines.
-- `src/qml` — picker overlay and Kirigami settings.
+- `src/qml` — picker overlay and Qt Quick Controls settings
 - `AGENTS.md` — config JSON shape and CLI for AI agents.
 
 ## Invariants

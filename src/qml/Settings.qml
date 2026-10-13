@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls as QQC
 import QtQuick.Layouts
-import org.kde.kirigami as Kirigami
+import app.lane.ui as LaneUi
 
 QQC.ApplicationWindow {
     id: root
@@ -11,7 +11,7 @@ QQC.ApplicationWindow {
     width: 920
     height: 660
     visible: true
-    color: Kirigami.Theme.backgroundColor
+    color: root.palette.window
 
     function selectPage(index) {
         nav.currentIndex = index
@@ -24,7 +24,7 @@ QQC.ApplicationWindow {
         Rectangle {
             Layout.preferredWidth: 220
             Layout.fillHeight: true
-            color: Qt.rgba(Kirigami.Theme.alternateBackgroundColor.r, Kirigami.Theme.alternateBackgroundColor.g, Kirigami.Theme.alternateBackgroundColor.b, 0.55)
+            color: Qt.rgba(root.palette.alternateBase.r, root.palette.alternateBase.g, root.palette.alternateBase.b, 0.55)
 
             ColumnLayout {
                 anchors.fill: parent
@@ -33,8 +33,8 @@ QQC.ApplicationWindow {
 
                 RowLayout {
                     spacing: 10
-                    Kirigami.Icon {
-                        source: "app.lane.Lane"
+                    LaneUi.LaneIcon {
+                        iconName: "app.lane.Lane"
                         Layout.preferredWidth: 28
                         Layout.preferredHeight: 28
                     }
@@ -71,7 +71,7 @@ QQC.ApplicationWindow {
                         height: 36
                         radius: 8
                         color: ListView.isCurrentItem
-                               ? Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.22)
+                               ? Qt.rgba(root.palette.highlight.r, root.palette.highlight.g, root.palette.highlight.b, 0.22)
                                : "transparent"
 
                         Accessible.role: Accessible.ListItem
@@ -87,8 +87,8 @@ QQC.ApplicationWindow {
                             anchors.leftMargin: 8
                             anchors.rightMargin: 8
                             spacing: 8
-                            Kirigami.Icon {
-                                source: iconName
+                            LaneUi.LaneIcon {
+                                iconName: iconName
                                 Layout.preferredWidth: 16
                                 Layout.preferredHeight: 16
                             }
@@ -107,7 +107,7 @@ QQC.ApplicationWindow {
         Rectangle {
             width: 1
             Layout.fillHeight: true
-            color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.08)
+            color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.08)
         }
 
         StackLayout {
