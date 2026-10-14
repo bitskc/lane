@@ -96,7 +96,7 @@ QQC.ApplicationWindow {
                             QQC.Label {
                                 text: label
                                 font.pixelSize: 13
-                                font.weight: ListView.isCurrentItem ? Font.DemiBold : Font.Normal
+                                font.weight: navItem.ListView.isCurrentItem ? Font.DemiBold : Font.Normal
                                 Layout.fillWidth: true
                             }
                         }

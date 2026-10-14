@@ -13,10 +13,9 @@ ThemeIconProvider::ThemeIconProvider()
 
 QPixmap ThemeIconProvider::requestPixmap(const QString &id, QSize *size, const QSize &requestedSize)
 {
-    // id can carry query params from the URL (e.g. "name?size=22");
-    // QQuickImageProvider strips them, so id is just the icon name.
+    // LaneIcon supplies physical-pixel sourceSize, including display DPR.
     const int px = requestedSize.width() > 0 ? requestedSize.width() : 22;
-    const QString name = id;
+    const QString &name = id;
     QIcon icon;
     if (!name.isEmpty()) {
         icon = QIcon::fromTheme(name);
@@ -27,7 +26,7 @@ QPixmap ThemeIconProvider::requestPixmap(const QString &id, QSize *size, const Q
     if (icon.isNull()) {
         icon = QIcon::fromTheme(QStringLiteral("image-missing"));
     }
-    QPixmap pixmap = icon.pixmap(px * 2, px * 2); // 2x for HiDPI
+    QPixmap pixmap = icon.pixmap(px, px);
     if (size) {
         *size = pixmap.size();
     }

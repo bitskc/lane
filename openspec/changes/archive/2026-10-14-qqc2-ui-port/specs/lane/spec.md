@@ -11,7 +11,8 @@ The picker SHALL be a Wayland layer-shell overlay sized to the active screen, wi
 
 #### Scenario: Remember with Alt+A
 - **WHEN** the user presses Alt+A
-- **THEN** Lane remembers the destination for the current path scope and opens it
+- **THEN** Lane toggles Always for the current path scope
+- **AND** if Always is enabled when the user confirms a destination, Lane remembers that destination for the current path scope and opens it
 
 #### Scenario: Private window with Alt+P
 - **WHEN** the user highlights a browser destination and presses Alt+P

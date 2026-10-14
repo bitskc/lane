@@ -7,11 +7,11 @@ import QtQuick.Layouts
 // `status`/`statusMessage`, trailing `trailing`. Signals `accepted()`,
 // `editingFinished()`, `textEdited(text)`. Exposes the TextField as
 // `textField`.
-QQC.ItemDelegate {
+QQC.Control {
     id: root
 
-    checkable: false
-    property alias label: root.text
+    property string label: ""
+    property alias text: textField.text
     property string description: ""
     property var status: null
     property string statusMessage: ""
@@ -39,7 +39,7 @@ QQC.ItemDelegate {
     horizontalPadding: Theme.horizontalPadding
     verticalPadding: Theme.verticalPadding
 
-    onClicked: textField.forceActiveFocus()
+    focusPolicy: Qt.NoFocus
 
     contentItem: RowLayout {
         spacing: Theme.largeSpacing
@@ -47,6 +47,7 @@ QQC.ItemDelegate {
         ColumnLayout {
             spacing: 2
             Layout.fillWidth: true
+            TapHandler { onTapped: textField.forceActiveFocus() }
 
             QQC.Label {
                 text: root.label
@@ -76,6 +77,7 @@ QQC.ItemDelegate {
             id: textField
             Layout.preferredWidth: 260
             selectByMouse: true
+            Accessible.name: root.label
 
             onAccepted: root.accepted()
             onEditingFinished: root.editingFinished()

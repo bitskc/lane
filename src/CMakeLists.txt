@@ -56,6 +56,7 @@ if(LANE_KDE_DESKTOP)
         CLASS_NAME LaneUiPlugin
         PLUGIN_TARGET laneuiplugin
         QML_FILES ${laneui_SRCS}
+        OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/app/lane/ui
         RESOURCE_PREFIX /qt/qml
     )
     target_link_libraries(laneui PUBLIC Qt6::Quick Qt6::QuickControls2)
@@ -72,24 +73,15 @@ if(LANE_KDE_DESKTOP)
         app/SourceInfo.cpp
         app/UpdateChecker.cpp
         app/DefaultBrowserWatcher.cpp
-        app/Localization.h
         app/ThemeIconProvider.cpp
         app/ThemeIconProvider.h
     )
-    # SingleInstance/DBusActivation/CrashLog/platform_linux/ThemeIconProvider
-    # land as part of the same bare-qt6-port change in sibling slices; guard
-    # with EXISTS so this file configures standalone before they land, and
-    # so a fresh `cmake -S . -B build` picks each one up once it appears.
-    foreach(_lane_optional_src
+    list(APPEND lane_SRCS
         app/SingleInstance.cpp
         app/DBusActivation.cpp
         app/CrashLog.cpp
         app/platform/platform_linux.cpp
     )
-        if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${_lane_optional_src})
-            list(APPEND lane_SRCS ${_lane_optional_src})
-        endif()
-    endforeach()
 
     qt_add_executable(lane ${lane_SRCS})
     target_include_directories(lane PRIVATE ${CMAKE_BINARY_DIR})

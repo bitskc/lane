@@ -48,14 +48,10 @@ public:
 private Q_SLOTS:
     void onActionInvoked(uint id, const QString &actionKey)
     {
-        const auto it = m_pending.find(id);
-        if (it == m_pending.end()) {
-            return;
+        auto pending = m_pending.take(id);
+        if (pending.first == actionKey && pending.second) {
+            pending.second();
         }
-        if (it->first == actionKey && it->second) {
-            it->second();
-        }
-        m_pending.erase(it);
     }
 
     void onNotificationClosed(uint id, uint)

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as QQC
 import QtQuick.Layouts
+import QtQuick.Window
 
 // FormCardPage replacement: scrollable single-card column centered at
 // a max width. Keeps FormCardPage's two key behaviors: pages taller
@@ -28,27 +29,30 @@ QQC.Control {
         QQC.ScrollIndicator.vertical: QQC.ScrollIndicator {}
 
         function scrollFocusedIntoView() {
-            const focused = column.children.find(c => c.activeFocus);
-            if (!focused) {
-                return;
-            }
+            const window = root.Window.window;
+            const focused = window ? window.activeFocusItem : null;
+            if (!focused) return;
+            let ancestor = focused;
+            while (ancestor && ancestor !== column) ancestor = ancestor.parent;
+            if (ancestor !== column) return;
             const viewTop = internalFlickable.contentY;
             const viewBottom = viewTop + internalFlickable.height;
             const itemTop = focused.mapToItem(internalFlickable.contentItem, 0, 0).y;
-            const itemBottom = itemTop + focused.implicitHeight;
+            const itemBottom = itemTop + focused.height;
             if (itemTop < viewTop) {
-                internalFlickable.contentY = itemTop - Theme.largeSpacing;
+                internalFlickable.contentY = Math.max(0, itemTop - Theme.largeSpacing);
             } else if (itemBottom > viewBottom) {
-                internalFlickable.contentY = itemBottom - internalFlickable.height + Theme.largeSpacing;
+                internalFlickable.contentY = Math.min(Math.max(0, internalFlickable.contentHeight - internalFlickable.height),
+                                                     itemBottom - internalFlickable.height + Theme.largeSpacing);
             }
         }
 
         // Track focus movement across delegate children via the
         // root window's activeFocusItem replacement.
         Connections {
-            target: root.Window
+            target: root.Window.window
             function onActiveFocusItemChanged() {
-                internalFlickable.scrollFocusedIntoView();
+                Qt.callLater(internalFlickable.scrollFocusedIntoView);
             }
         }
 
@@ -57,7 +61,7 @@ QQC.Control {
 
             // One width, centered: capped at contentWidth, never wider
             // than the viewport minus a gutter on each side.
-            readonly property real usable: Math.min(root.contentWidth, internalFlickable.width - Theme.largeSpacing * 2)
+            readonly property real usable: Math.max(0, Math.min(root.contentWidth, internalFlickable.width - Theme.largeSpacing * 2))
             width: usable
             x: (internalFlickable.width - usable) / 2
             y: Theme.largeSpacing

@@ -57,6 +57,31 @@ version is 0, minor releases may still contain breaking changes.
   Qt Quick's own `enabled` member; renamed to `ruleEnabled` to silence
   the runtime warning and remove a possible crash trigger.
 
+- Browser drag handles now have a usable hit area. Slow animated drags
+  keep the correct row identity, and canceled drags restore the order.
+- Clicking a Settings switch now persists the change and keeps its
+  binding to the underlying preference or rule.
+- Rule and custom-app editors keep captions separate from typed text.
+  Editing rules and adding custom apps work again.
+- Nested fields scroll into view when focused.
+- Crash logging no longer takes Qt locks or formats paths inside a fatal
+  signal handler. Logs retain up to 200 recent lines, use private 0600
+  permissions, and support main-thread stack overflow via an alternate
+  signal stack. The unused Kirigami localization shim is removed.
+- Closing Settings leaves the daemon running. QML engines are destroyed
+  before their controller/models, avoiding shutdown binding errors.
+- Concurrent startup no longer replaces a live routing socket. Framed
+  IPC waits for acknowledgment and reports ambiguous delivery failures
+  instead of replaying a URL or silently losing it.
+- Default-browser registration and watchdog restoration change only
+  HTTP/HTTPS handlers. HTML, mail, PDF and other schemes stay with their
+  existing apps; takeover detection checks both web schemes.
+- Theme icons no longer apply display scaling twice.
+- The ECM tooling floor is separate from the optional WindowSystem API
+  floor, and Qt 6.8-only QML policy setup is guarded. CI also builds with
+  both optional KDE integrations disabled.
+
+
 ### Changed
 
 - Lane now strips common tracking parameters (`utm_*`, `fbclid`,
@@ -81,6 +106,26 @@ version is 0, minor releases may still contain breaking changes.
   list where a browser can be dragged above a container or a web app
   below a custom app. Private windows stay in their own section since
   the picker never shows them.
+
+- Lane's application layer no longer links KDE Frameworks (KF6): single
+  instance, D-Bus activation, tray, and crash logging now run on stock
+  Qt6 (`QLocalServer`, a hand-rolled `org.freedesktop.Application` D-Bus
+  adaptor, `QSystemTrayIcon`, and an async-signal-safe crash logger)
+  instead of `KDBusService`/`KStatusNotifierItem`/`KCrash`. The UI no
+  longer loads Kirigami or kirigami-addons FormCard at runtime — it's
+  Qt Quick Controls 2 in the Fusion style; on Plasma, KDE's
+  platformtheme plugin still supplies native-ish colors and fonts with
+  zero `org.kde` QML imports. Trade-offs: the tray icon has no KDE
+  "Passive" auto-hide state anymore (it's always visible), and the
+  crash dialog is now a log file under the app-data directory instead
+  of KDE's crash reporter; there is no About dialog since Overview's
+  Information card already showed version and license. Build:
+  `extra-cmake-modules` is still required (KDE install-path
+  conventions, not KF6 itself); no KF6 development package is required
+  except optionally `kwindowsystem` (Wayland activation-token handoff).
+  The packaged build now declares `kwindowsystem` and `plasma-activities`
+  as real runtime dependencies (not just optional/build-time), since
+  Lane links and uses both when present.
 
 ### Fixed
 

@@ -5,16 +5,15 @@ namespace Lane
 namespace CrashLog
 {
 
-// Installs a Qt message handler that mirrors every log message to stderr
-// (same as the default handler) and also keeps the last ~200 lines in a
-// ring buffer, plus a std::terminate handler and fatal-signal handlers
-// (SIGSEGV/SIGABRT/SIGBUS/SIGILL/SIGFPE) that flush that ring buffer to
-// QStandardPaths::AppDataLocation/crash-<epoch>.log on an unhandled
-// exception or fatal signal, replacing KCrash::initialize(). Signal
-// handlers restore the default disposition and re-raise afterward, so a
-// core dump (if enabled) is never suppressed.
-//
-// Call once, first thing in main(), before constructing anything else.
+// Mirrors Qt messages to stderr and retains the last 200 lines, capped
+// at 2048 UTF-8 bytes per line. Fatal handlers read only published,
+// lock-free bytes and use POSIX I/O, even if a signal interrupts logging.
+// Logs are AppDataLocation/crash-<epoch>-<pid>.log, mode 0600.
+// The default signal disposition is restored before re-raising, so core
+// dumps are not suppressed.
+// In-flight lines may be omitted. The installing thread has an alternate
+// signal stack, so its stack-overflow faults can still write the log.
+// Call once after setting the application's name/organization metadata.
 void install();
 
 } // namespace CrashLog

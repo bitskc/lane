@@ -40,7 +40,7 @@ Style verdict (verified by probe + package contents): `qqc2-desktop-style` impor
 
 ### 2. Icons: `image://laneicon/` C++ provider
 
-`QQuickImageProvider` in `src/app/ThemeIconProvider.*`: `image://laneicon/<name>?size=N` → `QIcon::fromTheme(name).pixmap(N)`, fallback `application-x-executable`/`image-missing`. Registered on each engine in `Controller::ensureEngine` (3 engines: picker, hold, settings). `IconImage` rejected (private `QtQuick.Controls.impl` API). Icon recoloring (one site) handled by rendering the pixmap tinted server-side via `QIcon::pixmap` mode or a `color` query param if needed — else MultiEffect recolor.
+`QQuickImageProvider` resolves `image://laneicon/<name>` using `QIcon::fromTheme`, falling back to `application-x-executable`/`image-missing`. QML supplies physical-pixel `sourceSize` including DPR; the provider renders that size once. Each engine registers the provider. Private Qt Quick Controls implementation types and recoloring abstractions are not needed.
 
 ### 3. Style: Fusion conf, kill setStyle
 
@@ -50,13 +50,13 @@ Style verdict (verified by probe + package contents): `qqc2-desktop-style` impor
 
 ### 4. Keyboard-model parity checklist (the part with no test coverage)
 
-Picker must preserve, verbatim: digits 1-8 inside the `TextField`'s `Keys.onPressed` (focused field claims them before `Shortcut`s), `,`/`.` destination narrowing, `Esc` clears non-empty filter before cancelling, `Alt+A` remember, `Alt+P` private, `Alt+E` email, `Ctrl+C` copy, `Alt+S`/`Alt+R` zero-target recovery with the exact spec'd strings ("No browsers discovered…"), `maxRows: 8`.
+Preserve digits 1-8 in the focused filter field, comma/period scope narrowing, Esc-clear-then-cancel, Alt+A toggling Always (persisted when a destination is confirmed), Alt+P private launch, Alt+E email, Ctrl+C copy and Alt+S/Alt+R zero-target recovery. Keep maxRows 8. The actual-app probe exercises filter cancellation and Enter/hold behavior on a private Wayland compositor; registered control tests cover drag and preference events.
 
 ## Risks / Trade-offs
 
 - **Fusion≠Breeze look** — accepted; screenshot pass compares against `docs/screenshots/*.png`; user review gate.
 - **DragHandle reimplementation** — invariants pinned in design + manual checklist; model-side already tested.
-- **Icon provider pixmap scaling** — render at 2x for HiDPI (`size` * `devicePixelRatio`); verify in screenshot pass.
+- Icon scaling applies DPR exactly once through QML sourceSize; theme lookup and fallback were verified on Qt 6.11.2.
 - Semantic colors are approximations (Breeze green/red/orange) — flag to user if off-brand; no functional risk.
 
 ## Migration Plan

@@ -76,6 +76,7 @@ class Controller : public QObject
     Q_PROPERTY(QVariantList availableActivities READ availableActivities NOTIFY activitiesChanged)
 public:
     explicit Controller(QObject *parent = nullptr);
+    ~Controller() override;
 
     PickerModel *pickerModel() const { return m_pickerModel; }
     TargetModel *targetModel() const { return m_targetModel; }
@@ -254,9 +255,9 @@ private:
     // Cleared on every showPicker() and whenever the QML picker list
     // selection moves to a different target.
     QString m_pickerNotice;
-    // Cached result of the last xdg-settings default-browser check (see
+    // Cached result of the last HTTP/HTTPS handler check (see
     // refreshDefaultBrowserState()); isDefaultBrowser() only reads this,
-    // it never spawns xdg-settings itself.
+    // it never spawns xdg-mime itself.
     bool m_isDefaultBrowser = false;
     // Watches mimeapps.list for a browser update or app that grabs the
     // http/https handler; owned by the takeover alert it can raise.

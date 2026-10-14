@@ -15,7 +15,7 @@ The routing brain (`src/core/`) is already pure Qt6 and proven portable: it buil
 - **Metadata**: `KAboutData` + `KLocalizedString` → `QCoreApplication` setters (already present) + `tr()`. No About page — Overview already shows version + PolyForm notice.
 - **Activation token**: `KWaylandExtras` → `KF6::WindowSystem` as an **optional** link (`HAVE_KWAYLANDEXTRAS`); absent → immediate empty token (300ms fallback path already exists).
 - **Platform seam**: `src/app/platform/` — `Platform` interface (notify, autostart, `requestActivationToken` async producer) + `platform_linux.cpp`.
-- **Build**: all KF6 link entries removed except optional WindowSystem; dead links (`ConfigCore`, `IconThemes`, `ColorScheme`) confirmed zero-call-site; `notifyrc` file deleted; CI/packaging/docs dependency lists shrink — CI becomes the KF6-free proof.
+- **Build**: optional WindowSystem is the only remaining KF6 link; unused frameworks and notifyrc are removed. ECM remains tooling. CI also builds with both optional KDE integrations disabled to verify the minimal dependency contract.
 
 ## Capabilities
 

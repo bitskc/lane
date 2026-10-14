@@ -2,7 +2,6 @@
 
 #include "Autostart.h"
 #include "SourceInfo.h"
-#include "Localization.h"
 #include "ThemeIconProvider.h"
 #include "core/config.h"
 #include "core/destination.h"
@@ -103,6 +102,18 @@ Controller::Controller(QObject *parent)
     connect(m_defaultWatcher, &DefaultBrowserWatcher::mimeappsChanged,
             this, &Controller::onMimeappsChanged);
     m_defaultWatcher->setEnabled(m_config.watchdogEnabled);
+}
+
+Controller::~Controller()
+{
+    // Engines must die while their context object and models are still
+    // valid, not after QObject has nulled the controller in QML bindings.
+    delete m_pickerEngine;
+    delete m_settingsEngine;
+    delete m_holdEngine;
+    QMenu *menu = m_tray->contextMenu();
+    m_tray->setContextMenu(nullptr);
+    delete menu;
 }
 
 QString Controller::activityNameFor(const QString &id) const
@@ -235,15 +246,20 @@ bool Controller::isDefaultBrowser() const
 
 void Controller::refreshDefaultBrowserState()
 {
-    // Spawning xdg-settings is a real process launch; cache the result
-    // instead of re-running it on every isDefaultBrowser property read
-    // (QML binds this and reads it far more often than the default
-    // browser can actually change). Re-checked only here: after reload()
-    // and right after makeDefaultBrowser() asks the desktop to change it.
-    QProcess p;
-    p.start(QStringLiteral("xdg-settings"), {QStringLiteral("get"), QStringLiteral("default-web-browser")});
-    p.waitForFinished(1500);
-    m_isDefaultBrowser = QString::fromUtf8(p.readAllStandardOutput()).trimmed() == QLatin1String("app.lane.Lane.desktop");
+    // The scheme handlers are authoritative for this URL-only router.
+    // A desktop's broader "default browser" setting may also own HTML
+    // files, about: or unknown: URLs, which Lane must not take over.
+    m_isDefaultBrowser = true;
+    for (const QString &scheme : {QStringLiteral("http"), QStringLiteral("https")}) {
+        QProcess process;
+        process.start(QStringLiteral("xdg-mime"),
+                      {QStringLiteral("query"), QStringLiteral("default"), QStringLiteral("x-scheme-handler/") + scheme});
+        if (!process.waitForFinished(1500) || process.exitCode() != 0
+            || QString::fromUtf8(process.readAllStandardOutput()).trimmed() != QLatin1String("app.lane.Lane.desktop")) {
+            m_isDefaultBrowser = false;
+            break;
+        }
+    }
 }
 
 void Controller::onMimeappsChanged()
@@ -692,8 +708,6 @@ void Controller::makeDefaultBrowser()
                       {QStringLiteral("default"), QStringLiteral("app.lane.Lane.desktop"), QStringLiteral("x-scheme-handler/http")});
     QProcess::execute(QStringLiteral("xdg-mime"),
                       {QStringLiteral("default"), QStringLiteral("app.lane.Lane.desktop"), QStringLiteral("x-scheme-handler/https")});
-    QProcess::execute(QStringLiteral("xdg-settings"),
-                      {QStringLiteral("set"), QStringLiteral("default-web-browser"), QStringLiteral("app.lane.Lane.desktop")});
     refreshDefaultBrowserState();
     Q_EMIT defaultBrowserChanged();
 }
@@ -1085,9 +1099,6 @@ QWindow *Controller::ensureEngine(QQmlApplicationEngine *&engine, const QString 
         }
     });
     engine->rootContext()->setContextProperty(QStringLiteral("controller"), this);
-    // Kirigami/kirigami-addons resolve i18n* on the context object;
-    // KLocalizedContext used to supply it before the de-KF6 port.
-    engine->rootContext()->setContextObject(new I18nContext(engine));
     // Theme icons without Kirigami.Icon.
     engine->addImageProvider(QStringLiteral("laneicon"), new ThemeIconProvider());
     engine->loadFromModule(module, name);

@@ -1,133 +1,126 @@
 import QtQuick
 
-// DragHandle: reorder handle for ListView delegates, replacing
-// Kirigami.ListItemDragHandle. Honors the two invariants from the
-// Kirigami version:
-//   1. Disabled while the list is filtering (collapsed rows make
-//      index math wrong).
-//   2. dragId is captured before the first model move so a drop after
-//      intermediate moves still targets the right row.
-//
-// Release dispatches controller.moveTarget(dragId, targetIndex).
+// Rows must have unique targetId roles. The owner captures that id in
+// onDragStarted; model indices and pointer coordinates never depend on
+// the animated positions of displaced delegates.
 Item {
     id: root
 
+    implicitWidth: 24
+    implicitHeight: 32
+
     property Flickable flickable
-    property Item listItem
-
-    // The ListView/owner whose dragId the page maintains in its own
-    // scope (where the attached model IS visible). The handle cannot
-    // read model roles itself, so it pulls the id from here on drop.
-    property var ownerList: null
-
-    // Captured once on press so model moves don't retarget mid-drag.
+    required property Item listItem
+    required property ListView ownerList
     property string dragId: ""
-    // Drag in progress; the delegate's height stays intact while this
-    // is true even if the row would otherwise collapse.
     property bool dragActive: false
-
-    // Model index of the row we're hovering (updated during drag).
     property int targetIndex: -1
 
     signal dragStarted()
     signal dragFinished(string id, int index)
 
-    // Deferred move so the first drag step doesn't retarget dragId.
-    onDragActiveChanged: {
-        if (dragActive) {
-            dragStarted();
+    function updateDestination() {
+        const point = ownerList.contentItem.mapFromItem(null, mouse.sceneX, mouse.sceneY)
+        const rowHeight = listItem.height + ownerList.spacing
+        const destination = Math.max(0, Math.min(ownerList.count - 1,
+                                                Math.round((point.y - mouse.pointerOffset) / rowHeight)))
+        if (destination !== mouse.currentIndex) {
+            ownerList.model.move(mouse.currentIndex, destination, 1)
+            mouse.currentIndex = destination
         }
+        targetIndex = destination
     }
 
     MouseArea {
         id: mouse
-
         anchors.fill: parent
-        cursorShape: Qt.OpenHandCursor
+        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        preventStealing: true
 
-        property real pressY: 0
-        property real startY: 0
-        property int startIndex: -1
+        property real sceneX: 0
+        property real sceneY: 0
+        property real pointerOffset: 0
+        property int initialIndex: -1
+        property int currentIndex: -1
 
-        onPressed: function (mouse) {
-            pressY = mouse.y;
-            startY = listItem.mapToItem(ownerList.contentItem, 0, 0).y;
-            const rowHeight = listItem.height + ownerList.spacing;
-            startIndex = Math.max(0, Math.min(ownerList.count - 1, Math.round(startY / rowHeight)));
-            targetIndex = startIndex;
-            dragActive = true;
-        }
-
-        onPositionChanged: function (mouse) {
-            if (!dragActive) {
-                return;
-            }
-            const offset = mouse.y - pressY;
-            const newRowY = startY + offset;
-            const rowHeight = listItem.height + ownerList.spacing;
-            const newIndex = Math.max(0, Math.min(ownerList.count - 1, Math.round(newRowY / rowHeight)));
-            targetIndex = newIndex;
-
-            if (newIndex !== startIndex) {
-                // Visual move now, persisted order on drop (dragFinished).
-                // moveRow never existed here; ListModel.move is the method.
-                ownerList.model.move(startIndex, newIndex, 1);
-                startIndex = newIndex;
-                startY = listItem.mapToItem(ownerList.contentItem, 0, 0).y;
-            }
-
-            // Edge auto-scroll.
-            if (flickable) {
-                const edge = 40;
-                const mouseYIn = flickable.mapFromItem(root, 0, 0).y;
-                if (mouseYIn < edge && flickable.contentY > 0) {
-                    flickable.contentY -= 6;
-                } else if (mouseYIn > flickable.height - edge && flickable.contentY < flickable.contentHeight - flickable.height) {
-                    flickable.contentY += 6;
+        onPressed: function (event) {
+            root.dragStarted()
+            root.dragId = root.ownerList.dragId
+            for (let i = 0; i < root.ownerList.count; ++i) {
+                if (root.ownerList.model.get(i).targetId === root.dragId) {
+                    initialIndex = i
+                    currentIndex = i
+                    break
                 }
             }
+            root.targetIndex = currentIndex
+            const scene = mapToItem(null, event.x, event.y)
+            sceneX = scene.x
+            sceneY = scene.y
+            const point = root.ownerList.contentItem.mapFromItem(null, sceneX, sceneY)
+            pointerOffset = point.y - initialIndex * (root.listItem.height + root.ownerList.spacing)
+            root.dragActive = currentIndex >= 0
+        }
+
+        onPositionChanged: function (event) {
+            if (!root.dragActive) return
+            const scene = mapToItem(null, event.x, event.y)
+            sceneX = scene.x
+            sceneY = scene.y
+            root.updateDestination()
         }
 
         onReleased: {
-            dragActive = false;
-            // The page captures the id in its own scope (onDragStarted
-            // reads model.targetId) and hands it to the view via
-            // ownerList.dragId; the handle's scope has no model roles.
-            if (!dragId && ownerList) {
-                dragId = ownerList.dragId;
-            }
-            if (dragId !== "" && targetIndex >= 0) {
-                root.dragFinished(dragId, targetIndex);
-            }
-            dragId = "";
-            targetIndex = -1;
-            startIndex = -1;
+            root.dragActive = false
+            if (root.targetIndex !== initialIndex && root.dragId !== "")
+                root.dragFinished(root.dragId, root.targetIndex)
+            root.ownerList.dragId = ""
+            root.dragId = ""
+            root.targetIndex = -1
+            initialIndex = -1
+            currentIndex = -1
         }
 
         onCanceled: {
-            dragActive = false;
-            dragId = "";
-            targetIndex = -1;
-            startIndex = -1;
-            if (ownerList) {
-                ownerList.dragId = "";
+            root.dragActive = false
+            if (currentIndex >= 0 && currentIndex !== initialIndex)
+                root.ownerList.model.move(currentIndex, initialIndex, 1)
+            root.ownerList.dragId = ""
+            root.dragId = ""
+            root.targetIndex = -1
+            initialIndex = -1
+            currentIndex = -1
+        }
+    }
+
+    Timer {
+        interval: 16
+        repeat: true
+        running: root.dragActive && root.flickable !== null
+        onTriggered: {
+            const view = root.flickable
+            const point = view.mapFromItem(null, mouse.sceneX, mouse.sceneY)
+            const maximum = Math.max(0, view.contentHeight - view.height)
+            const step = point.y < 40 ? -6 : point.y > view.height - 40 ? 6 : 0
+            const next = Math.max(0, Math.min(maximum, view.contentY + step))
+            if (next !== view.contentY) {
+                view.contentY = next
+                root.updateDestination()
             }
         }
     }
 
-    // Visual affordance: vertical grip dots.
     Column {
         anchors.centerIn: parent
         spacing: 2
-        opacity: 0.5
-
+        opacity: root.enabled ? 0.5 : 0.25
         Repeater {
             model: 3
             Rectangle {
                 width: 14
                 height: 2
                 radius: 1
-                color: root.palette != undefined ? root.palette.placeholderText : "#888"
+                color: root.listItem.palette.placeholderText
             }
         }
     }

@@ -48,7 +48,7 @@ Lane's self-raise sites (Controller.cpp:684, 999, 1194) are already plain `reque
 
 **Uniqueness & failure contract** (resolves the two-tokens split-brain):
 1. `QLocalServer` on a filesystem socket under `$XDG_RUNTIME_DIR/lane-instance.sock` (falls back to `QStandardPaths::RuntimeLocation`), `setSocketOptions(QLocalServer::UserAccessOption)` — no `/tmp`, no other-UID access.
-2. If `listen()` fails with `AddressInUseError`: attempt `QLocalSocket` connect. Connect succeeds → forward payload `{args, workingDir, activationToken}` (JSON; `activationToken` = `qEnvironmentVariable("XDG_ACTIVATION_TOKEN")` of the client) and exit 0. Connect fails → stale socket from a crashed daemon: `QLocalServer::removeServer`, retry `listen()` once. Still fails → hard error, exit nonzero.
+2. Probe by connect before binding, then take a `QLockFile` and re-probe before removing an absent/stale socket. Release the lock after connection or bind, never during acknowledgment waits. Forward a newline-terminated JSON `{args, workingDir, activationToken}` frame; exact `ok` means accepted. Refused/not-found endpoints permit recovery; ambiguous connection or delivery failures exit nonzero without replay or takeover.
 3. Then register D-Bus name `app.lane.Lane`. Registration failure in daemon/activation mode is fatal (same semantic as `KDBusService::Unique`, and it is the systemd readiness signal). CLI modes that never daemonize (`--list`, `--explain`, `--config-path`) skip all of this exactly as today.
 
 **D-Bus adaptor**: a `QDBusAbstractAdaptor` registered on `/app/lane/Lane` **and** `/MainApplication` (parity with KDBusService's live export — verified via qdbus6), exposing `org.freedesktop.Application` (`Activate`, `Open`, `ActivateAction`) and `org.kde.KDBusService.CommandLine`. Each handler reads `platform_data["activation-token"]`/`["desktop-startup-id"]` and sets `XDG_ACTIVATION_TOKEN` in the process env for the duration of the `handleArgs`/`openUrl` dispatch, unsetting after — mirroring KDBusService's documented behavior (Controller.cpp:493-504 depends on it).
@@ -63,7 +63,7 @@ Lane's self-raise sites (Controller.cpp:684, 999, 1194) are already plain `reque
 
 ### 5. Crash log: message handler + terminate + fatal signals
 
-`qInstallMessageHandler` ring buffer (~200 lines) mirrored to stderr; `std::set_terminate` flushes to `QStandardPaths::AppDataLocation/crash-<epoch>.log`. Also `signal()` handlers for SIGSEGV/SIGABRT/SIGBUS/SIGILL/SIGFPE: write best-effort, restore default, re-raise (no core suppression). Log content inherits whatever was logged — same as stderr today.
+The Qt message handler mirrors stderr and publishes 200 lock-free lines capped at 2048 bytes each. `std::terminate` and `sigaction` fatal handlers write `AppDataLocation/crash-<epoch>-<pid>.log` using POSIX-only I/O with mode 0600. A 64 KiB alternate signal stack supports main-thread stack overflow. Interrupted/unpublished lines may be omitted. Resolve the directory after application metadata; restore default signal disposition and preserve synchronous fault context.
 
 ### 6. Metadata: QCoreApplication only
 
@@ -75,13 +75,13 @@ The token exists only on Wayland and only preserves the focus-handoff nicety (30
 
 ### 8. Build changes
 
-`src/CMakeLists.txt`: drop `KF6::I18n/CoreAddons/ConfigCore/DBusAddons/Notifications/IconThemes/ColorScheme/StatusNotifierItem/Crash`; conditionally `KF6::WindowSystem` + `HAVE_KWAYLANDEXTRAS`; add `platform/platform_linux.cpp`, `app/SingleInstance.cpp`, `app/CrashLog.cpp` under `LANE_KDE_DESKTOP`; drop `data/app.lane.Lane.notifyrc` install + file. `CMakeLists.txt`: `find_package(KF6)` replaced by per-module finds (WindowSystem QUIET). Delete `#include <KCrash>` in Controller.cpp. CI: shrink pacman list to qt6 + layershellqt (+ kwindowsystem) — the CI build itself becomes the KF6-free check. Docs: PKGBUILD deps, CONTRIBUTING, CLAUDE.md, README build section all updated.
+The app links Qt6/LayerShellQt and optional WindowSystem/Plasma Activities. ECM remains build-time tooling at a separate 6.0 floor; WindowSystem's optional activation API needs 6.19. Sources are explicit, not optional existence guards. CI builds both the normal app and a minimal configuration with both integrations disabled. Package recipes that enable the integrations declare their runtime libraries. Kirigami QML and the unused localization shim are removed by the UI cutover.
 
 ## Risks / Trade-offs
 
 - `DBusActivatable` regression → task pins both object paths and both interfaces; verification includes `qdbus6` introspection AND `gtk-launch` + a real click end-to-end (this exact path broke once before).
 - Wayland token without WindowSystem → degraded to no-token; documented in spec.
-- Plasma notification action rendering of hand-built Notify → UNVERIFIABLE from repo; live-test on Plasma in verification sweep.
+- Notification actions are verified through the native D-Bus protocol in a private sandbox; popup painting by Plasma is not claimed. The real watchdog callback and HTTP/HTTPS-only restoration were exercised with actual xdg utilities, without changing the user's handlers.
 - `QSystemTrayIcon` Passive-status loss → documented spec acceptance.
 - QLocalSocket payload injection by same-UID processes → same trust boundary as session D-Bus today; accepted.
 

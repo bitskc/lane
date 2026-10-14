@@ -42,7 +42,7 @@ Lane SHALL route in order: explicit rules, path-scoped remembered destination, u
 - **THEN** Lane opens `github.com/bitskc/*` there, and other `github.com` paths still ask
 
 ### Requirement: Hold HUD on silent opens
-Silent opens (remembered, PWA, default) SHALL show a hold HUD for `holdMs` unless `holdAutoOpen` is off.
+Silent opens (remembered, PWA, default) SHALL show a hold HUD for `holdMs` unless `holdAutoOpen` is off, rendered with Qt Quick Controls.
 
 #### Scenario: Hold cancels
 - **WHEN** a silent open is held and the user presses Esc or Space
@@ -53,7 +53,7 @@ Silent opens (remembered, PWA, default) SHALL show a hold HUD for `holdMs` unles
 - **THEN** Lane opens immediately with no hold HUD
 
 ### Requirement: Picker overlay
-The picker SHALL be a Wayland layer-shell overlay sized to the active screen, with exclusive keyboard and a 440px card. Type SHALL filter; 1-8 SHALL pick when the filter is empty; Enter, Esc, Alt+A, and Alt+P SHALL confirm, cancel, remember, and open in a private window.
+The picker SHALL be a Wayland layer-shell overlay sized to the active screen, with exclusive keyboard and a 440px card. Type SHALL filter; 1-8 SHALL pick when the filter is empty; Enter, Esc, Alt+A, and Alt+P SHALL confirm, cancel, remember, and open in a private window. The overlay SHALL render using Qt Quick Controls with no Kirigami runtime dependency.
 
 #### Scenario: Number pick
 - **WHEN** the filter is empty and the user presses 1 through 8
@@ -61,13 +61,16 @@ The picker SHALL be a Wayland layer-shell overlay sized to the active screen, wi
 
 #### Scenario: Remember with Alt+A
 - **WHEN** the user presses Alt+A
-- **THEN** Lane remembers the destination for the current path scope and opens it
+- **THEN** Lane toggles Always for the current path scope
+- **AND** if Always is enabled when the user confirms a destination, Lane remembers that destination for the current path scope and opens it
 
 #### Scenario: Private window with Alt+P
 - **WHEN** the user highlights a browser destination and presses Alt+P
 - **THEN** Lane resolves the destination's private counterpart and launches it immediately without saving to remembered destinations
 
----
+#### Scenario: Wayland exclusive input
+- **WHEN** the picker shows on a Wayland compositor with layer-shell
+- **THEN** it takes exclusive keyboard focus and dismisses on Esc
 
 ### Requirement: Private profiles stay out of the picker
 Private/incognito/Tor profiles SHALL stay available to rules but SHALL NOT clutter the picker.
@@ -244,3 +247,50 @@ When the picker overlay contains zero selectable destinations, it SHALL present 
 - **WHEN** target discovery finds zero valid browser targets on the host
 - **THEN** the picker displays "No browsers discovered — press Alt+S for Settings or Alt+R to Rediscover"
 - **AND** pressing `Alt+S` opens the Settings window
+
+### Requirement: System tray presence
+Lane SHALL show a tray icon on platforms with a status-icon mechanism; activating it SHALL open the Settings window, and its context menu SHALL offer Settings and Rediscover browsers. The tray SHALL NOT offer Quit (the resident daemon owns link routing).
+
+#### Scenario: Tray activation
+- **WHEN** the user clicks Lane's tray icon
+- **THEN** the Settings window opens or raises
+
+#### Scenario: Tray menu
+- **WHEN** the user opens the tray context menu
+- **THEN** it offers "Settings" and "Rediscover browsers" and no Quit entry
+
+### Requirement: Application metadata
+Lane SHALL set its application name, version, organization, and desktop-file identity directly on the application object without KDE metadata classes. The displayed version SHALL equal the CMake project version and the Overview page SHALL continue to show the PolyForm Noncommercial license notice.
+
+#### Scenario: Version string
+- **WHEN** the user runs `lane --version` or reads the Overview page
+- **THEN** the displayed version equals the CMake project version
+
+### Requirement: Crash log
+Lane SHALL NOT depend on KDE's crash dialog. On fatal failure it SHALL write a crash log containing the terminating reason and recent log output to a file in the application data directory.
+
+#### Scenario: Fatal log
+- **WHEN** Lane aborts or hits an unhandled exception
+- **THEN** a timestamped crash log exists under the application data directory
+
+### Requirement: Settings window
+The settings window SHALL present the same page model (Overview, Browsers & apps, Rules, Preferences) implemented with Qt Quick Controls and grouped card delegates inside scrollable pages, without Kirigami or kirigami-addons at runtime.
+
+#### Scenario: Drag reorder persists
+- **WHEN** the user drags a browser row to a new position in Browsers & apps while not filtering
+- **THEN** `targetOrder` updates in config.json and the picker order follows
+
+#### Scenario: Private windows are not orderable
+- **WHEN** the Private windows section is shown in Browsers & apps
+- **THEN** its rows show no drag handle and cannot be reordered
+
+### Requirement: Platform styling without KDE QML runtime
+The UI SHALL use the Fusion Qt Quick Controls style for its widgets and SHALL take its colors, fonts, and icons from the platform theme; it SHALL NOT require any KDE QML module at runtime.
+
+#### Scenario: Plasma appearance
+- **WHEN** Lane runs on Plasma with the KDE platformtheme plugin
+- **THEN** controls render in Fusion with the user's Plasma colors and fonts
+
+#### Scenario: No KDE modules loaded
+- **WHEN** Lane runs on any host without Kirigami installed
+- **THEN** the UI renders fully usable with zero `org.kde` imports resolved at runtime

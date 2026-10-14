@@ -18,17 +18,14 @@ Lane's routing brain is already portable. `src/core/` is pure Qt —
 URL safety, rule matching, pipeline, router, destination ladder,
 launcher argv safety, config JSON, unshorten — with zero OS calls.
 
-The C++ KF6 surface is shallow: five `KNotification` calls, one
-`KStatusNotifierItem`, `KDBusService`, `KAboutData`, `KCrash`,
-`KWindowSystem`/`KWaylandExtras` for activation, `KLocalizedString`.
-Every one has a Qt6 replacement (table below).
+Before the port, the C++ app used KNotification, KStatusNotifierItem,
+KDBusService, KAboutData, KCrash and KLocalizedString. Those calls are
+now replaced; only optional WindowSystem activation-token support
+remains. The mapping below records that cutover.
 
-The one genuinely large piece is the QML. `src/qml/` is built on
-Kirigami + kirigami-addons FormCard: ~80 FormCard delegates across 4
-settings pages, `Kirigami.Theme` at 63 sites, `Kirigami.Units` at 22,
-`Kirigami.ShadowedRectangle`, `Kirigami.Icon`, and
-`Kirigami.ListItemDragHandle` for the Targets page drag-reorder. Bare
-Qt6 means a real UI port to Qt Quick Controls — not a find/replace.
+The QML port is also complete: local Qt Quick Controls delegates replace
+Kirigami and FormCard across Settings, picker and hold. Fusion controls
+inherit the platform palette, fonts and icons without KDE QML imports.
 
 ## Decision: bare Qt6, and why
 
@@ -42,9 +39,9 @@ Bare Qt6 wins on results, not effort:
 
 - One dependency tree: stock Qt6 + Qt6 declarative, installable via
   windeployqt or a static build. No Craft, no ECM in the shipped path.
-- Porting the UI to Qt Quick Controls once gives **one QML codebase for
-  both platforms** — on Plasma, `qqc2-desktop-style` renders it native
-  anyway, so Linux loses almost nothing visually.
+- One Qt Quick Controls codebase serves the future platforms. Linux uses
+  Fusion with the platform palette/fonts/icons; Breeze widget styling is
+  intentionally not retained because it reintroduces Kirigami.
 - Every KF6 replacement below is either a stock Qt class or a thin
   D-Bus call we already depend on.
 
@@ -56,7 +53,7 @@ Bare Qt6 wins on results, not effort:
 | `KStatusNotifierItem` (tray) | `QSystemTrayIcon` | SNI has more features (context menu via D-Bus); current use is a passive icon + activate → settings, which QSystemTrayIcon covers on both OSes |
 | `KNotification` (5 sites) | Linux: `org.freedesktop.Notifications` via `QDBus` (actions supported — the "restore" button survives); Windows: `QSystemTrayIcon::showMessage` or WinRT toast | WinRT toast with an action button is ~100 lines of WinRT/COM; acceptable fallback is a settings-page banner |
 | `KCrash` | Drop, or `QMessageLogContext` + `std::set_terminate` writing a crash log | KCrash's value is the KDE crash dialog; a log file is enough for a single-binary app |
-| `KAboutData` | `QCoreApplication` metadata + a hand-rolled About page | The current About is already custom-license; a QML About card is ~40 lines |
+| `KAboutData` | `QCoreApplication` metadata (name/version/org/desktop-file) | No About page was built: Overview's Information card already showed version + the PolyForm notice, and `KAboutData`'s license text was never rendered by any UI, so the "hand-rolled About page" originally planned here was dropped as unneeded (see bare-qt6-port design.md Decision 6 / tasks.md §6) |
 | `KLocalizedString` / `i18n` | `qsTr()`/`QTranslator` | QML already avoids `i18n()` (0 hits); C++ has ~1 call site |
 | `KWindowSystem`/`KWaylandExtras` (activation token) | Linux: keep `KWindowSystem` optional via `#ifdef`, or accept `requestActivate()` on X11 path; Windows: `SetForegroundWindow` rules allow it from a foreground process | Activation polish, not correctness |
 | `KIconThemes`/`KColorScheme` | `QIcon::fromTheme` (Qt honors Freedesktop icon themes on Linux), `QPalette` | Already partially used |
@@ -71,8 +68,8 @@ WindowStaysOnTopHint`.
 
 | Seam | Linux today | Windows equivalent | Effort |
 |---|---|---|---|
-| Single instance + URL relay | KDBusService / D-Bus | `QLocalServer`/`QLocalSocket` at `main()` | Medium |
-| Default browser set/get | `xdg-settings` / `xdg-mime` | Registry reads + `ms-settings:defaultapps` user step | Medium + UX gap |
+| Single instance + URL relay | QLocalServer + D-Bus activation | `QLocalServer`/`QLocalSocket` at `main()` | Medium |
+| Default HTTP/HTTPS handlers | `xdg-mime` scheme queries/registration | Registry reads + `ms-settings:defaultapps` user step | Medium + UX gap |
 | Browser discovery front end | `.desktop` / `mimeapps.list` parsing | `HKLM/HKCU\...\Clients\StartMenuInternet` + `shell\open\command` | Large |
 | Overlay windowing | LayerShellQt (Wayland) | Plain `Qt::FramelessWindowHint \| Qt::WindowStaysOnTopHint` (existing X11 fallback already correct) | Small |
 | Autostart | XDG autostart `.desktop` | `HKCU\...\Run\Lane` value or Startup-folder `.lnk` | Small |
@@ -188,14 +185,33 @@ One QML codebase on Qt Quick Controls, shared by both platforms:
    **Done 2026-10-13.** Exceptions: `KF6::WindowSystem` kept as an
    optional link for `KWaylandExtras::xdgActivationToken` (absent →
    empty token, documented in the spec); `Plasma::Activities` stays
-   Linux-only; `libKF6*` can still appear in `/proc/PID/maps` at
-   runtime because the `org.kde.desktop` QQC2 style and Kirigami load
-   KF6 transitively — the link-time surface is one lib until
-   milestone 2.
-2. **UI port to Qt Quick Controls** — build the `ui/` delegate module,
-   migrate the 7 QML files, screenshot-compare settings/picker/hold
-   against current Kirigami renders, keep Plasma look via
-   `qqc2-desktop-style` if it holds up.
+   Linux-only. ELF links at most one KF6 library; the minimal build
+   links none. The platformtheme can load other Frameworks at runtime,
+   but Settings and overlays load zero Kirigami mappings after milestone
+   2. **Fixed and verified 2026-10-13:** `CrashLog`'s
+   fatal-signal handler used to lock a `QMutex` around the ring buffer
+   and call `std::snprintf` to format the crash path — neither is
+   async-signal-safe (the log directory was already resolved once at
+   `install()` time, outside the signal handler, so that part was
+   fine). A signal delivered while the ring mutex was already held
+   reproduced a real deadlock. Rewritten as a lock-free atomic byte
+   ring with POSIX-only `write()`/`open()` in the signal path on a
+   64 KiB `sigaltstack`; `CrashLog::install()` now runs after
+   `QCoreApplication`'s identity is set so the log directory resolves
+   correctly. Verified against a raised `SIGSEGV`, a real hardware
+   `SIGSEGV`, `std::terminate`, and a stack overflow — each wrote a
+   `0600` log with the reason line plus up to the last 200 ring-buffer
+   lines (201 lines total). Linux ctest passed 16/16, including IPC and
+   QML behavioral tests. Native tray activation, watchdog restoration,
+   stale Unix-socket recovery and installed Type=dbus readiness were
+   exercised through actual APIs/processes. UI and keyboard checks used
+   an isolated KWin compositor, not the user's locked desktop; native
+   notification protocol test peers did not claim to inspect Plasma's
+   popup painting. Default registration preserves all non-HTTP handlers.
+2. **UI port to Qt Quick Controls** — completed 2026-10-13. All four
+   settings pages, picker and hold render with Fusion. Slow drag,
+   canceled drag, switch persistence, rule/custom-app editing, focus
+   scrolling and Wayland overlay keyboard paths are verified.
 3. **Windows build skeleton** — CMake `if(WIN32)` guards for
    LayerShellQt/DBus paths; MSVC or llvm-mingw build that links; config
    round-trips at `%APPDATA%\lane`.

@@ -14,6 +14,14 @@ namespace Lane
 // Local-socket based single-instance guard, replacing KDBusService's
 // uniqueness half (the D-Bus name claim in DBusActivation.h covers the
 // rest, i.e. the systemd readiness signal and DBusActivatable handlers).
+//
+// Wire protocol, both halves implemented here: a forwarding invocation
+// writes one compact JSON object terminated by '\n' and waits for the
+// primary's one-line ack ("ok" = accepted, anything else = rejected).
+// The terminator makes a payload that arrives in several reads
+// recoverable, and the ack is what lets a forwarding process tell
+// "delivered" from "the primary died mid-handshake" instead of
+// exiting 0 on a message nobody ever read.
 class SingleInstance : public QObject
 {
     Q_OBJECT
@@ -24,10 +32,16 @@ public:
     // is primary (it now owns the listening socket; newConnection will
     // invoke `onMessage` for every later invocation's forwarded payload).
     // Returns false after this process has forwarded its own invocation
-    // (args/workingDir/activationToken) to the already-running primary;
-    // the caller must exit(0) in that case. Exits the process itself with
-    // a nonzero status on unrecoverable failure (a stale socket that
-    // cannot be cleared, or a fresh listen() that still fails afterward).
+    // (args/workingDir/activationToken) to the already-running primary
+    // *and that primary acknowledged it*; the caller must exit(0) in
+    // that case. Blocks for up to a few seconds while forwarding, since
+    // the primary acks from its event loop and may be busy with its own
+    // startup scan.
+    //
+    // Exits the process itself with a nonzero status on unrecoverable
+    // failure: a live primary that accepts the connection but never
+    // acknowledges the payload (rebinding over it would orphan it), or a
+    // bind that fails with nobody else listening.
     bool claim();
 
     // Invoked on the primary instance for every payload a later `lane`

@@ -13,9 +13,10 @@ set(QT_MIN_VERSION "6.6.0")
 # app/Controller.cpp). Below 6.19 only the deprecated serial/signal based
 # request exists.
 set(KF_MIN_VERSION "6.19.0")
+set(ECM_MIN_VERSION "6.0.0")
 
-# The full app (Kirigami UI, KF6, LayerShellQt, D-Bus, systemd, XDG) is
-# Linux/KDE-only for now. On other platforms lane-core and its tests are
+# The full app (Qt Quick UI, LayerShellQt, D-Bus, systemd, XDG) is
+# Linux-only for now. On other platforms lane-core and its tests are
 # still built - the routing brain is pure Qt and the tests prove it.
 # The app target itself returns per-OS as platform backends land.
 set(LANE_KDE_DESKTOP OFF)
@@ -24,14 +25,13 @@ if(UNIX AND NOT APPLE)
 endif()
 
 if(LANE_KDE_DESKTOP)
-    find_package(ECM ${KF_MIN_VERSION} REQUIRED NO_MODULE)
+    find_package(ECM ${ECM_MIN_VERSION} REQUIRED NO_MODULE)
     set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
     include(KDEInstallDirs)
     include(KDECMakeSettings)
     include(KDECompilerSettings NO_POLICY_SCOPE)
     include(ECMSetupVersion)
-    include(ECMFindQmlModule)
 endif()
 include(CTest)
 
@@ -64,7 +64,9 @@ if(LANE_KDE_DESKTOP)
     find_package(PlasmaActivities QUIET)
 
     qt_policy(SET QTP0001 NEW)
-    qt_policy(SET QTP0004 NEW)
+    if(Qt6_VERSION VERSION_GREATER_EQUAL "6.8.0")
+        qt_policy(SET QTP0004 NEW)
+    endif()
 
     ecm_setup_version(PROJECT
         VARIABLE_PREFIX LANE

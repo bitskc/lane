@@ -1,6 +1,5 @@
 #include "CrashLog.h"
 
-#include <QByteArray>
 #include <QDir>
 #include <QMutex>
 #include <QMutexLocker>
@@ -9,112 +8,116 @@
 #include <QtGlobal>
 
 #include <atomic>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
-#include <ctime>
-
+#include <exception>
 #include <fcntl.h>
+#include <time.h>
 #include <unistd.h>
 
-namespace Lane
-{
-namespace CrashLog
+namespace Lane::CrashLog
 {
 namespace
 {
+constexpr unsigned kRingSize = 200;
+constexpr unsigned kLineBytes = 2048;
+static_assert(std::atomic<char>::is_always_lock_free);
+static_assert(std::atomic<unsigned>::is_always_lock_free);
 
-constexpr int kRingSize = 200;
+// Normal logging is serialized. The signal handler never takes this
+// lock or touches a Qt object; it only reads published lock-free bytes.
+QMutex g_ringMutex;
+struct Line {
+    std::atomic<unsigned> sequence{0};
+    std::atomic<unsigned> size{0};
+    std::atomic<char> bytes[kLineBytes]{};
+};
+Line g_lines[kRingSize];
+std::atomic<unsigned> g_count{0};
+char g_prefix[1024]{};
+volatile sig_atomic_t g_writing = 0;
+alignas(16) char g_signalStack[64 * 1024];
 
-QMutex &ringMutex()
+void writeAll(int fd, const char *data, size_t size)
 {
-    static QMutex mutex;
-    return mutex;
+    while (size > 0) {
+        const ssize_t written = ::write(fd, data, size);
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) return;
+        data += written;
+        size -= size_t(written);
+    }
 }
 
-QByteArray *ringBuffer()
+char *appendNumber(char *out, unsigned long long number)
 {
-    static QByteArray lines[kRingSize];
-    return lines;
+    char digits[20];
+    unsigned count = 0;
+    do {
+        digits[count++] = char('0' + number % 10);
+        number /= 10;
+    } while (number);
+    while (count) *out++ = digits[--count];
+    return out;
 }
 
-std::atomic<quint64> &ringCounter()
-{
-    static std::atomic<quint64> counter{0};
-    return counter;
-}
-
-// Directory for crash logs, resolved and created once at install() time
-// (QStandardPaths/QDir are not safe to call from a signal handler); a
-// fixed-size byte buffer so the crash path can be built with snprintf
-// alone, with no heap allocation, when a signal actually fires.
-char g_logDir[1024] = {0};
-
-void ensureLogDir()
-{
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(dir);
-    const QByteArray utf8 = dir.toUtf8();
-    const qsizetype n = qMin<qsizetype>(utf8.size(), qsizetype(sizeof(g_logDir) - 1));
-    std::memcpy(g_logDir, utf8.constData(), size_t(n));
-    g_logDir[n] = '\0';
-}
-
-// Best-effort: writes `reason` followed by the ring buffer's contents to
-// a fresh crash-<epoch>.log file. Called from std::terminate and from
-// fatal-signal handlers, so it sticks to plain POSIX I/O rather than Qt
-// file APIs.
 void writeCrashLog(const char *reason)
 {
-    if (g_logDir[0] == '\0') {
-        return;
-    }
-    char path[1200];
-    std::snprintf(path, sizeof(path), "%s/crash-%lld.log", g_logDir, static_cast<long long>(::time(nullptr)));
+    if (!g_prefix[0] || g_writing) return;
+    g_writing = 1;
+    char path[1100];
+    char *out = path;
+    for (const char *in = g_prefix; *in; ++in) *out++ = *in;
+    timespec now{};
+    ::clock_gettime(CLOCK_REALTIME, &now);
+    out = appendNumber(out, static_cast<unsigned long long>(now.tv_sec));
+    *out++ = '-';
+    out = appendNumber(out, static_cast<unsigned long long>(::getpid()));
+    for (const char *in = ".log"; *in; ++in) *out++ = *in;
+    *out = '\0';
+    const int fd = ::open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0) return;
+    size_t reasonSize = 0;
+    while (reason[reasonSize]) ++reasonSize;
+    writeAll(fd, reason, reasonSize);
+    writeAll(fd, "\n", 1);
 
-    const int fd = ::open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) {
-        return;
+    const unsigned total = g_count.load(std::memory_order_acquire);
+    const unsigned count = total < kRingSize ? total : kRingSize;
+    char copy[kLineBytes];
+    for (unsigned i = total - count; i < total; ++i) {
+        const Line &line = g_lines[i % kRingSize];
+        if (line.sequence.load(std::memory_order_acquire) != i + 1) continue;
+        const unsigned size = line.size.load(std::memory_order_relaxed);
+        for (unsigned j = 0; j < size; ++j) copy[j] = line.bytes[j].load(std::memory_order_relaxed);
+        // A writer interrupted while replacing this slot leaves sequence
+        // zero. Skip incomplete snapshots instead of blocking the crash.
+        if (line.sequence.load(std::memory_order_acquire) != i + 1) continue;
+        writeAll(fd, copy, size);
+        writeAll(fd, "\n", 1);
     }
-
-    if (reason) {
-        ::write(fd, reason, std::strlen(reason));
-        ::write(fd, "\n", 1);
-    }
-
-    {
-        QMutexLocker locker(&ringMutex());
-        const quint64 total = ringCounter().load();
-        const quint64 count = qMin<quint64>(total, quint64(kRingSize));
-        const quint64 start = total > quint64(kRingSize) ? total - quint64(kRingSize) : 0;
-        QByteArray *lines = ringBuffer();
-        for (quint64 i = 0; i < count; ++i) {
-            const QByteArray &line = lines[(start + i) % quint64(kRingSize)];
-            if (!line.isEmpty()) {
-                ::write(fd, line.constData(), size_t(line.size()));
-                ::write(fd, "\n", 1);
-            }
-        }
-    }
-
     ::close(fd);
 }
 
 void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
-    const QString formatted = qFormatLogMessage(type, context, msg);
-    const quint64 idx = ringCounter().fetch_add(1);
+    const QByteArray formatted = qFormatLogMessage(type, context, msg).toUtf8();
     {
-        QMutexLocker locker(&ringMutex());
-        ringBuffer()[idx % quint64(kRingSize)] = formatted.toUtf8();
+        QMutexLocker locker(&g_ringMutex);
+        const unsigned index = g_count.load(std::memory_order_relaxed);
+        Line &line = g_lines[index % kRingSize];
+        line.sequence.store(0, std::memory_order_release);
+        const unsigned size = unsigned(qMin<qsizetype>(formatted.size(), kLineBytes));
+        for (unsigned i = 0; i < size; ++i) line.bytes[i].store(formatted[i], std::memory_order_relaxed);
+        line.size.store(size, std::memory_order_relaxed);
+        line.sequence.store(index + 1, std::memory_order_release);
+        g_count.store(index + 1, std::memory_order_release);
     }
-    std::fprintf(stderr, "%s\n", qPrintable(formatted));
-
-    // Matches Qt's default handler: a fatal message aborts the process.
-    if (type == QtFatalMsg) {
-        std::abort();
-    }
+    std::fprintf(stderr, "%s\n", formatted.constData());
+    if (type == QtFatalMsg) std::abort();
 }
 
 [[noreturn]] void terminateHandler()
@@ -123,7 +126,7 @@ void messageHandler(QtMsgType type, const QMessageLogContext &context, const QSt
     std::abort();
 }
 
-void fatalSignalHandler(int sig)
+void fatalSignalHandler(int sig, siginfo_t *info, void *)
 {
     const char *name = "unknown fatal signal";
     switch (sig) {
@@ -132,29 +135,32 @@ void fatalSignalHandler(int sig)
     case SIGBUS: name = "SIGBUS"; break;
     case SIGILL: name = "SIGILL"; break;
     case SIGFPE: name = "SIGFPE"; break;
-    default: break;
     }
     writeCrashLog(name);
-
-    // Restore the default disposition and re-raise: never suppress a
-    // core dump, and never return into whatever corrupted the process.
-    std::signal(sig, SIG_DFL);
-    std::raise(sig);
+    // Preserve the fault address for synchronous hardware faults: the
+    // instruction re-faults under SIG_DFL on return. Raised signals need
+    // to be queued again, because returning would otherwise resume.
+    if (!info || info->si_code <= 0) ::kill(::getpid(), sig);
 }
-
 } // namespace
 
 void install()
 {
-    ensureLogDir();
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(dir);
+    const QByteArray prefix = (dir + QStringLiteral("/crash-")).toUtf8();
+    if (prefix.size() < qsizetype(sizeof(g_prefix)))
+        std::memcpy(g_prefix, prefix.constData(), size_t(prefix.size() + 1));
     qInstallMessageHandler(messageHandler);
     std::set_terminate(terminateHandler);
-    std::signal(SIGSEGV, fatalSignalHandler);
-    std::signal(SIGABRT, fatalSignalHandler);
-    std::signal(SIGBUS, fatalSignalHandler);
-    std::signal(SIGILL, fatalSignalHandler);
-    std::signal(SIGFPE, fatalSignalHandler);
+    stack_t stack{};
+    stack.ss_sp = g_signalStack;
+    stack.ss_size = sizeof(g_signalStack);
+    if (::sigaltstack(&stack, nullptr) != 0) qWarning("Lane: could not install alternate crash signal stack");
+    struct sigaction action{};
+    action.sa_sigaction = fatalSignalHandler;
+    action.sa_flags = SA_RESETHAND | SA_SIGINFO | SA_ONSTACK;
+    ::sigemptyset(&action.sa_mask);
+    for (int sig : {SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE}) ::sigaction(sig, &action, nullptr);
 }
-
-} // namespace CrashLog
-} // namespace Lane
+} // namespace Lane::CrashLog

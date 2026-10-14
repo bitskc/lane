@@ -75,17 +75,8 @@ LaneUi.ScrollableFormPage {
                         listItem: listItem
                         flickable: page.flickable
                         ownerList: allList
-                        onDragStarted: {
-                            if (allList.dragId === "") {
-                                allList.dragId = model.targetId
-                            }
-                        }
-                        onDragFinished: (id, newIndex) => {
-                            if (newIndex >= 0 && allList.dragId !== "") {
-                                controller.moveTarget(allList.dragId, newIndex)
-                            }
-                            allList.dragId = ""
-                        }
+                        onDragStarted: allList.dragId = model.targetId
+                        onDragFinished: (id, newIndex) => controller.moveTarget(id, newIndex)
                     }
                     LaneUi.LaneIcon {
                         iconName: model.iconName
@@ -121,7 +112,7 @@ LaneUi.ScrollableFormPage {
                             anchors.bottom: parent.bottom
                             height: 1
                             visible: renameHover.hovered && !renameField.activeFocus
-                            color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.25)
+                            color: Qt.rgba(page.palette.windowText.r, page.palette.windowText.g, page.palette.windowText.b, 0.25)
                         }
                     }
                     // Kind badge keeps a flattened list legible: browsers,
@@ -210,7 +201,7 @@ LaneUi.ScrollableFormPage {
                         anchors.bottom: parent.bottom
                         height: 1
                         visible: renameHover.hovered && !renameField.activeFocus
-                        color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.25)
+                        color: Qt.rgba(page.palette.windowText.r, page.palette.windowText.g, page.palette.windowText.b, 0.25)
                     }
                 }
                 QQC.Switch {

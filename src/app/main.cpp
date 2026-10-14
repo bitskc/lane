@@ -59,8 +59,6 @@ static int explainUrl(const QString &url)
 
 int main(int argc, char **argv)
 {
-    Lane::CrashLog::install();
-
     // Plasma's platformtheme plugin calls QQuickStyle::setStyle("org.kde.desktop")
     // from inside QApplication's init, which drags Kirigami and
     // qqc2-desktop-style into the process. The env var outranks that
@@ -70,12 +68,14 @@ int main(int argc, char **argv)
     qputenv("QT_QUICK_CONTROLS_STYLE", "Fusion");
 
     QApplication app(argc, argv);
+    app.setQuitOnLastWindowClosed(false);
     Lane::migrateLegacyConfig();
     app.setApplicationName(QStringLiteral("Lane"));
     app.setOrganizationName(QStringLiteral("lane"));
     app.setOrganizationDomain(QStringLiteral("lane.app"));
     app.setDesktopFileName(QStringLiteral("app.lane.Lane"));
     app.setApplicationVersion(QStringLiteral(LANE_VERSION_STRING));
+    Lane::CrashLog::install();
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Lane — Plasma link router"));
@@ -131,7 +131,7 @@ int main(int argc, char **argv)
     }
 
     // Unique-instance must be claimed before Controller does its startup
-    // work (discovery scan + an xdg-settings subprocess of up to ~1.5s):
+    // work (discovery scan + bounded default-handler queries):
     // a duplicate `lane <url>` invocation that reaches past this line is
     // about to exit once the socket refuses a second listener, so
     // anything spent building a Controller here is wasted.

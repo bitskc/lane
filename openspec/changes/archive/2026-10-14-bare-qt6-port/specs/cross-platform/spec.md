@@ -6,7 +6,7 @@ Lane's full application builds and runs on a platform without KDE Frameworks, us
 ## ADDED Requirements
 
 ### Requirement: KF6-free application build
-Lane SHALL build its full application from source using Qt6 plus LayerShellQt only; no KDE Frameworks development package SHALL be required at configure or compile time. Optional KDE-adjacent features MAY link additional libraries when present but the build MUST NOT fail without them.
+Lane SHALL build its full Linux application using Qt6 plus LayerShellQt without any required KDE Frameworks library. CMake, Ninja and extra-cmake-modules remain build-time tools; extra-cmake-modules SHALL NOT impose the optional KF6WindowSystem API version floor. Optional KDE-adjacent features MAY link additional libraries when present but the build MUST NOT fail without them.
 
 #### Scenario: Configure on a KF6-free host
 - **WHEN** Lane is configured on a Linux host with Qt6 and LayerShellQt but no KF6 packages
