@@ -64,6 +64,7 @@ QQC.ApplicationWindow {
                         ListElement { label: "Preferences"; iconName: "settings-configure" }
                     }
                     delegate: Rectangle {
+                        id: navItem
                         required property int index
                         required property string label
                         required property string iconName
@@ -88,7 +89,7 @@ QQC.ApplicationWindow {
                             anchors.rightMargin: 8
                             spacing: 8
                             LaneUi.LaneIcon {
-                                iconName: iconName
+                                iconName: navItem.iconName
                                 Layout.preferredWidth: 16
                                 Layout.preferredHeight: 16
                             }

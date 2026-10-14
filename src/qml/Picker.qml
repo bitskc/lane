@@ -293,6 +293,7 @@ Window {
 
 
                     delegate: Rectangle {
+                        id: row
                         required property int index
                         required property string targetId
                         required property string name
@@ -327,7 +328,7 @@ Window {
                             anchors.rightMargin: 8
                             spacing: 10
                             LaneUi.LaneIcon {
-                                iconName: iconName
+                                iconName: row.iconName
                                 Layout.preferredWidth: 28
                                 Layout.preferredHeight: 28
                             }
