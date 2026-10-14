@@ -10,10 +10,12 @@ QQC.Label {
     // Kirigami FormHeader parity: callers pass `title`.
     property alias title: root.text
 
+    Layout.fillWidth: true
+    horizontalAlignment: Text.AlignLeft
+    elide: Text.ElideRight
     topPadding: Theme.smallSpacing * 2
-    leftPadding: Theme.largeSpacing
+    leftPadding: Theme.horizontalPadding
     bottomPadding: Theme.smallSpacing
-    Layout.leftMargin: Theme.smallSpacing
 
     font.pointSize: 14
     font.weight: Font.DemiBold

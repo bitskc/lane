@@ -9,6 +9,7 @@ import QtQuick.Layouts
 QQC.Control {
     id: root
 
+    Layout.fillWidth: true
     default property alias contentData: column.data
 
     readonly property real contentHeight: column.implicitHeight

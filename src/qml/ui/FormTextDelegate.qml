@@ -3,14 +3,15 @@ import QtQuick.Controls as QQC
 import QtQuick.Layouts
 
 // FormTextDelegate replacement: read-only row. Property parity:
-// `text`, `description`. Not clickable by default; enable with
-// `enabled: true` and use `clicked()`.
+// `text`, `description`. Stays enabled so text renders at full
+// contrast; it just never reacts to hover or clicks.
 QQC.ItemDelegate {
     id: root
 
     checkable: false
     hoverEnabled: false
-    enabled: false
+    focusPolicy: Qt.NoFocus
+    down: false
 
     property string description: ""
 
@@ -37,8 +38,4 @@ QQC.ItemDelegate {
         }
     }
 
-    TapHandler {
-        enabled: root.enabled
-        onTapped: root.clicked()
-    }
 }

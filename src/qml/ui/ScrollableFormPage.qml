@@ -55,18 +55,13 @@ QQC.Control {
         ColumnLayout {
             id: column
 
-            x: Math.max(Theme.largeSpacing, (internalFlickable.width - Math.min(root.contentWidth, internalFlickable.width)) / 2)
-            width: Math.min(root.contentWidth, internalFlickable.width) - Theme.largeSpacing * 2
+            // One width, centered: capped at contentWidth, never wider
+            // than the viewport minus a gutter on each side.
+            readonly property real usable: Math.min(root.contentWidth, internalFlickable.width - Theme.largeSpacing * 2)
+            width: usable
+            x: (internalFlickable.width - usable) / 2
+            y: Theme.largeSpacing
             spacing: Theme.largeSpacing
-        }
-
-        // Make the whole blank area a click-to-focus surface so pages
-        // don't behave like a dead full-screen region.
-        MouseArea {
-            anchors.fill: parent
-            z: -1
-            visible: false // reserved: not used now, placeholder to silence a warning
-            enabled: false
         }
     }
 }

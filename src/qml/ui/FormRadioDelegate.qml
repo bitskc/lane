@@ -13,11 +13,6 @@ QQC.RadioButton {
     horizontalPadding: Theme.horizontalPadding
     verticalPadding: Theme.verticalPadding
 
-    indicator: RadioButton {
-        checked: root.checked
-        enabled: false
-        opacity: 1.0
-    }
     contentItem: ColumnLayout {
         spacing: 2
         QQC.Label {

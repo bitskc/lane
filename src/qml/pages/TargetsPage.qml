@@ -59,8 +59,10 @@ LaneUi.ScrollableFormPage {
                 id: listItem
                 width: wrapper.width
                 height: wrapper.height
+                horizontalPadding: LaneUi.Theme.horizontalPadding
+                verticalPadding: 0
                 contentItem: RowLayout {
-                    spacing: LaneUi.Theme.smallSpacing
+                    spacing: LaneUi.Theme.largeSpacing
                     LaneUi.DragHandle {
                         // Filtered-out rows stay in allModel at their
                         // original index (only their visual height collapses
@@ -94,6 +96,7 @@ LaneUi.ScrollableFormPage {
                         id: renameField
                         text: model.name
                         placeholderText: model.discoveredName
+                        font.pointSize: 13
                         Layout.fillWidth: true
                         background: Item {}
                         verticalAlignment: TextInput.AlignVCenter
@@ -126,7 +129,9 @@ LaneUi.ScrollableFormPage {
                     QQC.Label {
                         text: model.kind
                         font.pointSize: 12
-                        opacity: 0.8
+                        opacity: 0.6
+                        horizontalAlignment: Text.AlignLeft
+                        Layout.preferredWidth: 72
                         Layout.alignment: Qt.AlignVCenter
                     }
                     QQC.Switch {
@@ -165,8 +170,10 @@ LaneUi.ScrollableFormPage {
             width: privateList.width
             height: page.matchesSearch(model.name, model.discoveredName) ? page.rowHeight : 0
             visible: height > 0
+            horizontalPadding: LaneUi.Theme.horizontalPadding
+            verticalPadding: 0
             contentItem: RowLayout {
-                spacing: LaneUi.Theme.smallSpacing
+                spacing: LaneUi.Theme.largeSpacing
                 Item { width: 22 }
                 LaneUi.LaneIcon {
                     iconName: model.iconName
@@ -178,6 +185,7 @@ LaneUi.ScrollableFormPage {
                     id: renameField
                     text: model.name
                     placeholderText: model.discoveredName
+                    font.pointSize: 13
                     Layout.fillWidth: true
                     background: Item {}
                     verticalAlignment: TextInput.AlignVCenter

@@ -41,8 +41,12 @@ QQC.ItemDelegate {
 
         QQC.Switch {
             checked: root.checked
-            enabled: false
-            opacity: 1.0
+            // The row toggles; the switch only mirrors state. Disabled
+            // would grey it out, so swallow input instead.
+            hoverEnabled: false
+            focusPolicy: Qt.NoFocus
+            Layout.alignment: Qt.AlignVCenter
+            TapHandler { onTapped: root.toggle() }
         }
     }
 }

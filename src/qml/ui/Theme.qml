@@ -16,8 +16,9 @@ QtObject {
     readonly property int verticalPadding: 10
     readonly property int horizontalPadding: 14
 
-    // Card metrics matching the old FormCard look.
-    readonly property real cardWidth: gridUnit * 28
+    // Old FormCard capped at 30 Kirigami grid units (18px each) = 540px.
+    // gridUnit here is the 8px form grid, so state the pixel width.
+    readonly property real cardWidth: 540
     readonly property real cornerRadius: 6
 
     // Breeze semantic approximations; these are static because
