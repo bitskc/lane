@@ -15,15 +15,16 @@ Item {
     property Flickable flickable
     property Item listItem
 
+    // The ListView/owner whose dragId the page maintains in its own
+    // scope (where the attached model IS visible). The handle cannot
+    // read model roles itself, so it pulls the id from here on drop.
+    property var ownerList: null
+
     // Captured once on press so model moves don't retarget mid-drag.
     property string dragId: ""
-
     // Drag in progress; the delegate's height stays intact while this
     // is true even if the row would otherwise collapse.
     property bool dragActive: false
-
-    property var modelData: null
-    property var model: null
 
     // Model index of the row we're hovering (updated during drag).
     property int targetIndex: -1
@@ -50,9 +51,7 @@ Item {
 
         onPressed: function (mouse) {
             pressY = mouse.y;
-            startY = listItem.mapToItem(listItem.ListView.view.contentItem, 0, 0).y;
-            startIndex = model.index;
-            dragId = listItem.ListView.view.model.get(startIndex, "targetId") ?? "";
+            startY = listItem.mapToItem(ownerList.contentItem, 0, 0).y;
             dragActive = true;
         }
 
@@ -62,16 +61,16 @@ Item {
             }
             const offset = mouse.y - pressY;
             const newRowY = startY + offset;
-            const rowHeight = listItem.height + listItem.ListView.view.spacing;
-            const newIndex = Math.max(0, Math.min(listItem.ListView.view.count - 1, Math.round(newRowY / rowHeight)));
+            const rowHeight = listItem.height + ownerList.spacing;
+            const newIndex = Math.max(0, Math.min(ownerList.count - 1, Math.round(newRowY / rowHeight)));
             targetIndex = newIndex;
 
             if (newIndex !== startIndex) {
-                // Move is deferred until the handle's dragFinished to
-                // preserve the captured-id invariant.
-                listItem.ListView.view.model.moveRow(startIndex, newIndex);
+                // Visual move now, persisted order on drop (dragFinished).
+                // moveRow never existed here; ListModel.move is the method.
+                ownerList.model.move(startIndex, newIndex, 1);
                 startIndex = newIndex;
-                startY = listItem.mapToItem(listItem.ListView.view.contentItem, 0, 0).y;
+                startY = listItem.mapToItem(ownerList.contentItem, 0, 0).y;
             }
 
             // Edge auto-scroll.
@@ -88,6 +87,12 @@ Item {
 
         onReleased: {
             dragActive = false;
+            // The page captures the id in its own scope (onDragStarted
+            // reads model.targetId) and hands it to the view via
+            // ownerList.dragId; the handle's scope has no model roles.
+            if (!dragId && ownerList) {
+                dragId = ownerList.dragId;
+            }
             if (dragId !== "") {
                 root.dragFinished(dragId, targetIndex);
             }

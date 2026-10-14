@@ -74,6 +74,7 @@ LaneUi.ScrollableFormPage {
                         enabled: page.searchText.trim().length === 0
                         listItem: listItem
                         flickable: page.flickable
+                        ownerList: allList
                         onDragStarted: {
                             if (allList.dragId === "") {
                                 allList.dragId = model.targetId
