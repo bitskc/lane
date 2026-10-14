@@ -52,6 +52,9 @@ Item {
         onPressed: function (mouse) {
             pressY = mouse.y;
             startY = listItem.mapToItem(ownerList.contentItem, 0, 0).y;
+            const rowHeight = listItem.height + ownerList.spacing;
+            startIndex = Math.max(0, Math.min(ownerList.count - 1, Math.round(startY / rowHeight)));
+            targetIndex = startIndex;
             dragActive = true;
         }
 
@@ -93,15 +96,22 @@ Item {
             if (!dragId && ownerList) {
                 dragId = ownerList.dragId;
             }
-            if (dragId !== "") {
+            if (dragId !== "" && targetIndex >= 0) {
                 root.dragFinished(dragId, targetIndex);
             }
             dragId = "";
+            targetIndex = -1;
+            startIndex = -1;
         }
 
         onCanceled: {
             dragActive = false;
             dragId = "";
+            targetIndex = -1;
+            startIndex = -1;
+            if (ownerList) {
+                ownerList.dragId = "";
+            }
         }
     }
 

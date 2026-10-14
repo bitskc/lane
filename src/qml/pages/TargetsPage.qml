@@ -175,7 +175,7 @@ LaneUi.ScrollableFormPage {
             verticalPadding: 0
             contentItem: RowLayout {
                 spacing: LaneUi.Theme.largeSpacing
-                Item { width: 22 }
+                Item { Layout.preferredWidth: 22 }
                 LaneUi.LaneIcon {
                     iconName: model.iconName
                     Layout.preferredWidth: 22
