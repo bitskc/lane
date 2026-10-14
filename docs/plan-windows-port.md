@@ -235,6 +235,8 @@ note); the app layer shares this plan's seam list, with discovery +
 default-browser registration being its own design (LaunchServices,
 `open -a`, no `xdg-*`) and not scheduled here.
 
+> **Update (2026-10-14):** macOS is now specified in `openspec/changes/native-macos-app/` (LaunchServices URL events, `NSWorkspace` default handler, bundle-id discovery). "Not scheduled here" no longer holds for macOS; this plan remains Windows-only.
+
 ## Risks
 
 - **QQC2 settings pages will not be pixel-identical** to FormCard.

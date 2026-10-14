@@ -1,5 +1,7 @@
 # Lane macOS / Windows port feasibility
 
+> **SUPERSEDED for macOS (2026-10-14):** the "Do not port" recommendation below predates the Platform seam and the bare Qt 6 port. The owner chose to build a native macOS app; the spec is `openspec/changes/native-macos-app/`. Where this document proposes `LSSetDefaultHandlerForURLScheme`, that change uses the newer asynchronous `NSWorkspace` default-handler API instead. The Windows assessment below is unchanged.
+
 Grounding: full read of `src/`, `CMakeLists.txt`, `data/`, `tests/`, and `docs/designs/competitive-analysis.md` on 2026-09-16. External claims are marked **[verified]** when backed by a fetched primary source in this session, **[inference]** when reasoned from code plus general platform knowledge.
 
 Lane today is a Linux-only Plasma link router. The codebase has **zero** `#ifdef Q_OS_*`, `if(UNIX AND NOT APPLE)`, or other platform branches. Every OS-specific behavior is implicit: it assumes Freedesktop `.desktop` files, D-Bus activation, XDG default-browser tools, and Wayland layer-shell. A port is a platform-abstraction project, not a recompile.

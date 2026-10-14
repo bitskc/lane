@@ -1,5 +1,7 @@
 # Lane Windows port plan
 
+> **Note (2026-10-14):** the "No Mac port is planned" statement in the grounding paragraph is superseded. macOS has its own spec at `openspec/changes/native-macos-app/`; this document stays Windows-only.
+
 Grounding: `docs/designs/port-assessment.md` (coupling inventory), `docs/designs/competitive-analysis.md` (differentiators to preserve), and direct reads of `src/app/Controller.cpp`, `src/app/main.cpp`, `src/core/launcher.cpp`, `src/core/discovery.cpp`, `src/qml/Picker.qml`, `src/qml/Hold.qml`, `CMakeLists.txt` on 2026-09-16. No Mac port is planned; this document is Windows-only.
 
 Lane's Windows competitor is Browser Tamer (`bt`). Lane wins on path-scoped memory, hold HUD, native container discovery, and agent-friendly config. Those features are not platform-locked in code, but the Linux integration layer is. The port is a platform-abstraction project, not a recompile.
