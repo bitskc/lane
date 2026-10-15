@@ -56,6 +56,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     QuickControls2
     Widgets
     Svg
+    QuickTest
 )
 qt_policy(SET QTP0001 NEW)
 if(Qt6_VERSION VERSION_GREATER_EQUAL "6.8.0")

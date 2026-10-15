@@ -31,9 +31,10 @@ add_executable(test_watchdog test_watchdog.cpp ${CMAKE_SOURCE_DIR}/src/app/Defau
 target_link_libraries(test_watchdog PRIVATE lane-core Qt6::Test)
 add_test(NAME test_watchdog COMMAND test_watchdog)
 
-# SingleInstance is Linux-only (XDG_RUNTIME_DIR socket) and lives in the
-# lane executable, so its test compiles the source directly.
-if(LANE_KDE_DESKTOP)
+# SingleInstance lives in the lane executable, so its test compiles the
+# source directly. It is cross-platform (XDG_RUNTIME_DIR on Linux,
+# confstr temp dir on macOS).
+if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
     add_executable(test_singleinstance test_singleinstance.cpp ${CMAKE_SOURCE_DIR}/src/app/SingleInstance.cpp)
     target_link_libraries(test_singleinstance PRIVATE lane-core Qt6::Test Qt6::Network)
     add_test(NAME test_singleinstance COMMAND test_singleinstance)
