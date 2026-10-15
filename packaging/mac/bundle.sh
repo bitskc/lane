@@ -73,6 +73,11 @@ sign_bundle() {
     local app="$1" f
     while IFS= read -r f; do
         if is_macho "$f"; then
+            # --remove-signature first: codesign --force over a copied
+            # Mach-O can leave a stale Info.plist hash that fails verify
+            # ("plist or signature have been modified"); a stripped file
+            # signs and verifies clean.
+            codesign --remove-signature "$f" 2>/dev/null || true
             codesign --force --sign "$IDENTITY" "$f" >/dev/null || die "codesign failed: $f"
         fi
     done < <(find "$app" -type f)
