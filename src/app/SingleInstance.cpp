@@ -17,6 +17,7 @@
 #ifdef Q_OS_MACOS
 #include <unistd.h>
 #endif
+#include <sys/stat.h>
 
 namespace Lane
 {
@@ -76,12 +77,16 @@ ForwardResult forwardToPrimary(const QString &path, QLockFile *claimLock = nullp
     QLocalSocket probe;
     probe.connectToServer(path);
     if (!probe.waitForConnected(kConnectTimeoutMs)) {
-        // ENOTSOCK (UnsupportedSocketOperationError) is what macOS
-        // reports for a stale regular file at the socket path; Linux
-        // reports ConnectionRefusedError for the same thing. Both mean
-        // the path holds no live primary and is safe to reclaim.
-        if (probe.error() == QLocalSocket::ServerNotFoundError || probe.error() == QLocalSocket::ConnectionRefusedError ||
-            probe.error() == QLocalSocket::UnsupportedSocketOperationError)
+        const auto err = probe.error();
+        if (err == QLocalSocket::ServerNotFoundError || err == QLocalSocket::ConnectionRefusedError)
+            return ForwardResult::NoPrimary;
+        // macOS reports ENOTSOCK (UnknownSocketError, errno 38) when a
+        // stale regular file sits at the socket path, where Linux gives
+        // ConnectionRefusedError. A path that exists but is not a socket
+        // inode cannot have a live listener, so reclaiming is safe; this
+        // check stays narrower than whitelisting UnknownSocketError.
+        struct stat st;
+        if (::stat(path.toLocal8Bit().constData(), &st) == 0 && !S_ISSOCK(st.st_mode))
             return ForwardResult::NoPrimary;
         qWarning("Lane: could not determine whether the primary is available: %s", qPrintable(probe.errorString()));
         return ForwardResult::Failed;
