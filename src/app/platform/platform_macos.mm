@@ -1,7 +1,7 @@
 // macOS platform seam. QFileOpenEvent + LaunchServices replace D-Bus;
 // NSWorkspace handles default-handler queries and registration. The
-// notification, autostart and overlay methods are still honest stubs and
-// get real bodies in tasks 6 and 7.
+// notification and autostart methods are still honest stubs and get
+// real bodies in task 7.
 
 #import <AppKit/AppKit.h>
 
@@ -67,6 +67,51 @@ NSString *ourResolvedPath()
 {
     return [[[[NSBundle mainBundle] bundleURL] URLByResolvingSymlinksInPath] path];
 }
+
+// Applies the AppKit-side chrome decisions that only exist once the
+// native NSWindow does: joining the active Space instead of the Space
+// the window was born in, and making Lane the active app so a borderless
+// accessory-app window can take key events. Decision 8 ordering: Qt
+// flags first (set in configureOverlayWindow), then this on every show.
+void applyMacOverlayChrome(QWindow *window)
+{
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    NSWindow *nsw = [view window];
+    if (!nsw) {
+        return;
+    }
+    // Move to the Space where the user triggered the pick instead of
+    // pinning to the Space the window was created on.
+    nsw.collectionBehavior = NSWindowCollectionBehaviorMoveToActiveSpace;
+    // An accessory app (LSUIElement) does not become active on its own;
+    // without this the overlay shows but keystrokes go to the previous app.
+    if (@available(macOS 14.0, *)) {
+        [NSApp activate];
+    } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        [NSApp activateIgnoringOtherApps:YES];
+#pragma clang diagnostic pop
+    }
+    window->requestActivate();
+}
+
+// Re-applies overlay chrome every time the window is shown: collection
+// behavior and app activation do not stick across hides on macOS.
+class OverlayWatcher final : public QObject
+{
+public:
+    using QObject::QObject;
+
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override
+    {
+        if (event->type() == QEvent::Show) {
+            applyMacOverlayChrome(static_cast<QWindow *>(obj));
+        }
+        return QObject::eventFilter(obj, event);
+    }
+};
 
 class MacPlatform final : public Platform
 {
@@ -171,12 +216,13 @@ public:
 
     void configureOverlayWindow(QWindow *window, const QString &scope) override
     {
-        // TODO(macos): borderless top-most key-capable window across Spaces
-        // (collection behavior). For now a plain top-most window so the
-        // picker is visible and testable; key focus is required, so no
-        // WindowDoesNotAcceptFocus.
+        // Decision 8 step 1: Qt flags. Borderless, top-most, accepts keys
+        // (no WindowDoesNotAcceptFocus). The AppKit side (collection
+        // behavior, activation) runs on every show via OverlayWatcher.
         Q_UNUSED(scope);
         window->setFlags(Qt::Window | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint);
+        auto *watcher = new OverlayWatcher(window);
+        window->installEventFilter(watcher);
     }
 
     bool registerActivation(std::function<void(const QStringList &args)> handleArgs,

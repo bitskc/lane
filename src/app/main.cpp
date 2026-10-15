@@ -187,5 +187,16 @@ int main(int argc, char **argv)
     urlEvents.setSink([&controller](const QString &url) { controller.openUrl(url); });
 #endif
 
+#ifdef Q_OS_MACOS
+    // First launch with no link (and not --daemon/--settings): onboarding
+    // means Settings opens now. On Linux handleArgs() already does this;
+    // on macOS it only opens Settings via --settings, so the bare-start
+    // case needs this. When a link did start Lane the flag survives until
+    // the pick or launch completes, and maybeFirstRun fires from launch().
+    if (parser.positionalArguments().isEmpty() && !parser.isSet(daemonOpt) && !parser.isSet(settingsOpt)) {
+        controller.maybeFirstRunSettings();
+    }
+#endif
+
     return app.exec();
 }

@@ -179,9 +179,14 @@ elseif(LANE_MAC_DESKTOP)
         RESOURCE_PREFIX /qt/qml
     )
 
-    qt_add_resources(lane "qtquickcontrols2conf"
+    qt_add_resources(lane "appresources"
         PREFIX "/"
         FILES qtquickcontrols2.conf
+    )
+    qt_add_resources(lane "icons"
+        PREFIX "/icons"
+        BASE "${CMAKE_SOURCE_DIR}/data/icons"
+        FILES "${CMAKE_SOURCE_DIR}/data/icons/app.lane.Lane.svg"
     )
 
     target_link_libraries(lane

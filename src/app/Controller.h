@@ -183,6 +183,14 @@ public:
     Q_INVOKABLE void openSettings();
     Q_INVOKABLE void rediscover();
     Q_INVOKABLE void makeDefaultBrowser();
+
+    // Cancels a pending pick or hold, or quits the app when nothing is
+    // pending (decision D2; reachable from the status item and ⌘Q).
+    Q_INVOKABLE void requestQuit();
+    // Opens Settings once on a first run: immediately when there is no
+    // link, or after the first pick/launch when a link started Lane.
+    // No-op after the first call.
+    Q_INVOKABLE void maybeFirstRunSettings();
     Q_INVOKABLE void hideTarget(const QString &id, bool hidden);
     Q_INVOKABLE void save();
     Q_INVOKABLE QString displayNameFor(const QString &id) const;
@@ -341,6 +349,11 @@ private:
     };
     QList<PendingUrl> m_pendingUrls;
     bool m_inOpenUrl = false;
+
+    // True until the first interaction completes (pick, launch, or a
+    // first launch with no link): opens Settings once, per decision D2's
+    // onboarding rule. Set in the ctor from "no config file on disk".
+    bool m_firstRun = false;
 };
 
 } // namespace Lane

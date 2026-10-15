@@ -16,6 +16,7 @@ QQC.ApplicationWindow {
     function selectPage(index) {
         nav.currentIndex = index
     }
+    Shortcut { sequence: StandardKey.Quit; onActivated: controller.requestQuit() }
 
     RowLayout {
         anchors.fill: parent

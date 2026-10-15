@@ -29,6 +29,14 @@ Window {
         }
     }
 
+    // macOS focus loss closes the overlay (closeOnFocusLoss). A click on
+    // the dim already cancels; this covers clicks outside the app.
+    onActiveChanged: {
+        if (visible && !active && controller.closeOnFocusLoss) controller.cancelPicker()
+    }
+
+    Shortcut { sequence: StandardKey.Quit; onActivated: controller.requestQuit() }
+
     Shortcut {
         sequence: "Escape"
         // When the filter has text, Esc clears it first instead of

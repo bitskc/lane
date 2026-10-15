@@ -23,6 +23,7 @@
 #include <QDebug>
 #include <QDesktopServices>
 #include <QFileInfo>
+#include <QFile>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLocale>
@@ -48,8 +49,21 @@ Controller::Controller(QObject *parent)
     , m_updateChecker(new UpdateChecker(QStringLiteral(LANE_VERSION_STRING), this))
 {
     m_configPath = defaultConfigPath();
+    // First run detection must happen before reload(): a launcher who
+    // starts Lane with a URL still counts as "no config yet" and gets
+    // Settings after the pick finishes, not before.
+    m_firstRun = !QFile::exists(m_configPath);
     reload();
-    m_tray = new QSystemTrayIcon(QIcon::fromTheme(QStringLiteral("app.lane.Lane")), this);
+#ifdef Q_OS_MACOS
+    // No icon theme on macOS: the bundled SVG is the source, and a mask
+    // icon lets the system draw it template-black in light menubars and
+    // template-white in dark ones instead of a fixed-color bitmap.
+    QIcon trayIcon(QStringLiteral(":/icons/app.lane.Lane.svg"));
+    trayIcon.setIsMask(true);
+#else
+    QIcon trayIcon = QIcon::fromTheme(QStringLiteral("app.lane.Lane"));
+#endif
+    m_tray = new QSystemTrayIcon(trayIcon, this);
     m_tray->setToolTip(QStringLiteral("Lane\nLink router"));
     auto *menu = new QMenu();
     menu->addAction(QStringLiteral("Settings"), this, &Controller::openSettings);
@@ -63,6 +77,11 @@ Controller::Controller(QObject *parent)
     m_tray->show();
 
     connect(m_updateChecker, &UpdateChecker::statusChanged, this, &Controller::updateStateChanged);
+
+    // Quit Lane (task D2): cancel an in-flight pick or hold first; a
+    // second Quit (or one with nothing pending) exits.
+    menu->addSeparator();
+    menu->addAction(QStringLiteral("Quit Lane"), this, &Controller::requestQuit);
 
     connect(m_ruleModel, &RuleModel::rulesChanged, this, [this]() {
         m_config.rules = m_ruleModel->rules();
@@ -719,6 +738,22 @@ void Controller::makeDefaultBrowser()
     });
 }
 
+void Controller::requestQuit()
+{
+    // Cancel an in-flight interaction first: a Quit that closed the app
+    // mid-pick would silently drop the link the user just clicked. The
+    // second Quit (nothing pending) exits.
+    if (m_pickerWindow && m_pickerWindow->isVisible()) {
+        cancelPicker();
+        return;
+    }
+    if (m_holdWindow && m_holdWindow->isVisible()) {
+        cancelHold();
+        return;
+    }
+    QCoreApplication::quit();
+}
+
 void Controller::hideTarget(const QString &id, bool hidden)
 {
     m_config.hiddenTargetIds.removeAll(id);
@@ -1022,6 +1057,15 @@ void Controller::hidePicker()
     Q_EMIT pickerVisibleChanged(false);
 }
 
+void Controller::maybeFirstRunSettings()
+{
+    if (!m_firstRun) {
+        return;
+    }
+    m_firstRun = false;
+    openSettings();
+}
+
 void Controller::launch(const Target &target, const QString &reason, const QString &activationToken, const Click &click)
 {
     // target.id is never empty here: Decision::Action::Launch always sets
@@ -1045,6 +1089,9 @@ void Controller::launch(const Target &target, const QString &reason, const QStri
     if (m_config.toast) {
         toast(target, reason, click.host);
     }
+    // A launch that just completed is a finished first interaction; the
+    // link-first first-run case lands Settings here.
+    maybeFirstRunSettings();
 }
 
 void Controller::requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window, const Click &click)
