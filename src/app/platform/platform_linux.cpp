@@ -242,6 +242,14 @@ public:
     {
         return Lane::registerActivation(std::move(handleArgs), std::move(openUrl));
     }
+
+    bool prefersReducedMotion() const override
+    {
+        // Linux has no single "reduce motion" setting that is practical
+        // to poll across desktops; the animations it would gate are the
+        // macOS-cheap ones, so false is the honest answer here.
+        return false;
+    }
 };
 
 } // namespace

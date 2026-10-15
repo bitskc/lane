@@ -6,6 +6,7 @@
 #include "UpdateChecker.h"
 #include "DefaultBrowserWatcher.h"
 #include "core/types.h"
+#include "platform/platform.h"
 #include "core/pipeline.h"
 
 #include <QHash>
@@ -47,6 +48,9 @@ class Controller : public QObject
     // One of registered, partial, other-copy, declined, unknown: the
     // state machine behind the Overview button and takeover alert.
     Q_PROPERTY(QString defaultHandlerStatus READ defaultHandlerStatus NOTIFY defaultBrowserChanged)
+    // Live read of the OS reduce-motion setting; gates the Hold ring and
+    // dim-fade animations. Not NOTIFY: QML reads it at each show.
+    Q_PROPERTY(bool reduceMotion READ reduceMotion NOTIFY settingsChanged)
     Q_PROPERTY(QString pickerPolicy READ pickerPolicy WRITE setPickerPolicy NOTIFY settingsChanged)
     Q_PROPERTY(bool preferPwa READ preferPwa WRITE setPreferPwa NOTIFY settingsChanged)
     Q_PROPERTY(bool toastEnabled READ toastEnabled WRITE setToastEnabled NOTIFY settingsChanged)
@@ -136,6 +140,7 @@ public:
     void setAutostartEnabled(bool on);
     bool closeOnFocusLoss() const { return m_config.closeOnFocusLoss; }
     void setCloseOnFocusLoss(bool on);
+    bool reduceMotion() const { return platform()->prefersReducedMotion(); }
     QStringList rememberedHosts() const;
 
     bool holdAutoOpen() const { return m_config.holdAutoOpen; }

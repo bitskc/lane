@@ -245,6 +245,11 @@ public:
         done(QString());
     }
 
+    bool prefersReducedMotion() const override
+    {
+        return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
+    }
+
 private:
     std::atomic<bool> m_changeDeclined{false};
 };
@@ -257,4 +262,3 @@ Platform *platform()
     return &instance;
 }
 
-} // namespace Lane

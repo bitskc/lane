@@ -19,6 +19,7 @@
 #endif
 
 #include <QClipboard>
+#include <QCursor>
 #include <QDateTime>
 #include <QDebug>
 #include <QDesktopServices>
@@ -1043,6 +1044,12 @@ void Controller::showPicker()
     ensurePickerEngine();
     clearPickerNotice();
     if (m_pickerWindow) {
+        // Open on the display the pointer is on, not the frontmost app's:
+        // the click that raised the picker came from the user's cursor.
+        QScreen *pointerScreen = QGuiApplication::screenAt(QCursor::pos());
+        if (pointerScreen && m_pickerWindow->screen() != pointerScreen) {
+            m_pickerWindow->setScreen(pointerScreen);
+        }
         m_pickerWindow->show();
         m_pickerWindow->requestActivate();
     }

@@ -78,7 +78,7 @@ Window {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.12)
         opacity: root.visible ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on opacity { enabled: !controller.reduceMotion; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         MouseArea {
             anchors.fill: parent
             onClicked: if (controller.closeOnFocusLoss) controller.cancelPicker()
@@ -99,8 +99,8 @@ Window {
         shadowAlpha: 0.42
         scale: root.visible ? 1 : 0.98
         opacity: root.visible ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on scale { enabled: !controller.reduceMotion; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+        Behavior on opacity { enabled: !controller.reduceMotion; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
         Accessible.role: Accessible.Dialog
         Accessible.name: "Open link"

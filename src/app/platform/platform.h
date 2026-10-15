@@ -74,6 +74,11 @@ struct Platform {
     virtual void requestActivationToken(QWindow *source,
                                         std::function<void(QString)> done,
                                         int timeoutMs = 300) = 0;
+
+    // Whether the OS is asking apps to reduce motion ("Reduce Motion" in
+    // macOS Accessibility). Used to gate the Hold ring and dim-fade
+    // animations. Linux returns false (no system-wide equivalent to poll).
+    virtual bool prefersReducedMotion() const = 0;
 };
 
 // Returns the per-OS Platform singleton.
