@@ -14,6 +14,9 @@
 
 #include <cstdlib>
 #include <memory>
+#ifdef Q_OS_MACOS
+#include <unistd.h>
+#endif
 
 namespace Lane
 {
@@ -40,20 +43,21 @@ constexpr int kClientIdleTimeoutMs = 10000;
 // Hold the lock only for connect/remove/bind, never for delivery/ack.
 constexpr int kLockWaitMs = 5000;
 
-QString socketPath()
-{
-    QString dir = qEnvironmentVariable("XDG_RUNTIME_DIR");
-    if (dir.isEmpty()) {
-        dir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
-    }
-    return dir + QLatin1String("/lane-instance.sock");
-}
-
 [[noreturn]] void fatal(const QString &message)
 {
     qCritical("%s", qPrintable(message));
     std::_Exit(1);
 }
+
+QString socketPath()
+{
+    const QString path = singleInstanceSocketPath();
+    if (path.isEmpty()) {
+        fatal(QStringLiteral("Lane: the instance socket path exceeds 103 bytes; refusing to pick a fallback"));
+    }
+    return path;
+}
+
 
 enum class ForwardResult {
     // The primary read the payload and acknowledged it.
@@ -128,6 +132,38 @@ ForwardResult forwardToPrimary(const QString &path, QLockFile *claimLock = nullp
 }
 
 } // namespace
+
+QString singleInstanceSocketPath()
+{
+    QString dir = qEnvironmentVariable("XDG_RUNTIME_DIR");
+    if (dir.isEmpty()) {
+#ifdef Q_OS_MACOS
+        // Per-user temp dir via confstr, not TMPDIR: TMPDIR can be unset
+        // or redirected per process. The directory ends with a slash.
+        char dirbuf[4096];
+        const size_t n = confstr(_CS_DARWIN_USER_TEMP_DIR, dirbuf, sizeof(dirbuf));
+        if (n == 0 || n > sizeof(dirbuf)) {
+            return {};
+        }
+        dir = QString::fromLocal8Bit(dirbuf, static_cast<qsizetype>(n - 1));
+#else
+        dir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+#endif
+    }
+#ifdef Q_OS_MACOS
+    if (!dir.endsWith(QLatin1Char('/'))) dir += QLatin1Char('/');
+    const QString path = dir + QStringLiteral("lane-%1.sock").arg(getuid());
+#else
+    const QString path = dir + QLatin1String("/lane-instance.sock");
+#endif
+    // Darwin sockaddr_un sun_path is 104 bytes including the NUL, so the
+    // name must fit in 103. No fallback path: binding somewhere else is
+    // how two instances both think they are primary.
+    if (path.toLocal8Bit().size() > 103) {
+        return {};
+    }
+    return path;
+}
 
 SingleInstance::SingleInstance(QObject *parent)
     : QObject(parent)

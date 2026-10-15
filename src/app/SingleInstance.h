@@ -22,6 +22,15 @@ namespace Lane
 // recoverable, and the ack is what lets a forwarding process tell
 // "delivered" from "the primary died mid-handshake" instead of
 // exiting 0 on a message nobody ever read.
+
+// The runtime socket path claim() binds and forwarding invocations
+// connect to. Exported for tests. On macOS the path is
+// <confstr(_CS_DARWIN_USER_TEMP_DIR)>lane-<uid>.sock and an empty return
+// means it exceeded 103 bytes (callers must fail, not pick a fallback);
+// XDG_RUNTIME_DIR overrides the base directory so tests stay sandboxed.
+QString singleInstanceSocketPath();
+
+
 class SingleInstance : public QObject
 {
     Q_OBJECT

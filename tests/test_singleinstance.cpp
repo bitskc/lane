@@ -14,6 +14,9 @@
 #include <atomic>
 
 #include <sys/stat.h>
+#ifdef Q_OS_MACOS
+#include <unistd.h>
+#endif
 
 #include "../src/app/SingleInstance.h"
 
@@ -101,7 +104,7 @@ class SingleInstanceTest : public QObject
 
     QTemporaryDir m_runtime;
 
-    QString socketPath() const { return m_runtime.path() + QStringLiteral("/lane-instance.sock"); }
+    QString socketPath() const { return singleInstanceSocketPath(); }
 
 private Q_SLOTS:
     void init()
@@ -290,6 +293,32 @@ private Q_SLOTS:
         QTRY_VERIFY_WITH_TIMEOUT(client.bytesAvailable() > 0 || client.state() == QLocalSocket::UnconnectedState, 5000);
         QVERIFY(!delivered);
     }
+
+#ifdef Q_OS_MACOS
+    void socketPathUsesConfstrTempDir()
+    {
+        // With the test override cleared, the path must come from
+        // confstr(_CS_DARWIN_USER_TEMP_DIR) and carry the uid.
+        qunsetenv("XDG_RUNTIME_DIR");
+        const QString path = singleInstanceSocketPath();
+        QVERIFY2(!path.isEmpty(), "real temp-dir path must fit in 103 bytes");
+        QVERIFY(path.contains(QStringLiteral("lane-%1.sock").arg(getuid())));
+        QVERIFY(path.startsWith(QStringLiteral("/var/folders/")));
+        // Restore the sandbox for cleanup().
+        qputenv("XDG_RUNTIME_DIR", m_runtime.path().toUtf8());
+    }
+
+    void socketPathOverlongFailsInsteadOfFallingBack()
+    {
+        // A base dir that pushes the socket name past 103 bytes must
+        // yield an empty path (caller fails), not a relocated socket.
+        QTemporaryDir base;
+        QVERIFY(base.isValid());
+        qputenv("XDG_RUNTIME_DIR",
+                (base.path() + QLatin1Char('/') + QString(110, QLatin1Char('y'))).toUtf8());
+        QVERIFY(singleInstanceSocketPath().isEmpty());
+    }
+#endif
 };
 
 QTEST_MAIN(SingleInstanceTest)
