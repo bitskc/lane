@@ -97,10 +97,11 @@ xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 if [ -n "$INSTALL_DIR" ]; then
     mkdir -p "$INSTALL_DIR"
     rm -rf "$INSTALL_DIR/Lane.app"
-    cp -R "$APP" "$INSTALL_DIR/Lane.app"
-    # Re-sign after the copy: cp can leave the sealed manifest missing the
-    # freshly-written executable ("file added: Contents/MacOS/lane"), and
-    # any resource-fork/xattr rewriting invalidates the seal anyway.
+    # ditto, not cp -R: it is the macOS-native bundle copier and preserves
+    # the signed resource layout (cp -R was observed to flip a byte in the
+    # embedded signature region of Contents/MacOS/lane).
+    ditto "$APP" "$INSTALL_DIR/Lane.app"
+    # Re-sign after the copy anyway so xattr/alert state cannot matter.
     codesign --force --sign "$IDENTITY" "$INSTALL_DIR/Lane.app" >/dev/null || die "post-install resign failed"
     codesign --verify --strict "$INSTALL_DIR/Lane.app" || die "installed bundle signature invalid"
     xattr -dr com.apple.quarantine "$INSTALL_DIR/Lane.app" 2>/dev/null || true
