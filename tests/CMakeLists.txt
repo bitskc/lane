@@ -39,6 +39,12 @@ if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
     target_link_libraries(test_singleinstance PRIVATE lane-core Qt6::Test Qt6::Network)
     add_test(NAME test_singleinstance COMMAND test_singleinstance)
 
+    # UrlEventFilter is a QObject-only filter; the test feeds it fake
+    # QFileOpenEvents so it runs on Linux CI too.
+    add_executable(test_urlevents test_urlevents.cpp ${CMAKE_SOURCE_DIR}/src/app/UrlEventFilter.cpp)
+    target_link_libraries(test_urlevents PRIVATE lane-core Qt6::Test Qt6::Gui)
+    add_test(NAME test_urlevents COMMAND test_urlevents)
+
     find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS QuickTest)
     add_executable(test_qml test_qml.cpp)
     target_link_libraries(test_qml PRIVATE laneuiplugin Qt6::QuickTest)

@@ -35,6 +35,7 @@ set(LANE_APP_SRCS
     app/ThemeIconProvider.cpp
     app/ThemeIconProvider.h
     app/SingleInstance.cpp
+    app/UrlEventFilter.cpp
     app/CrashLog.cpp
     app/DefaultBrowserWatcher.cpp   # safe on macOS: only enabled when
                                     # Platform::watchesDefaultHandlerByFile()

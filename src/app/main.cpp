@@ -2,6 +2,9 @@
 #include "app/CrashLog.h"
 #include "app/platform/platform.h"
 #include "app/SingleInstance.h"
+#ifdef Q_OS_MACOS
+#include "app/UrlEventFilter.h"
+#endif
 #include "core/config.h"
 #include "core/discovery.h"
 #include "core/pipeline.h"
@@ -76,6 +79,14 @@ int main(int argc, char **argv)
     app.setDesktopFileName(QStringLiteral("app.lane.Lane"));
     app.setApplicationVersion(QStringLiteral(LANE_VERSION_STRING));
     Lane::CrashLog::install();
+
+#ifdef Q_OS_MACOS
+    // LaunchServices posts QFileOpenEvent to the application object from
+    // the first click, including events raised before Controller exists;
+    // the filter queues them and drains once openUrl is wired below.
+    Lane::UrlEventFilter urlEvents(&app);
+    app.installEventFilter(&urlEvents);
+#endif
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Lane — Plasma link router"));
@@ -169,6 +180,12 @@ int main(int argc, char **argv)
     }
 
     controller.handleArgs(QCoreApplication::arguments());
+
+#ifdef Q_OS_MACOS
+    // Any URL events queued during startup dispatch here, in order,
+    // after positional argv is handled so an explicit URL wins first.
+    urlEvents.setSink([&controller](const QString &url) { controller.openUrl(url); });
+#endif
 
     return app.exec();
 }
