@@ -88,7 +88,10 @@ private Q_SLOTS:
         QVERIFY(ids.contains(QStringLiteral("browser:macapp:com.apple.Safari:default")));
         QVERIFY(ids.contains(QStringLiteral("browser:macapp:app.zen-browser.zen:sahyoxd1.Default (release)")));
         QVERIFY(ids.contains(QStringLiteral("browser:macapp:org.mozilla.floorp:x9sh86ht.default")));
-
+        // Apple marks system app stubs `chflags hidden` (Safari.app on
+        // macOS 26 is one); QDir needs the Hidden flag or the entry never
+        // appears. The dot-name fixture exercises the same flag on Linux.
+        QVERIFY(ids.contains(QStringLiteral("browser:macapp:com.example.hidden:default")));
         // A bundle is a browser only if a CFBundleURLTypes entry declares
         // http or https: no CFBundleURLTypes at all (Perplexity), a
         // mailto-only URL type (Mail Only), and Lane's own bundle are all

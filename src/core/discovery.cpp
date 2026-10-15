@@ -1338,7 +1338,11 @@ QList<DesktopApp> scanMacBundles(const QStringList &dirs)
     QSet<QString> seenCanonical;
     for (const QString &dir : dirs) {
         const QDir d(dir);
-        const auto entries = d.entryList({QStringLiteral("*.app")}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        // QDir::Hidden because Apple ships Safari and other system apps
+        // as `chflags hidden` symlinks into the cryptex volume on macOS;
+        // without it they never reach the entry list at all.
+        const auto entries = d.entryList({QStringLiteral("*.app")},
+                                         QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot, QDir::Name);
         for (const QString &entry : entries) {
             const QString bundlePath = d.filePath(entry);
             const QString canonicalPath = QFileInfo(bundlePath).canonicalFilePath();
