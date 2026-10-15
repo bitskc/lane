@@ -98,6 +98,11 @@ if [ -n "$INSTALL_DIR" ]; then
     mkdir -p "$INSTALL_DIR"
     rm -rf "$INSTALL_DIR/Lane.app"
     cp -R "$APP" "$INSTALL_DIR/Lane.app"
+    # Re-sign after the copy: cp can leave the sealed manifest missing the
+    # freshly-written executable ("file added: Contents/MacOS/lane"), and
+    # any resource-fork/xattr rewriting invalidates the seal anyway.
+    codesign --force --sign "$IDENTITY" "$INSTALL_DIR/Lane.app" >/dev/null || die "post-install resign failed"
+    codesign --verify --strict "$INSTALL_DIR/Lane.app" || die "installed bundle signature invalid"
     xattr -dr com.apple.quarantine "$INSTALL_DIR/Lane.app" 2>/dev/null || true
     echo "installed: $INSTALL_DIR/Lane.app"
 fi
