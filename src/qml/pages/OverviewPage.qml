@@ -13,9 +13,20 @@ LaneUi.ScrollableFormPage {
     LaneUi.FormCard {
         LaneUi.FormTextDelegate {
             text: "Default browser"
-            description: controller.isDefaultBrowser
-                         ? "Lane is handling http and https links. mailto and PDF stay with their own apps."
-                         : "Lane is not the default browser yet. Nothing is redirected until you opt in."
+            description: {
+                if (controller.isDefaultBrowser)
+                    return "Lane is handling http and https links. mailto and PDF stay with their own apps."
+                var base = "Lane is not the default browser yet. Nothing is redirected until you opt in."
+                if (controller.defaultHandlerStatus === "partial")
+                    base = "Lane handles only part of your links. Click below to fix both http and https."
+                else if (controller.defaultHandlerStatus === "declined")
+                    base = "The last change request was declined or dismissed. Try again when you are ready."
+                else if (controller.defaultHandlerStatus === "other-copy")
+                    base = "A different copy of Lane is the handler. This copy can claim it below."
+                if (controller.defaultHandlerName !== "")
+                    return base + "\nCurrent handler: " + controller.defaultHandlerName
+                return base
+            }
         }
         LaneUi.FormDelegateSeparator {}
         LaneUi.FormButtonDelegate {

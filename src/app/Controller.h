@@ -15,6 +15,7 @@
 #include <QVariant>
 #include <QVariantAnimation>
 #include <QWindow>
+#include <QTimer>
 
 class QSystemTrayIcon;
 
@@ -40,6 +41,12 @@ class Controller : public QObject
     Q_PROPERTY(bool currentSecure READ currentSecure NOTIFY currentChanged)
     Q_PROPERTY(bool alwaysForHost READ alwaysForHost WRITE setAlwaysForHost NOTIFY currentChanged)
     Q_PROPERTY(bool isDefaultBrowser READ isDefaultBrowser NOTIFY defaultBrowserChanged)
+    // Name of the app currently holding http/https (e.g. "OpenIn",
+    // "Safari"); empty when the OS cannot report one.
+    Q_PROPERTY(QString defaultHandlerName READ defaultHandlerName NOTIFY defaultBrowserChanged)
+    // One of registered, partial, other-copy, declined, unknown: the
+    // state machine behind the Overview button and takeover alert.
+    Q_PROPERTY(QString defaultHandlerStatus READ defaultHandlerStatus NOTIFY defaultBrowserChanged)
     Q_PROPERTY(QString pickerPolicy READ pickerPolicy WRITE setPickerPolicy NOTIFY settingsChanged)
     Q_PROPERTY(bool preferPwa READ preferPwa WRITE setPreferPwa NOTIFY settingsChanged)
     Q_PROPERTY(bool toastEnabled READ toastEnabled WRITE setToastEnabled NOTIFY settingsChanged)
@@ -109,6 +116,8 @@ public:
     void setAlwaysForHost(bool on);
 
     bool isDefaultBrowser() const;
+    QString defaultHandlerName() const { return m_defaultHandlerName; }
+    QString defaultHandlerStatus() const { return m_defaultHandlerStatus; }
     QString pickerPolicy() const;
     void setPickerPolicy(const QString &p);
     bool preferPwa() const { return m_config.preferPwa; }
@@ -261,6 +270,14 @@ private:
     // Watches mimeapps.list for a browser update or app that grabs the
     // http/https handler; owned by the takeover alert it can raise.
     DefaultBrowserWatcher *m_defaultWatcher = nullptr;
+    // macOS has no mimeapps.list to watch; this timer polls
+    // defaultHandlerState() every 60 s while watchdogEnabled so a
+    // browser update that takes over http/https still raises the alert.
+    QTimer *m_defaultPoll = nullptr;
+    // Cached halves of the last defaultHandlerState() call, kept next to
+    // m_isDefaultBrowser for the Overview and takeover alert.
+    QString m_defaultHandlerName;
+    QString m_defaultHandlerStatus = QStringLiteral("unknown");
     // Whatever inbound XDG_ACTIVATION_TOKEN this click's openUrl() call
     // carried (from KDBusService relaying a caller's token, or inherited at
     // process start), consumed at most once per click. Used only for a

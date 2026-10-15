@@ -101,6 +101,13 @@ Controller::Controller(QObject *parent)
         connect(m_defaultWatcher, &DefaultBrowserWatcher::mimeappsChanged,
                 this, &Controller::onMimeappsChanged);
         m_defaultWatcher->setEnabled(m_config.watchdogEnabled);
+    } else {
+        // No file to watch (macOS): poll LaunchServices instead. Same
+        // handler, same watchdogEnabled gate.
+        m_defaultPoll = new QTimer(this);
+        m_defaultPoll->setInterval(60 * 1000);
+        connect(m_defaultPoll, &QTimer::timeout, this, &Controller::onMimeappsChanged);
+        m_defaultPoll->setEnabled(m_config.watchdogEnabled);
     }
 }
 
@@ -249,7 +256,15 @@ void Controller::refreshDefaultBrowserState()
     // The scheme handlers are authoritative for this URL-only router.
     // A desktop's broader "default browser" setting may also own HTML
     // files, about: or unknown: URLs, which Lane must not take over.
-    m_isDefaultBrowser = platform()->defaultHandlerState().isDefault;
+    const auto state = platform()->defaultHandlerState();
+    m_isDefaultBrowser = state.isDefault;
+    m_defaultHandlerName = state.currentHandler;
+    using Status = Platform::DefaultHandlerState::Status;
+    m_defaultHandlerStatus = QLatin1String(state.status == Status::Registered ? "registered"
+                                        : state.status == Status::Partial    ? "partial"
+                                        : state.status == Status::OtherCopy  ? "other-copy"
+                                        : state.status == Status::Declined   ? "declined"
+                                                                             : "unknown");
 }
 
 void Controller::onMimeappsChanged()
@@ -334,6 +349,9 @@ void Controller::setWatchdogEnabled(bool on)
     m_config.watchdogEnabled = on;
     if (m_defaultWatcher) {
         m_defaultWatcher->setEnabled(on);
+    }
+    if (m_defaultPoll) {
+        m_defaultPoll->setEnabled(on);
     }
     persist();
     Q_EMIT settingsChanged();
