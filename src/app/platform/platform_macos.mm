@@ -1,11 +1,15 @@
 // macOS platform seam. QFileOpenEvent + LaunchServices replace D-Bus;
-// NSWorkspace handles default-handler queries and registration. The
-// notification and autostart methods are still honest stubs and get
-// real bodies in task 7.
+// NSWorkspace handles default-handler queries; UNUserNotificationCenter
+// delivers toasts; SMAppService owns the login item. The overlay method
+// applies AppKit chrome on every show.
 
 #import <AppKit/AppKit.h>
+#import <ServiceManagement/ServiceManagement.h>
+#import <UserNotifications/UserNotifications.h>
 
 #include "platform.h"
+
+#include "NotificationActionMap.h"
 
 #include <QDebug>
 #include <QUrl>
@@ -113,6 +117,58 @@ protected:
     }
 };
 
+} // namespace
+
+// The action map and delegate are shared state because the notification
+// response callback arrives on the delegate long after notify() returned.
+// QObject-only: accessible from the test binary too (test_notifymap).
+NotificationActionMap &notificationActions()
+{
+    static NotificationActionMap m;
+    return m;
+}
+
+// macOS notification authorization is a per-bundle state the user can
+// change in System Settings at any time; notify() refreshes it, the
+// Overview banner reads this.
+bool &notificationsDenied()
+{
+    static bool denied = false;
+    return denied;
+}
+
+} // namespace Lane
+
+// UNUserNotificationCenter delegate: our notification action buttons
+// carry the dynamic label Qt callers pass; the single "lane.action"
+// category is re-created with the label for each request that has one.
+@interface LaneNotificationDelegate : NSObject <UNUserNotificationCenterDelegate>
+@end
+
+@implementation LaneNotificationDelegate
+
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+        didReceiveNotificationResponse:(UNNotificationResponse *)response
+                 withCompletionHandler:(void (^)(void))completionHandler
+{
+    Q_UNUSED(center);
+    const QString key = Lane::nsStr(response.notification.request.identifier);
+    if (!Lane::notificationActions().take(key)) {
+        // Expired or evicted action: the notification still showed, the
+        // button just has nothing to run. Log, never crash.
+        qWarning("Lane: notification action for %s no longer registered", qPrintable(key));
+    }
+    completionHandler();
+}
+
+@end
+
+namespace Lane
+{
+
+namespace
+{
+
 class MacPlatform final : public Platform
 {
 public:
@@ -120,24 +176,85 @@ public:
                 const QString &actionId, const QString &actionLabel,
                 std::function<void()> action) override
     {
-        // TODO(macos): UNUserNotificationCenter. Until implemented, drop
-        // silently (the caller already gates on toastEnabled).
-        Q_UNUSED(summary);
-        Q_UNUSED(body);
+        // LSUIElement apps need no iconName: macOS shows our app icon.
         Q_UNUSED(iconName);
         Q_UNUSED(actionId);
-        Q_UNUSED(actionLabel);
-        Q_UNUSED(action);
+
+        UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+        static LaneNotificationDelegate *delegate = [LaneNotificationDelegate new];
+        center.delegate = delegate;
+
+        [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
+            if (settings.authorizationStatus == UNAuthorizationStatusAuthorized
+                || settings.authorizationStatus == UNAuthorizationStatusProvisional) {
+                notificationsDenied() = false;
+                postNotification(center, summary, body, actionLabel, std::move(action));
+                return;
+            }
+            if (settings.authorizationStatus == UNAuthorizationStatusDenied) {
+                notificationsDenied() = true;
+                qWarning("Lane: notifications are denied in System Settings; toast dropped");
+                return;
+            }
+            // Not determined yet: request once, lazily on first use.
+            [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
+                                  completionHandler:^(BOOL granted, NSError *error) {
+                if (error) {
+                    qWarning("Lane: notification authorization error: %s",
+                             qPrintable(nsStr([error localizedDescription])));
+                }
+                notificationsDenied() = !granted;
+                if (granted) {
+                    postNotification(center, summary, body, actionLabel, std::move(action));
+                }
+            }];
+        }];
     }
 
-    void autostartSet(bool on) override { Q_UNUSED(on); }
-    bool autostartEnabled() const override { return false; }
+    void autostartSet(bool on) override
+    {
+        SMAppService *svc = [SMAppService mainAppService];
+        NSError *error = nil;
+        if (on) {
+            if (![svc registerAndReturnError:&error]) {
+                logSMError(error);
+            }
+        } else {
+            if (![svc unregisterAndReturnError:&error] && error) {
+                logSMError(error);
+            }
+        }
+    }
+
+    bool autostartEnabled() const override
+    {
+        return [SMAppService mainAppService].status == SMAppServiceStatusEnabled;
+    }
+
     AutostartStatus autostartStatus() override
     {
         AutostartStatus s;
-        s.error = AutostartError::NotRegistered;
+        switch ([SMAppService mainAppService].status) {
+        case SMAppServiceStatusEnabled:
+            s.enabled = true;
+            break;
+        case SMAppServiceStatusRequiresApproval:
+            s.error = AutostartError::RequiresApproval;
+            break;
+        case SMAppServiceStatusNotRegistered:
+            s.error = AutostartError::NotRegistered;
+            break;
+        case SMAppServiceStatusNotFound:
+            s.error = AutostartError::InvalidSignature;
+            break;
+        default:
+            s.error = AutostartError::None;
+            break;
+        }
         return s;
     }
+
+    bool notificationsDenied() const override { return Lane::notificationsDenied(); }
 
     bool watchesDefaultHandlerByFile() const override { return false; }
 
@@ -251,6 +368,50 @@ public:
     }
 
 private:
+    static void logSMError(NSError *error)
+    {
+        qWarning("Lane: SMAppService failed: %s (code %ld)",
+                 qPrintable(nsStr([error localizedDescription])),
+                 static_cast<long>([error code]));
+    }
+
+    static void postNotification(UNUserNotificationCenter *center,
+                                 const QString &summary, const QString &body,
+                                 const QString &actionLabel,
+                                 std::function<void()> action)
+    {
+        UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+        content.title = summary.toNSString();
+        content.body = body.toNSString();
+
+        NSString *identifier = @"lane";
+        if (action) {
+            // One category, re-declared per request so the button label
+            // follows the caller's actionLabel instead of being frozen.
+            UNNotificationAction *btn =
+                [UNNotificationAction actionWithIdentifier:@"lane-action"
+                                                     title:actionLabel.toNSString()
+                                                   options:UNNotificationActionOptionForeground];
+            UNNotificationCategory *category =
+                [UNNotificationCategory categoryWithIdentifier:@"lane.action"
+                                                       actions:@[ btn ]
+                                             intentIdentifiers:@[]
+                                                       options:0];
+            [center setNotificationCategories:[NSSet setWithObject:category]];
+            content.categoryIdentifier = @"lane.action";
+            identifier = notificationActions().add(std::move(action)).toNSString();
+        }
+
+        UNNotificationRequest *request =
+            [UNNotificationRequest requestWithIdentifier:identifier content:content trigger:nil];
+        [center addNotificationRequest:request withCompletionHandler:^(NSError *error) {
+            if (error) {
+                qWarning("Lane: notification request failed: %s",
+                         qPrintable(nsStr([error localizedDescription])));
+            }
+        }];
+    }
+
     std::atomic<bool> m_changeDeclined{false};
 };
 
@@ -263,4 +424,3 @@ Platform *platform()
 }
 
 } // namespace Lane
-

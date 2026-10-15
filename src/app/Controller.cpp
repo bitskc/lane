@@ -386,6 +386,19 @@ void Controller::setAutostartEnabled(bool on)
     Q_EMIT settingsChanged();
 }
 
+QString Controller::autostartMessage() const
+{
+    const auto s = platform()->autostartStatus();
+    switch (s.error) {
+    case Platform::AutostartError::RequiresApproval:
+        return QStringLiteral("Approval needed in System Settings > General > Login Items");
+    case Platform::AutostartError::InvalidSignature:
+        return QStringLiteral("This build is unsigned, so macOS cannot register a login item");
+    default:
+        return {};
+    }
+}
+
 void Controller::setCloseOnFocusLoss(bool on)
 {
     m_config.closeOnFocusLoss = on;

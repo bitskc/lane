@@ -59,6 +59,11 @@ class Controller : public QObject
     Q_PROPERTY(bool stripTrackingParams READ stripTrackingParams WRITE setStripTrackingParams NOTIFY settingsChanged)
     Q_PROPERTY(bool watchdogEnabled READ watchdogEnabled WRITE setWatchdogEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool autostart READ autostart WRITE setAutostartEnabled NOTIFY settingsChanged)
+    // macOS notification denial, read live; drives the Overview banner.
+    Q_PROPERTY(bool notificationsDenied READ notificationsDenied NOTIFY settingsChanged)
+    // Human-readable autostart blocker (requires-approval, unsigned
+    // build) for the Settings toggle description; empty when fine.
+    Q_PROPERTY(QString autostartMessage READ autostartMessage NOTIFY settingsChanged)
     Q_PROPERTY(bool closeOnFocusLoss READ closeOnFocusLoss WRITE setCloseOnFocusLoss NOTIFY settingsChanged)
     Q_PROPERTY(bool showUrl READ showUrl WRITE setShowUrl NOTIFY settingsChanged)
     Q_PROPERTY(QString defaultTargetId READ defaultTargetId WRITE setDefaultTargetId NOTIFY settingsChanged)
@@ -141,6 +146,8 @@ public:
     bool closeOnFocusLoss() const { return m_config.closeOnFocusLoss; }
     void setCloseOnFocusLoss(bool on);
     bool reduceMotion() const { return platform()->prefersReducedMotion(); }
+    bool notificationsDenied() const { return platform()->notificationsDenied(); }
+    QString autostartMessage() const;
     QStringList rememberedHosts() const;
 
     bool holdAutoOpen() const { return m_config.holdAutoOpen; }

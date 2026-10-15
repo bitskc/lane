@@ -45,6 +45,10 @@ if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
     target_link_libraries(test_urlevents PRIVATE lane-core Qt6::Test Qt6::Gui)
     add_test(NAME test_urlevents COMMAND test_urlevents)
 
+    add_executable(test_notifymap test_notifymap.cpp)
+    target_link_libraries(test_notifymap PRIVATE lane-core Qt6::Test)
+    add_test(NAME test_notifymap COMMAND test_notifymap)
+
     find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS QuickTest)
     add_executable(test_qml test_qml.cpp)
     target_link_libraries(test_qml PRIVATE laneuiplugin Qt6::QuickTest)

@@ -79,6 +79,11 @@ struct Platform {
     // macOS Accessibility). Used to gate the Hold ring and dim-fade
     // animations. Linux returns false (no system-wide equivalent to poll).
     virtual bool prefersReducedMotion() const = 0;
+
+    // True after a notification post was refused (macOS "denied" in
+    // System Settings). Drives the denied banner in Overview. Default
+    // false: Linux toast backends cannot distinguish denied from quiet.
+    virtual bool notificationsDenied() const { return false; }
 };
 
 // Returns the per-OS Platform singleton.

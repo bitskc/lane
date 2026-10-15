@@ -36,9 +36,17 @@ LaneUi.ScrollableFormPage {
             onClicked: controller.makeDefaultBrowser()
         }
         LaneUi.FormDelegateSeparator {}
+        LaneUi.FormTextDelegate {
+            visible: controller.notificationsDenied
+            text: "Notifications are off"
+            description: "macOS denied Lane notification permission, so launch and takeover toasts are dropped. Re-enable in System Settings > Notifications."
+        }
+        LaneUi.FormDelegateSeparator { visible: controller.notificationsDenied }
         LaneUi.FormSwitchDelegate {
             text: "Start Lane when I log in"
-            description: "Keeps the picker instant on Wayland. Recommended."
+            description: controller.autostartMessage !== ""
+                         ? controller.autostartMessage
+                         : "Keeps the picker instant."
             checked: controller.autostart
             onToggled: controller.autostart = checked
         }
