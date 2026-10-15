@@ -262,3 +262,5 @@ Platform *platform()
     return &instance;
 }
 
+} // namespace Lane
+
