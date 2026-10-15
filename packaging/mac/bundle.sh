@@ -66,19 +66,32 @@ done < <(find "$APP" -type f)
 
 
 # --- sign every nested Mach-O, then the bundle -------------------------------
-sign_one() { codesign --force --sign "$IDENTITY" "$1" >/dev/null || die "codesign failed: $1"; }
-while IFS= read -r f; do
-    if is_macho "$f"; then sign_one "$f"; fi
-done < <(find "$APP" -type f)
-codesign --force --sign "$IDENTITY" "$APP" >/dev/null || die "codesign failed: $APP"
+# Factored into a function: the install step must re-run the whole pass at
+# the destination because copying a signed bundle (cp, ditto, anything)
+# invalidates embedded signatures on the copied Mach-Os.
+sign_bundle() {
+    local app="$1" f
+    while IFS= read -r f; do
+        if is_macho "$f"; then
+            codesign --force --sign "$IDENTITY" "$f" >/dev/null || die "codesign failed: $f"
+        fi
+    done < <(find "$app" -type f)
+    codesign --force --sign "$IDENTITY" "$app" >/dev/null || die "codesign failed: $app"
+}
 
 # --- verify each nested item and the bundle individually ---------------------
-while IFS= read -r f; do
-    if is_macho "$f"; then
-        codesign --verify --strict "$f" || die "signature invalid: $f"
-    fi
-done < <(find "$APP" -type f)
-codesign --verify --strict --verbose=2 "$APP" || die "bundle signature invalid"
+verify_bundle() {
+    local app="$1" f
+    while IFS= read -r f; do
+        if is_macho "$f"; then
+            codesign --verify --strict "$f" || die "signature invalid: $f"
+        fi
+    done < <(find "$app" -type f)
+    codesign --verify --strict --verbose=2 "$app" || die "bundle signature invalid"
+}
+
+sign_bundle "$APP"
+verify_bundle "$APP"
 
 # --- no Homebrew or /usr/local paths may survive inside the bundle -----------
 bad=""
@@ -97,13 +110,11 @@ xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 if [ -n "$INSTALL_DIR" ]; then
     mkdir -p "$INSTALL_DIR"
     rm -rf "$INSTALL_DIR/Lane.app"
-    # ditto, not cp -R: it is the macOS-native bundle copier and preserves
-    # the signed resource layout (cp -R was observed to flip a byte in the
-    # embedded signature region of Contents/MacOS/lane).
     ditto "$APP" "$INSTALL_DIR/Lane.app"
-    # Re-sign after the copy anyway so xattr/alert state cannot matter.
-    codesign --force --sign "$IDENTITY" "$INSTALL_DIR/Lane.app" >/dev/null || die "post-install resign failed"
-    codesign --verify --strict "$INSTALL_DIR/Lane.app" || die "installed bundle signature invalid"
+    # Copying invalidates embedded signatures even when bytes survive,
+    # so sign and verify the installed copy, not just the staged one.
+    sign_bundle "$INSTALL_DIR/Lane.app"
+    verify_bundle "$INSTALL_DIR/Lane.app"
     xattr -dr com.apple.quarantine "$INSTALL_DIR/Lane.app" 2>/dev/null || true
     echo "installed: $INSTALL_DIR/Lane.app"
 fi
