@@ -76,7 +76,12 @@ ForwardResult forwardToPrimary(const QString &path, QLockFile *claimLock = nullp
     QLocalSocket probe;
     probe.connectToServer(path);
     if (!probe.waitForConnected(kConnectTimeoutMs)) {
-        if (probe.error() == QLocalSocket::ServerNotFoundError || probe.error() == QLocalSocket::ConnectionRefusedError)
+        // ENOTSOCK (UnsupportedSocketOperationError) is what macOS
+        // reports for a stale regular file at the socket path; Linux
+        // reports ConnectionRefusedError for the same thing. Both mean
+        // the path holds no live primary and is safe to reclaim.
+        if (probe.error() == QLocalSocket::ServerNotFoundError || probe.error() == QLocalSocket::ConnectionRefusedError ||
+            probe.error() == QLocalSocket::UnsupportedSocketOperationError)
             return ForwardResult::NoPrimary;
         qWarning("Lane: could not determine whether the primary is available: %s", qPrintable(probe.errorString()));
         return ForwardResult::Failed;
