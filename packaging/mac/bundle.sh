@@ -20,6 +20,8 @@ die() { echo "bundle: $*" >&2; exit 1; }
 command -v macdeployqt >/dev/null || die 'macdeployqt not on PATH (export PATH=/opt/homebrew/bin:$PATH)'
 mkdir -p "$APP/Contents/Resources"
 
+is_macho() { case "$(file -b "$1")" in Mach-O*) return 0 ;; *) return 1 ;; esac }
+
 # --- icon: render the SVG to an iconset, then Lane.icns ----------------------
 iconset="$(mktemp -d)/Lane.iconset"
 mkdir -p "$iconset"
@@ -43,30 +45,48 @@ rm -rf "$(dirname "$iconset")"
 # --- Qt deploy ---------------------------------------------------------------
 macdeployqt "$APP" -qmldir="$SRC_ROOT/src/qml" || die "macdeployqt failed"
 
+# --- fix dylib IDs: Homebrew Qt ships absolute install names; macdeployqt ----
+# rewrites dependents to @rpath but leaves each framework's own LC_ID_DYLIB
+# pointing at /opt/homebrew. Rewrite IDs to @rpath before signing.
+while IFS= read -r f; do
+    if is_macho "$f"; then
+        id="$(otool -D "$f" | awk 'NR>1 {print $1; exit}')"
+        case "$id" in
+            /opt/homebrew/*|/usr/local/*)
+                base="$(basename "$f")"
+                case "$f" in
+                    *.framework/*) new_id="@rpath/${base}.framework/Versions/A/${base}" ;;
+                    *)             new_id="@rpath/${base}" ;;
+                esac
+                install_name_tool -id "$new_id" "$f" || die "install_name_tool failed: $f"
+                ;;
+        esac
+    fi
+done < <(find "$APP" -type f)
+
+
 # --- sign every nested Mach-O, then the bundle -------------------------------
 sign_one() { codesign --force --sign "$IDENTITY" "$1" >/dev/null || die "codesign failed: $1"; }
 while IFS= read -r f; do
-    case "$(file -b "$f")" in Mach-O*) sign_one "$f" ;; esac
+    if is_macho "$f"; then sign_one "$f"; fi
 done < <(find "$APP" -type f)
 codesign --force --sign "$IDENTITY" "$APP" >/dev/null || die "codesign failed: $APP"
 
 # --- verify each nested item and the bundle individually ---------------------
 while IFS= read -r f; do
-    case "$(file -b "$f")" in
-        Mach-O*) codesign --verify --strict "$f" || die "signature invalid: $f" ;;
-    esac
+    if is_macho "$f"; then
+        codesign --verify --strict "$f" || die "signature invalid: $f"
+    fi
 done < <(find "$APP" -type f)
 codesign --verify --strict --verbose=2 "$APP" || die "bundle signature invalid"
 
 # --- no Homebrew or /usr/local paths may survive inside the bundle -----------
 bad=""
 while IFS= read -r f; do
-    case "$(file -b "$f")" in
-        Mach-O*)
-            refs="$(otool -L "$f" | awk 'NR>1 {print $1}' | grep -E '^/opt/homebrew|^/usr/local' || true)"
-            [ -n "$refs" ] && bad="$bad\n$f:\n$refs"
-            ;;
-    esac
+    if is_macho "$f"; then
+        refs="$(otool -L "$f" | awk 'NR>1 {print $1}' | grep -E '^/opt/homebrew|^/usr/local' || true)"
+        [ -n "$refs" ] && bad="$bad\n$f:\n$refs"
+    fi
 done < <(find "$APP" -type f)
 [ -z "$bad" ] || die "otool check failed, bundle references local prefixes:$bad"
 
