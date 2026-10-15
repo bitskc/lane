@@ -187,12 +187,12 @@ public:
         [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
             if (settings.authorizationStatus == UNAuthorizationStatusAuthorized
                 || settings.authorizationStatus == UNAuthorizationStatusProvisional) {
-                notificationsDenied() = false;
+                Lane::notificationsDenied() = false;
                 postNotification(center, summary, body, actionLabel, std::move(action));
                 return;
             }
             if (settings.authorizationStatus == UNAuthorizationStatusDenied) {
-                notificationsDenied() = true;
+                Lane::notificationsDenied() = true;
                 qWarning("Lane: notifications are denied in System Settings; toast dropped");
                 return;
             }
@@ -203,7 +203,7 @@ public:
                     qWarning("Lane: notification authorization error: %s",
                              qPrintable(nsStr([error localizedDescription])));
                 }
-                notificationsDenied() = !granted;
+                Lane::notificationsDenied() = !granted;
                 if (granted) {
                     postNotification(center, summary, body, actionLabel, std::move(action));
                 }
