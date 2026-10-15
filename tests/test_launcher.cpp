@@ -19,7 +19,10 @@ static QString writeDumpEnvScript(const QTemporaryDir &dir, const QString &name,
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
         return {};
     }
-    f.write(QStringLiteral("#!/bin/sh\nenv > '%1'\n").arg(outPath).toUtf8());
+    // Write then rename: the shell creates a redirect target before env
+    // writes into it, so a waiter polling exists() could read an empty
+    // file. rename() makes existence imply complete content.
+    f.write(QStringLiteral("#!/bin/sh\nenv > '%1.tmp' && mv '%1.tmp' '%1'\n").arg(outPath).toUtf8());
     f.close();
     QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
     return path;
