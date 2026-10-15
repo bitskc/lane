@@ -19,14 +19,14 @@ Build host for all macOS work: the MacBook over `ssh andys-macbook-pro` (existin
 - [x] 2.2 Signing mode for the bundle script is ad-hoc by default with an optional `LANE_SIGN_IDENTITY` override; recorded in `design.md` Decision 11. Notification authorization (task 7.1) and the Apple Development override stay unverified until run from an unlocked GUI session. Dep: 2.1.
 
 ## 3. macOS build target and bundle
-- [ ] 3.1 CMake: `LANE_MAC_DESKTOP` under `APPLE`; `MACOSX_BUNDLE`, OBJCXX only for `platform_macos.mm`, frameworks AppKit, UserNotifications, ServiceManagement, CoreServices; `Qt6::DBus`, `DBusActivation.cpp`, `Autostart.cpp` (reached only through `platform_linux.cpp` after 1.2) and LayerShellQt Linux-only; `DefaultBrowserWatcher.cpp` stays compiled but is never constructed on macOS; no ECM or KDE. `lane-core` gets no `.mm` files. Linux gate stays `UNIX AND NOT APPLE`. Dep: 1.3.
-- [ ] 3.2 `Info.plist` template, `.icns`, version from `project(VERSION)`, `CFBundleURLTypes` http and https only, `LSUIElement`, `LSMinimumSystemVersion` 13.0. Dep: 3.1.
-- [ ] 3.3 Bundle script: install, `macdeployqt -qmldir`, nested-then-bundle signing per 2.2, per-item `codesign --verify --strict`, `otool -L` check, quarantine strip, install to `~/Applications`. Dep: 3.1, 2.2.
+- [x] 3.1 Built on the MacBook: configure clean, `lane.app` links (arm64, Qt 6.11.2), 16/16 ctest. Fixes found by the first real build: `Info.plist.in` path (`CMAKE_SOURCE_DIR`), `CrashLog.cpp` `::sigemptyset` (Darwin macro). Dep: 1.3.
+- [x] 3.2 Built `Info.plist` read back on the Mac: id `app.lane.Lane`, version 0.3.0, URL types http/https, `LSUIElement` true, min 13.0, `CFBundleIconFile` Lane. `.icns` is rendered from the SVG by `bundle.sh` (`qlmanage` + `iconutil`). Dep: 3.1.
+- [x] 3.3 `packaging/mac/bundle.sh` ran to `ok` on the MacBook: icon, `macdeployqt -qmldir`, dylib IDs rewritten from `/opt/homebrew` to `@rpath` (macdeployqt leaves them absolute; caught by the `otool -L` check), nested-then-bundle ad-hoc signing, per-item `codesign --verify --strict`, quarantine strip. Install-to-`~/Applications` path written, exercised in 9.1. Dep: 3.1, 2.2.
 - [ ] 3.4 `platform_macos.mm` with honest "unsupported" bodies so the app links and the picker can open; replaced by real bodies in 5 to 7. Confirm `CrashLog` runs on macOS (POSIX signals, `AppDataLocation` under `~/Library/Application Support`). Dep: 3.1.
 
 ## 4. Single instance and URL delivery
-- [ ] 4.1 `SingleInstance` macOS socket path: per-user temp dir via `confstr(_CS_DARWIN_USER_TEMP_DIR)`, `lane-<uid>.sock`, 103-byte check, fail fast with message, no shared fallback. Dep: 3.1.
-- [ ] 4.2 `UrlEventFilter`: install right after `QApplication`, bounded FIFO (8), http/https only, drain after `Controller` exists. Dep: 4.1.
+- [x] 4.1 `singleInstanceSocketPath()` (exported): `confstr` temp dir + `lane-<uid>.sock`, empty result when over 103 bytes, `claim()` exits on empty, no fallback. `XDG_RUNTIME_DIR` still overrides so tests stay sandboxed. Real macOS finding: connecting to a stale regular file reports `UnknownSocketError` (ENOTSOCK) instead of Linux's refused, so stale reclaim now also accepts "path exists and is not a socket inode". `test_singleinstance` and `test_qml` now build and pass on macOS (15/15 then 16/16). Dep: 3.1.
+- [x] 4.2 `UrlEventFilter` (bounded FIFO 8, drop-newest with count, http/https only, drain on `setSink`), installed in `main.cpp` right after `QApplication` and drained after `handleArgs`. `test_urlevents` (4 cases) passes on Linux and macOS. Also fixed a pre-existing `test_launcher` race the Mac exposed (env dump file existed before it had content). Dep: 4.1.
 - [ ] 4.3 Cold-start and running-instance smoke through LaunchServices with `open -b app.lane.Lane <url>` on the installed bundle; record whether the FIFO was ever used. Dep: 4.2, 3.3.
 
 ## 5. Default handler and takeover
