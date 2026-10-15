@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <list>
+#include <mutex>
 #include <unordered_map>
 
 namespace Lane
@@ -29,6 +30,7 @@ public:
         if (!action) {
             return {};
         }
+        std::lock_guard<std::mutex> lock(m_mutex);
         const QString key = QStringLiteral("act-%1").arg(m_next++);
         insert(key, std::move(action));
         return key;
@@ -39,20 +41,40 @@ public:
     // callers log rather than faking success.
     bool take(const QString &key)
     {
-        auto it = m_map.find(key);
-        if (it == m_map.end()) {
-            return false;
+        std::function<void()> action;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            auto it = m_map.find(key);
+            if (it == m_map.end()) {
+                return false;
+            }
+            action = it->second;
+            m_map.erase(it);
+            m_lru.remove(key);
         }
-        auto action = it->second;
-        m_map.erase(it);
-        m_lru.remove(key);
         action();
         return true;
     }
 
-    int size() const { return static_cast<int>(m_map.size()); }
-    int evictedCount() const { return m_evicted; }
-    bool contains(const QString &key) const { return m_map.count(key) != 0; }
+    int size() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return static_cast<int>(m_map.size());
+    }
+
+    int evictedCount() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_evicted;
+    }
+
+    bool contains(const QString &key) const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_map.count(key) != 0;
+    }
+
+
 
 private:
     void insert(const QString &key, std::function<void()> action)
@@ -69,6 +91,10 @@ private:
         m_map.emplace(key, std::move(action));
     }
 
+    // The macOS notification delegate and UNUserNotificationCenter
+    // completion handlers run on Apple-managed queues; every mutation and
+    // read goes through this lock so the two sides never race.
+    mutable std::mutex m_mutex;
     std::unordered_map<QString, std::function<void()>> m_map;
     std::list<QString> m_lru;
     int m_evicted = 0;

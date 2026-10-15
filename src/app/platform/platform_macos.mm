@@ -152,11 +152,17 @@ bool &notificationsDenied()
                  withCompletionHandler:(void (^)(void))completionHandler
 {
     Q_UNUSED(center);
-    const QString key = Lane::nsStr(response.notification.request.identifier);
-    if (!Lane::notificationActions().take(key)) {
-        // Expired or evicted action: the notification still showed, the
-        // button just has nothing to run. Log, never crash.
-        qWarning("Lane: notification action for %s no longer registered", qPrintable(key));
+    // Only the explicit action button runs the stored handler; a body tap
+    // (UNNotificationDefaultActionIdentifier) must not fire it, or a
+    // plain click on the "default browser changed" toast would pop the
+    // LaunchServices consent prompt.
+    if ([response.actionIdentifier isEqualToString:@"lane-action"]) {
+        const QString key = Lane::nsStr(response.notification.request.identifier);
+        if (!Lane::notificationActions().take(key)) {
+            // Expired or evicted action: the notification still showed,
+            // the button just has nothing to run. Log, never crash.
+            qWarning("Lane: notification action for %s no longer registered", qPrintable(key));
+        }
     }
     completionHandler();
 }
@@ -184,30 +190,38 @@ public:
         static LaneNotificationDelegate *delegate = [LaneNotificationDelegate new];
         center.delegate = delegate;
 
+        // All UNUserNotificationCenter completion handlers run on an
+        // Apple-managed queue; the denied flag is read on the GUI thread
+        // and postNotification touches Qt objects, so every piece lands
+        // on the main queue.
         [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
-            if (settings.authorizationStatus == UNAuthorizationStatusAuthorized
-                || settings.authorizationStatus == UNAuthorizationStatusProvisional) {
-                Lane::notificationsDenied() = false;
-                postNotification(center, summary, body, actionLabel, std::move(action));
-                return;
-            }
-            if (settings.authorizationStatus == UNAuthorizationStatusDenied) {
-                Lane::notificationsDenied() = true;
-                qWarning("Lane: notifications are denied in System Settings; toast dropped");
-                return;
-            }
-            // Not determined yet: request once, lazily on first use.
-            [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
-                                  completionHandler:^(BOOL granted, NSError *error) {
-                if (error) {
-                    qWarning("Lane: notification authorization error: %s",
-                             qPrintable(nsStr([error localizedDescription])));
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (settings.authorizationStatus == UNAuthorizationStatusAuthorized
+                    || settings.authorizationStatus == UNAuthorizationStatusProvisional) {
+                    Lane::notificationsDenied() = false;
+                    postNotification(center, summary, body, actionLabel, action);
+                    return;
                 }
-                Lane::notificationsDenied() = !granted;
-                if (granted) {
-                    postNotification(center, summary, body, actionLabel, std::move(action));
+                if (settings.authorizationStatus == UNAuthorizationStatusDenied) {
+                    Lane::notificationsDenied() = true;
+                    qWarning("Lane: notifications are denied in System Settings; toast dropped");
+                    return;
                 }
-            }];
+                // Not determined yet: request once, lazily on first use.
+                [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
+                                      completionHandler:^(BOOL granted, NSError *error) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (error) {
+                            qWarning("Lane: notification authorization error: %s",
+                                     qPrintable(nsStr([error localizedDescription])));
+                        }
+                        Lane::notificationsDenied() = !granted;
+                        if (granted) {
+                            postNotification(center, summary, body, actionLabel, action);
+                        }
+                    });
+                }];
+            });
         }];
     }
 
@@ -303,13 +317,16 @@ public:
             (*donePtr)(ok);
         };
 
+        // NSWorkspace completions run on an Apple-managed queue, but
+        // `done` lands in Controller and emits Qt signals, so finish work
+        // is marshalled to the main queue.
         [ws setDefaultApplicationAtURL:ourBundle
                        toOpenURLsWithScheme:@"https"
                         completionHandler:^(NSError *error) {
             if (error) {
                 qWarning("Lane: setDefaultApplicationAtURL https failed: %s",
                          qPrintable(nsStr([error localizedDescription])));
-                finish(false);
+                dispatch_async(dispatch_get_main_queue(), ^{ finish(false); });
                 return;
             }
             [ws setDefaultApplicationAtURL:ourBundle
@@ -318,15 +335,17 @@ public:
                 if (error2) {
                     qWarning("Lane: setDefaultApplicationAtURL http failed: %s",
                              qPrintable(nsStr([error2 localizedDescription])));
-                    finish(false);
+                    dispatch_async(dispatch_get_main_queue(), ^{ finish(false); });
                     return;
                 }
                 // Both calls accepted. Claim success only if a re-query
                 // shows us as the handler for both schemes.
                 const bool ok = handlerForScheme(@"http", ourPath).isUs
                              && handlerForScheme(@"https", ourPath).isUs;
-                m_changeDeclined.store(!ok);
-                (*donePtr)(ok);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    m_changeDeclined.store(!ok);
+                    (*donePtr)(ok);
+                });
             }];
         }];
     }
@@ -364,7 +383,12 @@ public:
 
     bool prefersReducedMotion() const override
     {
-        return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
+        // accessibilityDisplayShouldReduceMotion is macOS 14+; the plist
+        // floor is 13.0, so guard and fall back to "no reduction" there.
+        if (@available(macOS 14.0, *)) {
+            return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
+        }
+        return false;
     }
 
 private:

@@ -535,9 +535,17 @@ void Controller::handleArgs(const QStringList &args)
         openUrl(url, forcePicker);
         return;
     }
+#ifndef Q_OS_MACOS
+    // Bare argv on Linux means "the user typed lane": onboarding opens
+    // Settings. On macOS argv is always bare (links arrive through
+    // QFileOpenEvent and login items launch with no args), so Settings
+    // here must wait for maybeFirstRunSettings in main.cpp.
     if (!daemon && rest.isEmpty()) {
         openSettings();
     }
+#else
+    Q_UNUSED(daemon);
+#endif
 }
 
 void Controller::openUrl(const QString &url, bool forcePicker)

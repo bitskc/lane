@@ -40,9 +40,11 @@ Window {
     }
 
     // macOS focus loss closes the overlay (closeOnFocusLoss). A click on
-    // the dim already cancels; this covers clicks outside the app.
+    // the dim already cancels; this covers clicks outside the app. macOS
+    // only: transient focus loss on Linux (notification steals, another
+    // window claiming focus) must not cancel a mid-selection picker.
     onActiveChanged: {
-        if (visible && !active && controller.closeOnFocusLoss) controller.cancelPicker()
+        if (visible && !active && mac && controller.closeOnFocusLoss) controller.cancelPicker()
     }
 
     Shortcut { sequence: StandardKey.Quit; onActivated: controller.requestQuit() }
