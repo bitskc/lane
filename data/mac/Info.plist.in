@@ -19,6 +19,9 @@
     <!-- Accessory app: status item only, no Dock icon (owner decision D3). -->
     <key>LSUIElement</key>
     <true/>
+    <!-- Icon staged by packaging/mac/bundle.sh into Contents/Resources/Lane.icns. -->
+    <key>CFBundleIconFile</key>
+    <string>Lane</string>
     <!-- http and https only. No mailto/PDF interception. -->
     <key>CFBundleURLTypes</key>
     <array>
