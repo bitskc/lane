@@ -1,20 +1,72 @@
-// macOS platform seam (stub). The macOS app uses QFileOpenEvent and
-// LaunchServices instead of D-Bus; this file links Objective-C++ against
-// AppKit/UserNotifications/ServiceManagement where the real macOS bodies
-// will live. Every method here is intentionally an honest "unsupported on
-// this build" so that `lane-core`'s picker and Settings window open, while
-// the macOS-specific tasks (URL delivery, autostart, default handler,
-// notifications) remain to be implemented.
+// macOS platform seam. QFileOpenEvent + LaunchServices replace D-Bus;
+// NSWorkspace handles default-handler queries and registration. The
+// notification, autostart and overlay methods are still honest stubs and
+// get real bodies in tasks 6 and 7.
+
+#import <AppKit/AppKit.h>
 
 #include "platform.h"
 
+#include <QDebug>
+#include <QUrl>
 #include <QWindow>
+
+#include <atomic>
+#include <memory>
 
 namespace Lane
 {
 
 namespace
 {
+
+QString nsStr(NSString *s)
+{
+    return QString::fromNSString(s);
+}
+
+// What LaunchServices reports as the handler for one scheme, compared
+// against the running bundle. isUs requires both the bundle id AND the
+// resolved real path to match so a second Lane.app elsewhere on disk is
+// reported as OtherCopy instead of being mistaken for this install.
+struct HandlerInfo
+{
+    bool found = false;
+    bool sameId = false;
+    bool isUs = false;
+    QString name;
+    QString path;
+};
+
+HandlerInfo handlerForScheme(NSString *scheme, const QString &ourPath)
+{
+    HandlerInfo h;
+    NSURL *probe = [NSURL URLWithString:[NSString stringWithFormat:@"%@://example.invalid/", scheme]];
+    NSURL *appURL = [[NSWorkspace sharedWorkspace] URLForApplicationToOpenURL:probe];
+    if (!appURL) {
+        return h;
+    }
+    h.found = true;
+    NSBundle *bundle = [NSBundle bundleWithURL:appURL];
+    NSString *bid = [bundle bundleIdentifier];
+    h.sameId = [bid isEqualToString:[[NSBundle mainBundle] bundleIdentifier]];
+    h.path = nsStr([[appURL URLByResolvingSymlinksInPath] path]);
+    NSString *name = [[bundle infoDictionary] objectForKey:@"CFBundleDisplayName"];
+    if (!name) {
+        name = [[bundle infoDictionary] objectForKey:@"CFBundleName"];
+    }
+    if (!name) {
+        name = [[appURL lastPathComponent] stringByDeletingPathExtension];
+    }
+    h.name = nsStr(name);
+    h.isUs = h.sameId && (h.path == ourPath);
+    return h;
+}
+
+NSString *ourResolvedPath()
+{
+    return [[[[NSBundle mainBundle] bundleURL] URLByResolvingSymlinksInPath] path];
+}
 
 class MacPlatform final : public Platform
 {
@@ -43,15 +95,78 @@ public:
     }
 
     bool watchesDefaultHandlerByFile() const override { return false; }
+
     DefaultHandlerState defaultHandlerState() override
     {
-        return DefaultHandlerState{}; // macOS uses LSSetDefaultHandler; not yet implemented
+        const QString ourPath = nsStr(ourResolvedPath());
+        const HandlerInfo http = handlerForScheme(@"http", ourPath);
+        const HandlerInfo https = handlerForScheme(@"https", ourPath);
+
+        DefaultHandlerState s;
+        s.currentHandler = http.found ? http.name : https.name;
+        const bool bothUs = http.isUs && https.isUs;
+        if (bothUs) {
+            s.isDefault = true;
+            s.status = DefaultHandlerState::Status::Registered;
+            s.currentHandler = QStringLiteral("Lane");
+        } else if (http.isUs || https.isUs) {
+            s.status = DefaultHandlerState::Status::Partial;
+        } else if (http.sameId || https.sameId) {
+            // Our bundle id at a different path: another Lane copy owns it.
+            s.status = DefaultHandlerState::Status::OtherCopy;
+        } else if (m_changeDeclined.load()) {
+            // We asked to become the handler, the call finished, and the
+            // handler still is not us: the consent prompt was declined.
+            s.status = DefaultHandlerState::Status::Declined;
+        } else {
+            s.status = DefaultHandlerState::Status::Unknown;
+        }
+        return s;
     }
+
     void makeDefaultHandler(std::function<void(bool ok)> done) override
     {
-        // TODO(macos): NSWorkspace setDefaultApplication...; requires user
-        // consent and (for SMAppService) a signed bundle.
-        done(false);
+        auto donePtr = std::make_shared<std::function<void(bool)>>(std::move(done));
+        NSURL *ourBundle = [[NSBundle mainBundle] bundleURL];
+        const QString ourPath = nsStr(ourResolvedPath());
+        NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+
+        auto finish = [this, donePtr, ourPath](bool ok) {
+            if (!ok) {
+                // A finished attempt that did not make us the handler is
+                // a decline, whether the user cancelled the prompt or the
+                // system rejected the change.
+                m_changeDeclined.store(true);
+            }
+            (*donePtr)(ok);
+        };
+
+        [ws setDefaultApplicationAtURL:ourBundle
+                       toOpenURLsWithScheme:@"https"
+                        completionHandler:^(NSError *error) {
+            if (error) {
+                qWarning("Lane: setDefaultApplicationAtURL https failed: %s",
+                         qPrintable(nsStr([error localizedDescription])));
+                finish(false);
+                return;
+            }
+            [ws setDefaultApplicationAtURL:ourBundle
+                           toOpenURLsWithScheme:@"http"
+                            completionHandler:^(NSError *error2) {
+                if (error2) {
+                    qWarning("Lane: setDefaultApplicationAtURL http failed: %s",
+                             qPrintable(nsStr([error2 localizedDescription])));
+                    finish(false);
+                    return;
+                }
+                // Both calls accepted. Claim success only if a re-query
+                // shows us as the handler for both schemes.
+                const bool ok = handlerForScheme(@"http", ourPath).isUs
+                             && handlerForScheme(@"https", ourPath).isUs;
+                m_changeDeclined.store(!ok);
+                (*donePtr)(ok);
+            }];
+        }];
     }
 
     void configureOverlayWindow(QWindow *window, const QString &scope) override
@@ -83,6 +198,9 @@ public:
         Q_UNUSED(timeoutMs);
         done(QString());
     }
+
+private:
+    std::atomic<bool> m_changeDeclined{false};
 };
 
 } // namespace
