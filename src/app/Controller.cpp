@@ -107,7 +107,7 @@ Controller::Controller(QObject *parent)
         m_defaultPoll = new QTimer(this);
         m_defaultPoll->setInterval(60 * 1000);
         connect(m_defaultPoll, &QTimer::timeout, this, &Controller::onMimeappsChanged);
-        m_defaultPoll->setEnabled(m_config.watchdogEnabled);
+        if (m_config.watchdogEnabled) m_defaultPoll->start();
     }
 }
 
@@ -351,7 +351,8 @@ void Controller::setWatchdogEnabled(bool on)
         m_defaultWatcher->setEnabled(on);
     }
     if (m_defaultPoll) {
-        m_defaultPoll->setEnabled(on);
+        if (on) m_defaultPoll->start();
+        else m_defaultPoll->stop();
     }
     persist();
     Q_EMIT settingsChanged();
