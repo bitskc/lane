@@ -160,7 +160,7 @@ void install()
     struct sigaction action{};
     action.sa_sigaction = fatalSignalHandler;
     action.sa_flags = SA_RESETHAND | SA_SIGINFO | SA_ONSTACK;
-    ::sigemptyset(&action.sa_mask);
+    sigemptyset(&action.sa_mask);
     for (int sig : {SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE}) ::sigaction(sig, &action, nullptr);
 }
 } // namespace Lane::CrashLog
