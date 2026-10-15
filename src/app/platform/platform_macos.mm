@@ -9,7 +9,7 @@
 
 #include "platform.h"
 
-#include "NotificationActionMap.h"
+#include "../NotificationActionMap.h"
 
 #include <QDebug>
 #include <QUrl>
