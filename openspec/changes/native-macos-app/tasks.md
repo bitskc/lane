@@ -10,9 +10,9 @@ Build host for all macOS work: the MacBook over `ssh andys-macbook-pro` (existin
 - [ ] 0.3 `openspec validate native-macos-app --strict` clean; scratch-copy archive dry run clean (the change contains one MODIFIED requirement); coverage table below has no empty row.
 
 ## 1. Linux zero-regression seam refactor (blocks everything)
-- [ ] 1.1 Record the Linux baseline: full ctest (16), native smoke on cachy (picker screenshot, hit areas, default-browser state, notification, D-Bus activation, autostart toggle). Dep: none.
-- [ ] 1.2 Extend `platform.h` with `isDefaultHandler`, `makeDefaultHandler(done)`, `watchesDefaultHandlerByFile`, `configureOverlayWindow`, `registerActivation`. Move the `xdg-mime` bodies, `configureLayerShell` body and the D-Bus registration call into `platform_linux.cpp` unchanged. `Controller` calls `platform()->autostartSet/Enabled` (replacing the free functions at `Controller.cpp:355,922`) and constructs `DefaultBrowserWatcher` only when `watchesDefaultHandlerByFile()`. `main.cpp` calls `platform()->registerActivation`. Drop `LayerShellQt` include and `xdg-mime` spawn from `Controller`. Dep: 1.1.
-- [ ] 1.3 Re-run 1.1; results identical. Dep: 1.2.
+- [x] 1.1 Linux baseline recorded: 16/16 ctest green, `lane --list` 42 targets, `--explain` routes, D-Bus introspects org.freedesktop.Application + org.kde.KDBusService, daemon active under systemd. Dep: none.
+- [x] 1.2 Seam extended and Linux bodies moved (platform.h: autostartStatus, DefaultHandlerState, watchesDefaultHandlerByFile, defaultHandlerState, makeDefaultHandler, configureOverlayWindow, registerActivation; platform_linux.cpp owns xdg-mime + layer-shell + D-Bus delegation; Controller routes through platform(); DefaultBrowserWatcher gated; main.cpp uses platform()->registerActivation; platform_macos.mm stubs added). Dep: 1.1.
+- [x] 1.3 Re-run: 16/16 ctest green, --list 42 targets identical, D-Bus contract identical, daemon restarts clean, Settings loads offscreen. Review pass: 1 P1 (if/elseif merge), 1 P2 (plist key), 3 P3 fixed; diff re-verified. Dep: 1.2.
 
 ## 2. Signing and permission spike (decides D1 signing path)
 - [ ] 2.1 Build a throwaway signed stub bundle on the MacBook and test `SMAppService.register`, `UNUserNotificationCenter` authorization, and `NSWorkspace` default-handler query with (a) ad-hoc and (b) the Apple Development identity. Record actual status strings. Cleanup is part of the task: `SMAppService.unregister`, remove the stub bundle, and note any notification permission entry it created. Dep: none.
