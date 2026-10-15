@@ -18,6 +18,7 @@ SVG="$SRC_ROOT/data/icons/app.lane.Lane.svg"
 die() { echo "bundle: $*" >&2; exit 1; }
 [ -d "$APP" ] || die "$APP not found - run cmake --build $BUILD_DIR first"
 command -v macdeployqt >/dev/null || die 'macdeployqt not on PATH (export PATH=/opt/homebrew/bin:$PATH)'
+mkdir -p "$APP/Contents/Resources"
 
 # --- icon: render the SVG to an iconset, then Lane.icns ----------------------
 iconset="$(mktemp -d)/Lane.iconset"
