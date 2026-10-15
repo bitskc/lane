@@ -65,27 +65,28 @@ while IFS= read -r f; do
 done < <(find "$APP" -type f)
 
 
-# --- sign every nested Mach-O, then the bundle -------------------------------
-# Factored into a function: signing must happen at each bundle's final
-# location. Copying a signed bundle breaks embedded signatures on the
-# copied Mach-Os (the exe loses its Info.plist binding), so the install
-# step copies the unsigned bundle and signs the copy in place.
+# --- sign the bundle, then verify it ----------------------------------------
+# Factored into functions: signing must happen at each bundle's final
+# location. Copying a signed bundle (cp, ditto, rsync) breaks embedded
+# signatures on the copied Mach-Os (the exe loses its Info.plist binding),
+# so the install step copies the unsigned bundle and signs the copy in
+# place.
 sign_bundle() {
     local app="$1" f
-    local main_exec="$app/Contents/MacOS/lane"
+    # Clear every signature first. codesign --force over an already-signed
+    # or copied Mach-O can leave a stale Info.plist binding that fails
+    # verify ("plist or signature have been modified"); stripped files
+    # sign clean, and --deep binds the Info.plist slot on the executable.
+    xattr -rc "$app" 2>/dev/null || true
     while IFS= read -r f; do
-        # The main executable is signed by the bundle-level codesign call
-        # below so its Info.plist slot stays bound; signing it standalone
-        # ("Info.plist=not bound") makes copied bundles fail verify.
-        if is_macho "$f" && [ "$f" != "$main_exec" ]; then
+        if is_macho "$f"; then
             codesign --remove-signature "$f" 2>/dev/null || true
-            codesign --force --sign "$IDENTITY" "$f" >/dev/null || die "codesign failed: $f"
         fi
     done < <(find "$app" -type f)
-    codesign --force --sign "$IDENTITY" "$app" >/dev/null || die "codesign failed: $app"
+    codesign --deep --force --sign "$IDENTITY" "$app" >/dev/null || die "codesign failed: $app"
 }
 
-# --- verify each nested item and the bundle individually ---------------------
+# --- verify each nested item and the bundle ----------------------------------
 verify_bundle() {
     local app="$1" f
     while IFS= read -r f; do
