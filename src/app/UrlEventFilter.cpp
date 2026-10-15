@@ -57,6 +57,9 @@ void UrlEventFilter::enqueue(const QUrl &url)
         return;
     }
     m_queue.push_back(url.toString());
+    // Diagnosing a cold start depends on knowing whether the queue was
+    // ever used; this is the only place that is observable.
+    qInfo("Lane: queued link open pending controller startup (%d waiting)", pendingCount() + 1);
 }
 
 } // namespace Lane
