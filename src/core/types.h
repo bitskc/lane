@@ -59,6 +59,13 @@ struct Target {
     QString profileDir;
     QString pwaUlid;
     QString pwaScope;
+    // macOS .app bundle identity. Set only on targets discovered from an
+    // application bundle; empty on Linux desktop-file targets. The
+    // launcher keys /usr/bin/open invocations and direct bundle-executable
+    // launches off these; they are runtime-only and never serialized to
+    // config.json.
+    QString bundleId;
+    QString bundlePath;
     int containerId = 0;
     QString containerName;
     QColor color;

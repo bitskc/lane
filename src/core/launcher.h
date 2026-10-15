@@ -2,6 +2,8 @@
 
 #include "types.h"
 
+#include <optional>
+
 namespace Lane
 {
 
@@ -20,6 +22,30 @@ bool isBlockedInterpreter(const QString &exec);
 // longer than any real executable needs) is treated as blocked rather
 // than silently passed through.
 bool isBlockedInterpreterChain(const QString &execPath);
+// The macOS superset of isBlockedInterpreterChain(): the same basename and
+// symlink-chain walk plus the macOS-only exec-name additions (open,
+// osascript, swift, script, tclsh, wish, shortcuts, lldb, automator), and it
+// also refuses a chain whose path resolves to a directory or ends in .app.
+// These are the rules the macOS build runs; exported so tests can pin the
+// macOS set on any platform. parseCustomCommand() and launchTarget() call
+// this on macOS and isBlockedInterpreterChain() on Linux; a Linux `open`
+// command keeps its old behavior.
+bool isBlockedInterpreterChainMac(const QString &execPath);
+
+// The fixed /usr/bin/open routes a macOS build takes instead of exec'ing
+// target.exec. Returns no value for a target the route does not own, and
+// an EMPTY list for a target it owns but must refuse (a launch of
+// /usr/bin/open with no argument would open Finder). Program is always
+// /usr/bin/open: launchTarget() never takes its path or argv text from
+// target.exec, target.args or config. Pure QString work, portable; the
+// /usr/bin/open call site itself is behind Q_OS_MACOS.
+//  - action:email: [mailto:?body=<percent-encoded url>]; the whole
+//    sanitized URL is encoded so an attacker query cannot inject to, cc
+//    or subject parameters.
+//  - Safari bundle (bundleId com.apple.Safari): [-b, bundleId, url];
+//    Safari takes no profile or private arguments.
+std::optional<QStringList> macFixedOpenArgs(const Target &target, const QString &sanitizedUrl);
+
 QString resolveExecutable(const QString &exec);
 bool parseCustomCommand(const QString &command, Target *out, QString *error);
 

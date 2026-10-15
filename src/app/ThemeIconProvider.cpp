@@ -1,5 +1,9 @@
 #include "ThemeIconProvider.h"
 
+#include "core/discovery.h"
+
+#include <QFileIconProvider>
+#include <QFileInfo>
 #include <QIcon>
 #include <QPixmap>
 
@@ -17,7 +21,14 @@ QPixmap ThemeIconProvider::requestPixmap(const QString &id, QSize *size, const Q
     const int px = requestedSize.width() > 0 ? requestedSize.width() : 22;
     const QString &name = id;
     QIcon icon;
-    if (!name.isEmpty()) {
+    if (name.startsWith(QLatin1String("bundle:"))) {
+        // macOS .app icons: QFileIconProvider on the bundle path, keyed
+        // by bundle id so a rename does not break the QML source URL.
+        const QString path = macBundlePathForId(name.mid(QStringLiteral("bundle:").size()));
+        if (!path.isEmpty()) {
+            icon = QFileIconProvider().icon(QFileInfo(path));
+        }
+    } else if (!name.isEmpty()) {
         icon = QIcon::fromTheme(name);
     }
     if (icon.isNull()) {

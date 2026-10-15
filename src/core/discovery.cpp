@@ -3,6 +3,7 @@
 #include "urlutil.h"
 
 #include <algorithm>
+#include <initializer_list>
 
 #include <QDir>
 #include <QFile>
@@ -10,12 +11,15 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
 #include <QSettings>
 #include <QHash>
 #include <QStandardPaths>
 #include <QSet>
 #include <QDebug>
 #include <QRegularExpression>
+#include <QVariant>
+#include <QXmlStreamReader>
 
 
 namespace Lane
@@ -31,6 +35,11 @@ struct DesktopApp {
     QString wmClass;
     QStringList categories;
     QString mime;
+    // Set only for .app bundles found by the macOS scanner; empty for
+    // desktop-file entries. Copied onto every Target the walkers produce
+    // for this app.
+    QString bundleId;
+    QString bundlePath;
     bool noDisplay = false;
 };
 
@@ -548,6 +557,86 @@ Fingerprint fingerprint(const DesktopApp &app, const DiscoveryPaths &paths)
         }
         return candidates.isEmpty() ? QString() : candidates.first();
     };
+    // Per-OS profile-root table. The linux candidates reproduce the list
+    // each brand check used before the table existed; the mac candidates
+    // are relative to applicationSupport (~/Library/Application Support)
+    // and are consulted only when applicationSupport is set, so Linux
+    // output is unchanged whether or not the row carries mac entries.
+    // Rule order is the brand-match order the old if-chain had: more
+    // specific needles first (zen before firefox so Zen-named forks win,
+    // brave's beta bundle id before plain brave, chrome before chromium),
+    // first match wins.
+    enum class RootBase { ConfigHome, Home };
+    struct RootCandidate {
+        RootBase base;
+        const char *rel;
+    };
+    struct RootRule {
+        std::initializer_list<const char *> needles; // all must appear in the blob
+        const char *antiNeedle = nullptr;            // vetoes the rule when present in the blob
+        Engine engine = Engine::Generic;
+        const char *brand = "";
+        // Brand shown for macOS bundles only. Brave Beta is still
+        // fingerprinted as "Brave" on Linux: nothing there distinguishes
+        // it, and Linux output must not change.
+        const char *macBrand = nullptr;
+        std::initializer_list<RootCandidate> linux;
+        std::initializer_list<const char *> mac; // relative to applicationSupport
+        const char *flatpakRel = "";             // ~/.var/app/<id>/<flatpakRel>, gecko only
+    };
+    static const RootRule rootRules[] = {
+        {{"zen"}, nullptr, Engine::Gecko, "Zen", nullptr,
+         {{RootBase::ConfigHome, "zen"}, {RootBase::Home, ".zen"}}, {"zen", "Zen"}, ".zen"},
+        {{"librewolf"}, nullptr, Engine::Gecko, "LibreWolf", nullptr,
+         {{RootBase::ConfigHome, "librewolf"}, {RootBase::Home, ".librewolf"}}, {"LibreWolf"},
+         ".librewolf"},
+        {{"floorp"}, nullptr, Engine::Gecko, "Floorp", nullptr,
+         {{RootBase::Home, ".floorp"}, {RootBase::ConfigHome, "floorp"}}, {"Floorp"}, ".floorp"},
+        {{"waterfox"}, nullptr, Engine::Gecko, "Waterfox", nullptr,
+         {{RootBase::Home, ".waterfox"}}, {"Waterfox"}, ".waterfox"},
+        {{"firefox"}, "pwa", Engine::Gecko, "Firefox", nullptr,
+         {{RootBase::ConfigHome, "mozilla/firefox"}, {RootBase::Home, ".mozilla/firefox"}},
+         {"Firefox"}, ".mozilla/firefox"},
+        {{"brave", "browser.beta"}, nullptr, Engine::Chromium, "Brave", "Brave Beta",
+         {{RootBase::ConfigHome, "BraveSoftware/Brave-Browser"}}, {"BraveSoftware/Brave-Browser-Beta"}},
+        {{"brave"}, nullptr, Engine::Chromium, "Brave", nullptr,
+         {{RootBase::ConfigHome, "BraveSoftware/Brave-Browser"}}, {"BraveSoftware/Brave-Browser"}},
+        {{"google-chrome"}, nullptr, Engine::Chromium, "Chrome", nullptr,
+         {{RootBase::ConfigHome, "google-chrome"}}, {"Google/Chrome"}},
+        {{"google chrome"}, nullptr, Engine::Chromium, "Chrome", nullptr,
+         {{RootBase::ConfigHome, "google-chrome"}}, {"Google/Chrome"}},
+        {{"chromium"}, nullptr, Engine::Chromium, "Chromium", nullptr,
+         {{RootBase::ConfigHome, "chromium"}}, {"Chromium"}},
+        {{"microsoft-edge"}, nullptr, Engine::Chromium, "Edge", nullptr,
+         {{RootBase::ConfigHome, "microsoft-edge"}}, {"Microsoft Edge"}},
+        {{"microsoft edge"}, nullptr, Engine::Chromium, "Edge", nullptr,
+         {{RootBase::ConfigHome, "microsoft-edge"}}, {"Microsoft Edge"}},
+        {{"msedge"}, nullptr, Engine::Chromium, "Edge", nullptr,
+         {{RootBase::ConfigHome, "microsoft-edge"}}, {"Microsoft Edge"}},
+        {{"vivaldi"}, nullptr, Engine::Chromium, "Vivaldi", nullptr,
+         {{RootBase::ConfigHome, "vivaldi"}}, {"Vivaldi"}},
+        {{"opera"}, nullptr, Engine::Chromium, "Opera", nullptr,
+         {{RootBase::ConfigHome, "opera"}}, {"com.operasoftware.Opera"}},
+        {{"thorium"}, nullptr, Engine::Chromium, "Thorium", nullptr,
+         {{RootBase::ConfigHome, "thorium"}}, {"Thorium"}},
+    };
+
+    const bool macRoots = !paths.applicationSupport.isEmpty();
+    auto candidatesFor = [&](const RootRule &r) {
+        QStringList out;
+        if (macRoots) {
+            for (const char *rel : r.mac) {
+                out << paths.applicationSupport + QLatin1Char('/') + QLatin1String(rel);
+            }
+            return out;
+        }
+        for (const auto &c : r.linux) {
+            out << (c.base == RootBase::ConfigHome ? paths.configHome : paths.home)
+                    + QLatin1Char('/') + QLatin1String(c.rel);
+        }
+        return out;
+    };
+
     auto gecko = [&](const QString &brand, const QStringList &nativeCandidates, const QString &flatpakRelDir) {
         fp.engine = Engine::Gecko;
         fp.brand = brand;
@@ -571,66 +660,41 @@ Fingerprint fingerprint(const DesktopApp &app, const DiscoveryPaths &paths)
         // Mirrors the Gecko flatpakId check above: a Chromium-based
         // browser packaged as a Flatpak keeps its profile directory under
         // ~/.var/app/<app-id>/config/... instead of ~/.config/....
+        // relDir is relative to configHome on Linux and to
+        // applicationSupport on macOS; the flatpak branch only ever runs
+        // on Linux (a bundle has no flatpak Exec= to read an id from), so
+        // it is always handed the Linux rel.
         if (flatpakId.isEmpty()) {
-            fp.dataDir = paths.configHome + QLatin1Char('/') + relDir;
+            fp.dataDir = (macRoots ? paths.applicationSupport : paths.configHome) + QLatin1Char('/') + relDir;
         } else {
             fp.dataDir = paths.home + QStringLiteral("/.var/app/") + flatpakId + QStringLiteral("/config/") + relDir;
         }
     };
 
-    if (blob.contains(QLatin1String("zen"))) {
-        gecko(QStringLiteral("Zen"), {paths.configHome + QStringLiteral("/zen"), paths.home + QStringLiteral("/.zen")},
-              QStringLiteral(".zen"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("librewolf"))) {
-        gecko(QStringLiteral("LibreWolf"),
-              {paths.configHome + QStringLiteral("/librewolf"), paths.home + QStringLiteral("/.librewolf")},
-              QStringLiteral(".librewolf"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("floorp"))) {
-        gecko(QStringLiteral("Floorp"), {paths.home + QStringLiteral("/.floorp"), paths.configHome + QStringLiteral("/floorp")},
-              QStringLiteral(".floorp"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("waterfox"))) {
-        gecko(QStringLiteral("Waterfox"), {paths.home + QStringLiteral("/.waterfox")}, QStringLiteral(".waterfox"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("firefox")) && !blob.contains(QLatin1String("pwa"))) {
-        gecko(QStringLiteral("Firefox"),
-              {paths.configHome + QStringLiteral("/mozilla/firefox"), paths.home + QStringLiteral("/.mozilla/firefox")},
-              QStringLiteral(".mozilla/firefox"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("brave"))) {
-        chromium(QStringLiteral("Brave"), QStringLiteral("BraveSoftware/Brave-Browser"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("google-chrome")) || blob.contains(QLatin1String("google chrome"))) {
-        chromium(QStringLiteral("Chrome"), QStringLiteral("google-chrome"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("chromium"))) {
-        chromium(QStringLiteral("Chromium"), QStringLiteral("chromium"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("microsoft-edge")) || blob.contains(QLatin1String("microsoft edge"))
-        || blob.contains(QLatin1String("msedge"))) {
-        chromium(QStringLiteral("Edge"), QStringLiteral("microsoft-edge"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("vivaldi"))) {
-        chromium(QStringLiteral("Vivaldi"), QStringLiteral("vivaldi"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("opera"))) {
-        chromium(QStringLiteral("Opera"), QStringLiteral("opera"));
-        return fp;
-    }
-    if (blob.contains(QLatin1String("thorium"))) {
-        chromium(QStringLiteral("Thorium"), QStringLiteral("thorium"));
+    for (const RootRule &r : rootRules) {
+        bool matched = true;
+        for (const char *needle : r.needles) {
+            if (!blob.contains(QLatin1String(needle))) {
+                matched = false;
+                break;
+            }
+        }
+        if (!matched || (r.antiNeedle && blob.contains(QLatin1String(r.antiNeedle)))) {
+            continue;
+        }
+        const QString brand =
+            QString::fromLatin1(macRoots && r.macBrand ? r.macBrand : r.brand);
+        if (r.engine == Engine::Gecko) {
+            gecko(brand, candidatesFor(r), QLatin1String(r.flatpakRel));
+        } else if (r.engine == Engine::Chromium) {
+            const QString relDir = macRoots && r.mac.size()
+                ? QLatin1String(*r.mac.begin())
+                : QLatin1String(r.linux.begin()->rel);
+            chromium(brand, relDir);
+        } else {
+            fp.engine = Engine::Generic;
+            fp.brand = brand;
+        }
         return fp;
     }
     fp.engine = Engine::Generic;
@@ -834,6 +898,8 @@ QList<Target> geckoContainers(const Target &profile, const QStringList &argPrefi
             QStringLiteral("ext+container:name=") + encodedName + QStringLiteral("&url=$urlEncoded"),
         };
         t.icon = profile.icon;
+        t.bundleId = profile.bundleId;
+        t.bundlePath = profile.bundlePath;
         t.profileKey = profile.profileKey;
         t.profileDir = profile.profileDir;
         t.containerId = userContextId;
@@ -889,6 +955,8 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp, const 
         t.exec = prefix.program;
         t.args = argPrefix + QStringList{QStringLiteral("--new-tab"), QStringLiteral("$url")};
         t.icon = app.icon;
+        t.bundleId = app.bundleId;
+        t.bundlePath = app.bundlePath;
         t.isBrowserDefault = true;
         out.append(t);
         return out;
@@ -971,6 +1039,8 @@ QList<Target> geckoProfiles(const DesktopApp &app, const Fingerprint &fp, const 
         t.args = argPrefix
             + QStringList{QStringLiteral("--profile"), launchProfileDir(r.path), QStringLiteral("--new-tab"), QStringLiteral("$url")};
         t.icon = app.icon;
+        t.bundleId = app.bundleId;
+        t.bundlePath = app.bundlePath;
         t.profileKey = r.name;
         t.profileDir = r.path;
         t.isBrowserDefault = isInstallDefault;
@@ -1036,6 +1106,8 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
             + QStringList{QStringLiteral("--profile-directory=") + key, QStringLiteral("--new-tab"), QStringLiteral("$url")};
         const QString pic = chromiumProfileIcon(fp.dataDir, key);
         t.icon = pic.isEmpty() ? app.icon : pic;
+        t.bundleId = app.bundleId;
+        t.bundlePath = app.bundlePath;
         t.profileKey = key;
         t.profileDir = fp.dataDir + QLatin1Char('/') + key;
         t.isBrowserDefault = isDefault || key == QLatin1String("Default");
@@ -1045,8 +1117,15 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
         inc.id += QStringLiteral(":incognito");
         inc.name = t.name + QStringLiteral(" (Incognito)");
         inc.subtitle = t.browserName + QStringLiteral(" · Incognito");
+        // Edge on macOS ignores --incognito (it opens a normal window,
+        // verified on the port machine); its private flag is --inprivate.
+        // Linux Edge keeps --incognito: the flag check is keyed on
+        // bundleId, which only .app targets carry.
+        const QString privateFlag = app.bundleId == QLatin1String("com.microsoft.edgemac")
+            ? QStringLiteral("--inprivate")
+            : QStringLiteral("--incognito");
         inc.args = argPrefix
-            + QStringList{QStringLiteral("--profile-directory=") + key, QStringLiteral("--incognito"), QStringLiteral("$url")};
+            + QStringList{QStringLiteral("--profile-directory=") + key, privateFlag, QStringLiteral("$url")};
         inc.incognito = true;
         inc.isBrowserDefault = false;
         out.append(inc);
@@ -1072,6 +1151,8 @@ QList<Target> chromiumProfiles(const DesktopApp &app, const Fingerprint &fp)
         tor.exec = prefix.program;
         tor.args = argPrefix + QStringList{QStringLiteral("--tor"), QStringLiteral("$url")};
         tor.icon = app.icon;
+        tor.bundleId = app.bundleId;
+        tor.bundlePath = app.bundlePath;
         tor.incognito = true;
         out.append(tor);
     }
@@ -1092,6 +1173,8 @@ QList<Target> genericBrowser(const DesktopApp &app, const Fingerprint &fp)
     t.exec = prefix.program;
     t.args = argPrefix + QStringList{QStringLiteral("$url")};
     t.icon = app.icon;
+    t.bundleId = app.bundleId;
+    t.bundlePath = app.bundlePath;
     t.isBrowserDefault = true;
     return {t};
 }
@@ -1151,6 +1234,200 @@ QList<Target> discoverPwas(const DiscoveryPaths &paths)
     return out;
 }
 
+// Reads one plist value node with the cursor on its start element.
+// Scalar types Lane does not need (integer, real, date, data, true,
+// false) are consumed but produce an invalid QVariant.
+QVariant readPlistValue(QXmlStreamReader &xml)
+{
+    const QStringView tag = xml.name();
+    if (tag == QLatin1String("dict")) {
+        QVariantMap map;
+        while (xml.readNextStartElement()) {
+            if (xml.name() != QLatin1String("key")) {
+                xml.skipCurrentElement();
+                continue;
+            }
+            const QString key = xml.readElementText();
+            if (!xml.readNextStartElement()) {
+                break;
+            }
+            map.insert(key, readPlistValue(xml));
+        }
+        return map;
+    }
+    if (tag == QLatin1String("array")) {
+        QVariantList list;
+        while (xml.readNextStartElement()) {
+            list.append(readPlistValue(xml));
+        }
+        return list;
+    }
+    if (tag == QLatin1String("string")) {
+        return xml.readElementText();
+    }
+    xml.skipCurrentElement();
+    return {};
+}
+
+// Parses the top-level <dict> of an XML property list. Returns an empty
+// map on any parse error.
+QVariantMap parseXmlPlist(const QByteArray &data)
+{
+    QXmlStreamReader xml(data);
+    while (xml.readNextStartElement()) {
+        if (xml.name() != QLatin1String("plist")) {
+            xml.skipCurrentElement();
+            continue;
+        }
+        if (!xml.readNextStartElement()) {
+            break;
+        }
+        return readPlistValue(xml).toMap();
+    }
+    return {};
+}
+
+// Loads an Info.plist as a QVariantMap. XML plists are parsed directly;
+// a binary plist ("bplist" magic) needs conversion through
+// /usr/bin/plutil, which exists only on macOS, so elsewhere a binary
+// Info.plist means the bundle is skipped rather than failing.
+QVariantMap readInfoPlist(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    QByteArray data = f.read(8 * 1024 * 1024);
+    if (data.startsWith(QByteArrayLiteral("bplist"))) {
+#ifdef Q_OS_MACOS
+        QProcess plutil;
+        plutil.start(QStringLiteral("/usr/bin/plutil"),
+                     {QStringLiteral("-convert"), QStringLiteral("xml1"), QStringLiteral("-o"), QStringLiteral("-"),
+                      QStringLiteral("--"), path});
+        if (!plutil.waitForFinished(10000) || plutil.exitCode() != 0) {
+            qDebug() << "Lane: skipping" << path << "- plutil could not convert its binary plist";
+            return {};
+        }
+        data = plutil.readAllStandardOutput();
+#else
+        qDebug() << "Lane: skipping" << path
+                 << "- binary Info.plist conversion needs /usr/bin/plutil (macOS only)";
+        return {};
+#endif
+    }
+    return parseXmlPlist(data);
+}
+
+// Scans each dir in `dirs` one level deep for .app bundles and turns the
+// qualifying ones into DesktopApp entries so the shared Gecko/Chromium/
+// generic walkers can build their profile targets. A bundle qualifies
+// only when its Info.plist declares http or https in
+// CFBundleURLTypes/CFBundleURLSchemes and its CFBundleExecutable resolves
+// to a regular executable file inside the bundle's Contents/MacOS (a
+// name containing a slash or dot-dot, or a symlink pointing outside the
+// bundle, is rejected with a log line). Lane's own bundle id is never a
+// target. Results are deduped by bundle id (shorter bundle path wins,
+// then lexicographic) and by resolved real path.
+QHash<QString, QString> g_macBundlePaths;
+
+QList<DesktopApp> scanMacBundles(const QStringList &dirs)
+{
+    g_macBundlePaths.clear();
+    QList<DesktopApp> apps;
+    QHash<QString, int> byId;
+    QSet<QString> seenCanonical;
+    for (const QString &dir : dirs) {
+        const QDir d(dir);
+        const auto entries = d.entryList({QStringLiteral("*.app")}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QString &entry : entries) {
+            const QString bundlePath = d.filePath(entry);
+            const QString canonicalPath = QFileInfo(bundlePath).canonicalFilePath();
+            if (canonicalPath.isEmpty() || seenCanonical.contains(canonicalPath)) {
+                continue;
+            }
+
+            const QVariantMap plist = readInfoPlist(bundlePath + QStringLiteral("/Contents/Info.plist"));
+            const QString bundleId = plist.value(QStringLiteral("CFBundleIdentifier")).toString();
+            if (bundleId.isEmpty()) {
+                continue;
+            }
+            if (bundleId.compare(QLatin1String("app.lane.Lane"), Qt::CaseInsensitive) == 0) {
+                continue; // Lane is never its own target
+            }
+            bool handlesWeb = false;
+            const auto urlTypes = plist.value(QStringLiteral("CFBundleURLTypes")).toList();
+            for (const auto &urlType : urlTypes) {
+                const auto schemes = urlType.toMap().value(QStringLiteral("CFBundleURLSchemes")).toList();
+                for (const auto &scheme : schemes) {
+                    const QString s = scheme.toString().toLower();
+                    if (s == QLatin1String("http") || s == QLatin1String("https")) {
+                        handlesWeb = true;
+                    }
+                }
+            }
+            if (!handlesWeb) {
+                continue;
+            }
+
+            const QString execName = plist.value(QStringLiteral("CFBundleExecutable")).toString();
+            if (execName.isEmpty() || execName.contains(QLatin1Char('/')) || execName.contains(QLatin1Char('\\'))
+                || execName == QLatin1String(".") || execName == QLatin1String("..")) {
+                qDebug() << "Lane: skipping" << bundlePath
+                         << "- CFBundleExecutable is not a bare file name:" << execName;
+                continue;
+            }
+            const QString macosDir = bundlePath + QStringLiteral("/Contents/MacOS");
+            const QString canonicalMacosDir = QFileInfo(macosDir).canonicalFilePath();
+            const QString execPath = macosDir + QLatin1Char('/') + execName;
+            const QFileInfo execInfo(execPath);
+            const QString canonicalExec = execInfo.canonicalFilePath();
+            if (canonicalMacosDir.isEmpty() || canonicalExec.isEmpty() || !execInfo.isFile() || !execInfo.isExecutable()
+                || !(canonicalExec == canonicalMacosDir
+                     || canonicalExec.startsWith(canonicalMacosDir + QLatin1Char('/')))) {
+                qDebug() << "Lane: skipping" << bundlePath
+                         << "- CFBundleExecutable does not resolve to an executable file inside Contents/MacOS:"
+                         << execName;
+                continue;
+            }
+
+            seenCanonical.insert(canonicalPath);
+            DesktopApp app;
+            app.id = QStringLiteral("macapp:") + bundleId;
+            app.name = plist.value(QStringLiteral("CFBundleDisplayName")).toString();
+            if (app.name.isEmpty()) {
+                app.name = plist.value(QStringLiteral("CFBundleName")).toString();
+            }
+            if (app.name.isEmpty()) {
+                app.name = QFileInfo(bundlePath).completeBaseName();
+            }
+            app.icon = QStringLiteral("bundle:") + bundleId;
+            app.bundleId = bundleId;
+            app.bundlePath = bundlePath;
+            // The walkers take the program out of execLine via
+            // execPrefix(); quoting keeps a bundle path containing spaces
+            // (e.g. "Brave Browser.app") a single token.
+            app.execLine = QLatin1Char('"') + execPath + QLatin1Char('"');
+
+            const auto it = byId.constFind(bundleId);
+            if (it == byId.constEnd()) {
+                byId.insert(bundleId, apps.size());
+                apps.append(app);
+                g_macBundlePaths.insert(bundleId, app.bundlePath);
+            } else {
+                // Same bundle id installed twice: keep the shorter bundle
+                // path, breaking a tie lexicographically.
+                const QString &current = apps.at(it.value()).bundlePath;
+                if (bundlePath.size() < current.size()
+                    || (bundlePath.size() == current.size() && bundlePath < current)) {
+                    apps[it.value()] = app;
+                    g_macBundlePaths.insert(bundleId, app.bundlePath);
+                }
+            }
+        }
+    }
+    return apps;
+}
+
 QList<Target> actionTargets()
 {
     Target copy;
@@ -1170,12 +1447,23 @@ QList<Target> actionTargets()
     mail.browserName = QStringLiteral("Lane");
     mail.subtitle = QStringLiteral("Mail");
     mail.icon = QStringLiteral("mail-sent");
+#ifdef Q_OS_MACOS
+    // The launcher builds the mailto open invocation itself; this string
+    // is only what `lane --list` prints, so it names the real binary.
+    mail.exec = QStringLiteral("/usr/bin/open");
+#else
     mail.exec = QStringLiteral("xdg-email");
+#endif
     mail.args = {QStringLiteral("--body"), QStringLiteral("$url")};
     return {copy, mail};
 }
 
 } // namespace
+
+QString macBundlePathForId(const QString &bundleId)
+{
+    return g_macBundlePaths.value(bundleId);
+}
 
 DiscoveryPaths defaultDiscoveryPaths()
 {
@@ -1184,6 +1472,13 @@ DiscoveryPaths defaultDiscoveryPaths()
     p.configHome = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
     p.dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
     p.applicationDirs = QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation);
+#ifdef Q_OS_MACOS
+    // ~/Library/Application Support is also GenericDataLocation's
+    // writable location on macOS; it doubles as the base for the macOS
+    // side of the profile-root table.
+    p.applicationSupport = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    p.bundleDirs = {QStringLiteral("/Applications"), p.home + QStringLiteral("/Applications")};
+#endif
 
     // QStandardPaths::ApplicationsLocation does not include Flatpak's own
     // export directories, so a Flatpak-only browser install (no native
@@ -1225,7 +1520,8 @@ DiscoveryPaths defaultDiscoveryPaths()
 QList<Target> discoverTargets(const DiscoveryPaths &paths)
 {
     QList<Target> out;
-    const auto apps = scanDesktopFiles(paths.applicationDirs);
+    auto apps = scanDesktopFiles(paths.applicationDirs);
+    apps += scanMacBundles(paths.bundleDirs);
 
     // Two desktop files can point at the same browser install and profile
     // store (e.g. an AUR "zen-bin" package shipping zen.desktop while a

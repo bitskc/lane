@@ -78,6 +78,88 @@ const QSet<QString> &blockedInterpreters()
     return k;
 }
 
+// macOS-only additions to the exec blocklist above, applied by
+// isBlockedInterpreterChainMac(). `open` and `osascript` are the Launch-
+// Services and AppleScript back doors: a user-authored custom: target that
+// names either could launch or drive any installed app, which is exactly
+// what the interpreter blocklist exists to prevent. The rest are macOS
+// scripting runtimes and wrappers with no Linux counterpart worth banning
+// (`open` is a plain text/URL viewer on Linux desktops that have one, so
+// the Linux list deliberately does not add it). osascript sits in the base
+// list already; it is repeated here only so this set reads as the spec's
+// complete macOS addition list.
+const QSet<QString> &macBlockedExecNames()
+{
+    static const QSet<QString> k = {
+        QStringLiteral("open"),
+        QStringLiteral("osascript"),
+        QStringLiteral("swift"),
+        QStringLiteral("script"),
+        QStringLiteral("tclsh"),
+        QStringLiteral("wish"),
+        QStringLiteral("shortcuts"),
+        QStringLiteral("lldb"),
+        QStringLiteral("automator"),
+    };
+    return k;
+}
+
+// Shared walk behind isBlockedInterpreterChain() and its macOS superset.
+// With macRules on, every hop's basename is additionally matched against
+// macBlockedExecNames() -- so a custom command symlinked to /usr/bin/open
+// is caught at the final hop's basename too -- and any hop (including the
+// final resolved path) that is a directory or ends in .app fails closed.
+// A directory is never a launchable program, and a .app path means the
+// command names a bundle directory or a file inside one, which must go
+// through the fixed /usr/bin/open route instead of exec'ing directly.
+bool blockedChain(const QString &execPath, bool macRules)
+{
+    if (execPath.isEmpty()) {
+        return true;
+    }
+    QString current = execPath;
+    // Real executables are never nested this many symlinks deep; the cap
+    // exists only to guarantee termination against a pathological or
+    // looping chain, not because any legitimate install needs it.
+    static constexpr int kMaxHops = 40;
+    for (int hop = 0; hop < kMaxHops; ++hop) {
+        if (isBlockedInterpreter(current)
+            || (macRules && macBlockedExecNames().contains(QFileInfo(current).fileName().toLower()))) {
+            return true;
+        }
+        const QFileInfo info(current);
+        if (!info.exists()) {
+            // Fail closed: a hop that vanished mid-check (broken link,
+            // deleted-out-from-under-us race) cannot be vouched for.
+            return true;
+        }
+        if (macRules
+            && (info.isDir() || info.fileName().endsWith(QLatin1String(".app"), Qt::CaseInsensitive))) {
+            return true;
+        }
+        if (!info.isSymLink()) {
+            return false;
+        }
+        const QString target = info.symLinkTarget();
+        if (target.isEmpty() || target == current) {
+            return true;
+        }
+        current = target;
+    }
+    return true;
+}
+
+// The chain check this build actually runs: the macOS rule set on macOS,
+// the unchanged Linux set everywhere else.
+bool osChainBlocked(const QString &execPath)
+{
+#ifdef Q_OS_MACOS
+    return isBlockedInterpreterChainMac(execPath);
+#else
+    return isBlockedInterpreterChain(execPath);
+#endif
+}
+
 // flatpak itself is not a blocked interpreter (legitimate browser desktop
 // entries launch through `flatpak run`), but its argv can still name a
 // blocked interpreter via `run --command=<prog>`, which is what actually
@@ -191,34 +273,12 @@ bool isBlockedInterpreter(const QString &exec)
 
 bool isBlockedInterpreterChain(const QString &execPath)
 {
-    if (execPath.isEmpty()) {
-        return true;
-    }
-    QString current = execPath;
-    // Real executables are never nested this many symlinks deep; the cap
-    // exists only to guarantee termination against a pathological or
-    // looping chain, not because any legitimate install needs it.
-    static constexpr int kMaxHops = 40;
-    for (int hop = 0; hop < kMaxHops; ++hop) {
-        if (isBlockedInterpreter(current)) {
-            return true;
-        }
-        const QFileInfo info(current);
-        if (!info.exists()) {
-            // Fail closed: a hop that vanished mid-check (broken link,
-            // deleted-out-from-under-us race) cannot be vouched for.
-            return true;
-        }
-        if (!info.isSymLink()) {
-            return false;
-        }
-        const QString target = info.symLinkTarget();
-        if (target.isEmpty() || target == current) {
-            return true;
-        }
-        current = target;
-    }
-    return true;
+    return blockedChain(execPath, false);
+}
+
+bool isBlockedInterpreterChainMac(const QString &execPath)
+{
+    return blockedChain(execPath, true);
 }
 
 QString resolveExecutable(const QString &exec)
@@ -260,7 +320,7 @@ bool parseCustomCommand(const QString &command, Target *out, QString *error)
         }
         return false;
     }
-    if (isBlockedInterpreterChain(resolved)) {
+    if (osChainBlocked(resolved)) {
         if (error) {
             *error = QStringLiteral("Shells and language runtimes are not allowed as handlers");
         }
@@ -287,16 +347,53 @@ bool parseCustomCommand(const QString &command, Target *out, QString *error)
     return true;
 }
 
+std::optional<QStringList> macFixedOpenArgs(const Target &target, const QString &sanitizedUrl)
+{
+    if (target.kind == Kind::Action && target.id == QLatin1String("action:email")) {
+        if (sanitizedUrl.isEmpty()) {
+            // Owned but refused: `open` with no argument opens Finder.
+            return QStringList();
+        }
+        // The whole URL is percent-encoded into a single mailto body so a
+        // crafted query string cannot inject to, cc or subject fields.
+        return QStringList{QStringLiteral("mailto:?body=")
+                           + QString::fromUtf8(QUrl::toPercentEncoding(sanitizedUrl))};
+    }
+    if (target.kind == Kind::BrowserProfile && target.bundleId == QLatin1String("com.apple.Safari")) {
+        if (sanitizedUrl.isEmpty()) {
+            return QStringList();
+        }
+        // Safari is reached through LaunchServices, not by exec'ing the
+        // bundle binary, and takes no profile or private arguments.
+        return QStringList{QStringLiteral("-b"), target.bundleId, sanitizedUrl};
+    }
+    return std::nullopt;
+}
+
 bool launchTarget(const Target &target, const QString &url, const QString &activationToken)
 {
     if (target.kind == Kind::Action && target.id == QLatin1String("action:copy")) {
         return false;
     }
-    if (target.exec.isEmpty()) {
-        return false;
-    }
     const QString open = sanitizedOpenUrl(url);
     if (open.isEmpty()) {
+        return false;
+    }
+#ifdef Q_OS_MACOS
+    // Fixed /usr/bin/open routes (Safari, action:email) are built from the
+    // target's kind and bundle id and deliberately never look at
+    // target.exec, so they run before the exec resolution and chain checks
+    // -- which would otherwise refuse `/usr/bin/open` itself, since `open`
+    // is on the macOS exec blocklist. The path is fixed, so no
+    // resolveExecutable() or chain check applies to it.
+    if (const auto openArgs = macFixedOpenArgs(target, open)) {
+        if (openArgs->isEmpty()) {
+            return false;
+        }
+        return QProcess::startDetached(QStringLiteral("/usr/bin/open"), *openArgs);
+    }
+#endif
+    if (target.exec.isEmpty()) {
         return false;
     }
     // Always resolve, even for an absolute exec: this is what confirms
@@ -308,11 +405,11 @@ bool launchTarget(const Target &target, const QString &url, const QString &activ
     if (exe.isEmpty()) {
         return false;
     }
-    // isBlockedInterpreterChain(), not the plain basename check: exe can
-    // itself be a symlink (resolveExecutable() deliberately does not
-    // canonicalize) pointing at a blocked interpreter under an unrelated
-    // name, and the chain walk is what catches that.
-    if (isBlockedInterpreterChain(exe)) {
+    // osChainBlocked(), not the plain basename check: exe can itself be a
+    // symlink (resolveExecutable() deliberately does not canonicalize)
+    // pointing at a blocked interpreter under an unrelated name, and the
+    // chain walk is what catches that.
+    if (osChainBlocked(exe)) {
         return false;
     }
     // flatpak passes the exec check legitimately, so its argv needs its

@@ -144,7 +144,14 @@ static bool targetFromJson(const QJsonObject &o, Target *out)
     if (!blocked) {
         const QString resolved = resolveExecutable(t.exec);
         if (!resolved.isEmpty()) {
+#ifdef Q_OS_MACOS
+            // Same rule set launchTarget() enforces on macOS: open,
+            // osascript, directories and .app paths are refused there, so
+            // keeping such an entry would only strand it in the picker.
+            blocked = isBlockedInterpreterChainMac(resolved);
+#else
             blocked = isBlockedInterpreterChain(resolved);
+#endif
         }
     }
     if (blocked) {
