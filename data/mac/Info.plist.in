@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Lane</string>
+    <key>CFBundleIdentifier</key>
+    <string>app.lane.Lane</string>
+    <key>CFBundleVersion</key>
+    <string>${LANE_VERSION_STRING}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>${LANE_VERSION_STRING}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <!-- Accessory app: status item only, no Dock icon (owner decision D3). -->
+    <key>LSUIElement</key>
+    <true/>
+    <!-- http and https only. No mailto/PDF interception. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>http and https link routing</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>http</string>
+                <string>https</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+        </dict>
+    </array>
+</dict>
+</plist>

@@ -1,6 +1,6 @@
 #include "Controller.h"
 
-#include "Autostart.h"
+#include "platform/platform.h"
 #include "SourceInfo.h"
 #include "ThemeIconProvider.h"
 #include "core/config.h"
@@ -12,9 +12,7 @@
 #include "core/unshorten.h"
 #include "core/urlutil.h"
 #include "lane_version.h"
-#include "platform/platform.h"
 
-#include <LayerShellQt/Window>
 #ifdef HAVE_PLASMA_ACTIVITIES
 #include <PlasmaActivities/Consumer>
 #include <PlasmaActivities/Info>
@@ -29,7 +27,6 @@
 #include <QIcon>
 #include <QLocale>
 #include <QMenu>
-#include <QProcess>
 #include <QQmlContext>
 #include <QQmlError>
 #include <QQuickStyle>
@@ -97,11 +94,14 @@ Controller::Controller(QObject *parent)
 
     // The watchdog only fires while the daemon lives; Controller is the
     // long-lived process object, so owning it here keeps it out of the
-    // short-lived --pick/--explain invocations.
-    m_defaultWatcher = new DefaultBrowserWatcher(this);
-    connect(m_defaultWatcher, &DefaultBrowserWatcher::mimeappsChanged,
-            this, &Controller::onMimeappsChanged);
-    m_defaultWatcher->setEnabled(m_config.watchdogEnabled);
+    // short-lived --pick/--explain invocations. macOS polls LaunchServices
+    // instead (Platform::watchesDefaultHandlerByFile is false there).
+    if (platform()->watchesDefaultHandlerByFile()) {
+        m_defaultWatcher = new DefaultBrowserWatcher(this);
+        connect(m_defaultWatcher, &DefaultBrowserWatcher::mimeappsChanged,
+                this, &Controller::onMimeappsChanged);
+        m_defaultWatcher->setEnabled(m_config.watchdogEnabled);
+    }
 }
 
 Controller::~Controller()
@@ -249,17 +249,7 @@ void Controller::refreshDefaultBrowserState()
     // The scheme handlers are authoritative for this URL-only router.
     // A desktop's broader "default browser" setting may also own HTML
     // files, about: or unknown: URLs, which Lane must not take over.
-    m_isDefaultBrowser = true;
-    for (const QString &scheme : {QStringLiteral("http"), QStringLiteral("https")}) {
-        QProcess process;
-        process.start(QStringLiteral("xdg-mime"),
-                      {QStringLiteral("query"), QStringLiteral("default"), QStringLiteral("x-scheme-handler/") + scheme});
-        if (!process.waitForFinished(1500) || process.exitCode() != 0
-            || QString::fromUtf8(process.readAllStandardOutput()).trimmed() != QLatin1String("app.lane.Lane.desktop")) {
-            m_isDefaultBrowser = false;
-            break;
-        }
-    }
+    m_isDefaultBrowser = platform()->defaultHandlerState().isDefault;
 }
 
 void Controller::onMimeappsChanged()
@@ -352,7 +342,7 @@ void Controller::setWatchdogEnabled(bool on)
 void Controller::setAutostartEnabled(bool on)
 {
     m_config.autostart = on;
-    setAutostart(on);
+    platform()->autostartSet(on);
     persist();
     Q_EMIT settingsChanged();
 }
@@ -704,12 +694,10 @@ void Controller::rediscover()
 
 void Controller::makeDefaultBrowser()
 {
-    QProcess::execute(QStringLiteral("xdg-mime"),
-                      {QStringLiteral("default"), QStringLiteral("app.lane.Lane.desktop"), QStringLiteral("x-scheme-handler/http")});
-    QProcess::execute(QStringLiteral("xdg-mime"),
-                      {QStringLiteral("default"), QStringLiteral("app.lane.Lane.desktop"), QStringLiteral("x-scheme-handler/https")});
-    refreshDefaultBrowserState();
-    Q_EMIT defaultBrowserChanged();
+    platform()->makeDefaultHandler([this](bool) {
+        refreshDefaultBrowserState();
+        Q_EMIT defaultBrowserChanged();
+    });
 }
 
 void Controller::hideTarget(const QString &id, bool hidden)
@@ -919,7 +907,7 @@ void Controller::moveTarget(const QString &id, int newIndex)
 void Controller::reload()
 {
     m_config = loadConfig(m_configPath);
-    m_config.autostart = autostartEnabled();
+    m_config.autostart = platform()->autostartEnabled();
     m_targets = applyConfigToTargets(discoverTargets(defaultDiscoveryPaths()), m_config);
     if (m_config.defaultTargetId.isEmpty()) {
         if (const Target *t = defaultTarget(m_targets, m_config)) {
@@ -1116,7 +1104,7 @@ void Controller::ensurePickerEngine()
         return;
     }
     m_pickerWindow = window;
-    configureLayerShell(m_pickerWindow);
+    platform()->configureOverlayWindow(m_pickerWindow);
 }
 
 void Controller::ensureSettingsEngine()
@@ -1128,30 +1116,6 @@ void Controller::ensureSettingsEngine()
     m_settingsWindow = window;
 }
 
-void Controller::configureLayerShell(QWindow *window, const QString &scope)
-{
-    auto *ls = LayerShellQt::Window::get(window);
-    if (!ls) { // null on X11 / non-wlroots — window behaves as normal
-        qWarning() << "Lane: layer-shell unavailable; falling back to normal window";
-        return;
-    }
-    ls->setLayer(LayerShellQt::Window::LayerOverlay);
-    LayerShellQt::Window::Anchors anchors;
-    anchors.setFlag(LayerShellQt::Window::AnchorTop);
-    anchors.setFlag(LayerShellQt::Window::AnchorBottom);
-    anchors.setFlag(LayerShellQt::Window::AnchorLeft);
-    anchors.setFlag(LayerShellQt::Window::AnchorRight);
-    ls->setAnchors(anchors);
-    ls->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
-    ls->setExclusiveZone(-1);
-    ls->setScope(scope);
-    ls->setWantsToBeOnActiveScreen(true);
-    ls->setActivateOnShow(true);
-    auto *screen = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
-    if (screen) {
-        window->setGeometry(screen->geometry());
-    }
-}
 
 UnshortenFn Controller::unshortenFn() const
 {
@@ -1244,7 +1208,7 @@ void Controller::ensureHoldEngine()
         return;
     }
     m_holdWindow = window;
-    configureLayerShell(m_holdWindow, QStringLiteral("lane-hold"));
+    platform()->configureOverlayWindow(m_holdWindow, QStringLiteral("lane-hold"));
 }
 
 } // namespace Lane

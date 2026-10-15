@@ -222,7 +222,6 @@ private:
     void ensurePickerEngine();
     void ensureSettingsEngine();
     void ensureHoldEngine();
-    void configureLayerShell(QWindow *window, const QString &scope = QStringLiteral("lane-picker"));
     bool shouldHold(const QString &reason) const;
     void startHold(const Target &target, const QString &reason, const QString &memoryKey);
     void hideHold();

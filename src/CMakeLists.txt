@@ -22,7 +22,45 @@ target_link_libraries(lane-core
         Qt6::Network
 )
 
+# Core app sources shared by every lane executable (Linux daemon and macOS
+# app bundle). None of these touch D-Bus or KDE directly; the OS-specific
+# bits live in platform_*.cpp via the Platform seam.
+set(LANE_APP_SRCS
+    app/Controller.cpp
+    app/PickerModel.cpp
+    app/TargetModel.cpp
+    app/RuleModel.cpp
+    app/SourceInfo.cpp
+    app/UpdateChecker.cpp
+    app/ThemeIconProvider.cpp
+    app/ThemeIconProvider.h
+    app/SingleInstance.cpp
+    app/CrashLog.cpp
+    app/DefaultBrowserWatcher.cpp   # safe on macOS: only enabled when
+                                    # Platform::watchesDefaultHandlerByFile()
+                                    # is true (Linux only; see Controller)
+)
 if(LANE_KDE_DESKTOP)
+    list(APPEND LANE_APP_SRCS
+        app/Autostart.cpp
+        app/DBusActivation.cpp
+        app/platform/platform_linux.cpp
+    )
+elseif(LANE_MAC_DESKTOP)
+    list(APPEND LANE_APP_SRCS
+        app/platform/platform_macos.mm
+    )
+endif()
+
+add_library(lane-app STATIC ${LANE_APP_SRCS})
+target_include_directories(lane-app PUBLIC ${CMAKE_BINARY_DIR})
+target_link_libraries(lane-app PUBLIC lane-core Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets)
+if(LANE_KDE_DESKTOP)
+    target_link_libraries(lane-app PRIVATE Qt6::DBus)
+endif()
+
+if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
+
     # UI module: local FormCard/Kirigami replacements, no KDE QML at
     # runtime. Static target so the app links it without a separate
     # plugin; qt_add_qml_module generates the qmldir for URI app.lane.ui.
@@ -65,27 +103,11 @@ endif()
 if(LANE_KDE_DESKTOP)
     set(lane_SRCS
         app/main.cpp
-        app/Controller.cpp
-        app/PickerModel.cpp
-        app/TargetModel.cpp
-        app/RuleModel.cpp
-        app/Autostart.cpp
-        app/SourceInfo.cpp
-        app/UpdateChecker.cpp
-        app/DefaultBrowserWatcher.cpp
-        app/ThemeIconProvider.cpp
-        app/ThemeIconProvider.h
-    )
-    list(APPEND lane_SRCS
-        app/SingleInstance.cpp
-        app/DBusActivation.cpp
-        app/CrashLog.cpp
-        app/platform/platform_linux.cpp
     )
 
     qt_add_executable(lane ${lane_SRCS})
     target_include_directories(lane PRIVATE ${CMAKE_BINARY_DIR})
-    target_link_libraries(lane PRIVATE laneuiplugin)
+    target_link_libraries(lane PRIVATE lane-app laneuiplugin)
 
     qt_add_qml_module(lane
         URI app.lane
@@ -133,4 +155,55 @@ if(LANE_KDE_DESKTOP)
     endif()
 
     install(TARGETS lane ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+elseif(LANE_MAC_DESKTOP)
+    set(lane_SRCS
+        app/main.cpp
+    )
+
+    qt_add_executable(lane MACOSX_BUNDLE ${lane_SRCS})
+    target_include_directories(lane PRIVATE ${CMAKE_BINARY_DIR})
+    target_link_libraries(lane PRIVATE lane-app laneuiplugin)
+
+    qt_add_qml_module(lane
+        URI app.lane
+        VERSION 1.0
+        QML_FILES
+            qml/Picker.qml
+            qml/Hold.qml
+            qml/Settings.qml
+            qml/pages/OverviewPage.qml
+            qml/pages/TargetsPage.qml
+            qml/pages/RulesPage.qml
+            qml/pages/PreferencesPage.qml
+        RESOURCE_PREFIX /qt/qml
+    )
+
+    qt_add_resources(lane "qtquickcontrols2conf"
+        PREFIX "/"
+        FILES qtquickcontrols2.conf
+    )
+
+    target_link_libraries(lane
+        PRIVATE
+            lane-core
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Qml
+            Qt6::Quick
+            Qt6::QuickControls2
+            Qt6::Widgets
+            Qt6::Network
+            Qt6::Svg
+            "-framework AppKit"
+            "-framework UserNotifications"
+            "-framework ServiceManagement"
+            "-framework CoreServices"
+    )
+
+    set_target_properties(lane PROPERTIES
+        MACOSX_BUNDLE_BUNDLE_NAME "Lane"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/data/mac/Info.plist.in"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "app.lane.Lane"
+    )
+    target_compile_definitions(lane PRIVATE LANE_MACOS_BUNDLE=1)
 endif()

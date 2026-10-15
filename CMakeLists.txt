@@ -20,8 +20,15 @@ set(ECM_MIN_VERSION "6.0.0")
 # still built - the routing brain is pure Qt and the tests prove it.
 # The app target itself returns per-OS as platform backends land.
 set(LANE_KDE_DESKTOP OFF)
+set(LANE_MAC_DESKTOP OFF)
 if(UNIX AND NOT APPLE)
     set(LANE_KDE_DESKTOP ON)
+elseif(APPLE)
+    set(LANE_MAC_DESKTOP ON)
+endif()
+
+if(APPLE)
+    enable_language(OBJCXX)
 endif()
 
 if(LANE_KDE_DESKTOP)
@@ -44,16 +51,18 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Gui
     Network
     Test
+    Qml
+    Quick
+    QuickControls2
+    Widgets
+    Svg
 )
+qt_policy(SET QTP0001 NEW)
+if(Qt6_VERSION VERSION_GREATER_EQUAL "6.8.0")
+    qt_policy(SET QTP0004 NEW)
+endif()
 if(LANE_KDE_DESKTOP)
-    find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
-        Qml
-        Quick
-        QuickControls2
-        Widgets
-        DBus
-        Svg
-    )
+    find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS DBus)
     find_package(KF6WindowSystem ${KF_MIN_VERSION} QUIET)
     find_package(LayerShellQt REQUIRED)
     # Optional: KDE Plasma Activities integration for per-Activity rules and
@@ -63,10 +72,6 @@ if(LANE_KDE_DESKTOP)
     # exactly today's behavior.
     find_package(PlasmaActivities QUIET)
 
-    qt_policy(SET QTP0001 NEW)
-    if(Qt6_VERSION VERSION_GREATER_EQUAL "6.8.0")
-        qt_policy(SET QTP0004 NEW)
-    endif()
 
     ecm_setup_version(PROJECT
         VARIABLE_PREFIX LANE

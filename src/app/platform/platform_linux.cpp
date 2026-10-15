@@ -1,6 +1,10 @@
 #include "platform.h"
-
 #include "app/Autostart.h"
+#include "app/DBusActivation.h"
+
+#include <LayerShellQt/Window>
+#include <QGuiApplication>
+#include <QProcess>
 
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -168,6 +172,75 @@ public:
         Q_UNUSED(timeoutMs);
         done(QString());
 #endif
+    }
+
+    AutostartStatus autostartStatus() override
+    {
+        AutostartStatus s;
+        s.enabled = Lane::autostartEnabled();
+        return s;
+    }
+
+    bool watchesDefaultHandlerByFile() const override { return true; }
+
+    DefaultHandlerState defaultHandlerState() override
+    {
+        DefaultHandlerState state;
+        state.isDefault = true;
+        state.status = DefaultHandlerState::Status::Registered;
+        for (const QString &scheme : {QStringLiteral("http"), QStringLiteral("https")}) {
+            QProcess process;
+            process.start(QStringLiteral("xdg-mime"),
+                          {QStringLiteral("query"), QStringLiteral("default"), QStringLiteral("x-scheme-handler/") + scheme});
+            if (!process.waitForFinished(1500) || process.exitCode() != 0
+                || QString::fromUtf8(process.readAllStandardOutput()).trimmed() != QLatin1String("app.lane.Lane.desktop")) {
+                state.isDefault = false;
+                state.status = DefaultHandlerState::Status::Partial;
+                break;
+            }
+        }
+        return state;
+    }
+
+    void makeDefaultHandler(std::function<void(bool ok)> done) override
+    {
+        QProcess::execute(QStringLiteral("xdg-mime"),
+                          {QStringLiteral("default"), QStringLiteral("app.lane.Lane.desktop"), QStringLiteral("x-scheme-handler/http")});
+        QProcess::execute(QStringLiteral("xdg-mime"),
+                          {QStringLiteral("default"), QStringLiteral("app.lane.Lane.desktop"), QStringLiteral("x-scheme-handler/https")});
+        const DefaultHandlerState state = defaultHandlerState();
+        done(state.isDefault);
+    }
+
+    void configureOverlayWindow(QWindow *window, const QString &scope) override
+    {
+        auto *ls = LayerShellQt::Window::get(window);
+        if (!ls) { // null on X11 / non-wlroots — window behaves as normal
+            qWarning() << "Lane: layer-shell unavailable; falling back to normal window";
+            return;
+        }
+        ls->setLayer(LayerShellQt::Window::LayerOverlay);
+        LayerShellQt::Window::Anchors anchors;
+        anchors.setFlag(LayerShellQt::Window::AnchorTop);
+        anchors.setFlag(LayerShellQt::Window::AnchorBottom);
+        anchors.setFlag(LayerShellQt::Window::AnchorLeft);
+        anchors.setFlag(LayerShellQt::Window::AnchorRight);
+        ls->setAnchors(anchors);
+        ls->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
+        ls->setExclusiveZone(-1);
+        ls->setScope(scope);
+        ls->setWantsToBeOnActiveScreen(true);
+        ls->setActivateOnShow(true);
+        auto *screen = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
+        if (screen) {
+            window->setGeometry(screen->geometry());
+        }
+    }
+
+    bool registerActivation(std::function<void(const QStringList &args)> handleArgs,
+                            std::function<void(const QString &url)> openUrl) override
+    {
+        return Lane::registerActivation(std::move(handleArgs), std::move(openUrl));
     }
 };
 

@@ -1,6 +1,6 @@
 #include "app/Controller.h"
 #include "app/CrashLog.h"
-#include "app/DBusActivation.h"
+#include "app/platform/platform.h"
 #include "app/SingleInstance.h"
 #include "core/config.h"
 #include "core/discovery.h"
@@ -160,8 +160,8 @@ int main(int argc, char **argv)
     // Bus-name acquisition is the systemd Type=dbus readiness signal and
     // the only way a launcher's gtk-launch/Open call can reach a running
     // daemon; a failure here is as fatal as KDBusService::Unique's used
-    // to be.
-    if (!Lane::registerActivation(
+    // to be. On macOS this always succeeds (LaunchServices needs none).
+    if (!Lane::platform()->registerActivation(
             [&controller](const QStringList &args) { controller.handleArgs(args); },
             [&controller](const QString &url) { controller.openUrl(url); })) {
         std::fprintf(stderr, "lane: could not register D-Bus activation; exiting\n");
