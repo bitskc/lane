@@ -16,6 +16,16 @@ Window {
     readonly property int maxRows: 8
     readonly property int rowHeight: 48
 
+    // Key hints are labelled per platform: on macOS Qt.ControlModifier is
+    // ⌘ and Qt.AltModifier is ⌥, so the same Shortcut bindings keep
+    // working and only the labels change (decision D4).
+    readonly property bool mac: Qt.platform.os === "osx"
+    readonly property string hintCopy: mac ? "⌘C" : "^C"
+    readonly property string hintAltP: mac ? "⌥P private" : "alt+p private"
+    readonly property string hintAltE: mac ? "⌥E" : "alt+e"
+    // Hints read better in the system UI font than monospace on macOS.
+    readonly property string hintFont: mac ? "" : "monospace"
+
     onVisibleChanged: {
         if (visible) {
             width = Screen.width
@@ -267,7 +277,7 @@ Window {
                             visible: emptyState.filtering && !emptyState.zeroTargets
                             text: "esc clear"
                             font.pixelSize: 10
-                            font.family: "monospace"
+                            font.family: root.hintFont
                             opacity: 0.4
                         }
 
@@ -278,7 +288,7 @@ Window {
                             visible: emptyState.zeroTargets
                             text: "alt+s settings · alt+r rescan"
                             font.pixelSize: 10
-                            font.family: "monospace"
+                            font.family: root.hintFont
                             opacity: 0.4
                         }
                     }
@@ -501,7 +511,7 @@ Window {
 
                         Accessible.role: Accessible.Button
                         Accessible.name: "Copy link"
-                        Accessible.description: "Copy the current link to the clipboard, shortcut Control C"
+                        Accessible.description: root.mac ? "Copy the current link to the clipboard, shortcut Command C" : "Copy the current link to the clipboard, shortcut Control C"
 
                         RowLayout {
                             id: copyRow
@@ -514,9 +524,9 @@ Window {
                                 opacity: copyHover.hovered ? 0.7 : 0.4
                             }
                             QQC.Label {
-                                text: "^C"
+                                text: root.hintCopy
                                 font.pixelSize: 10
-                                font.family: "monospace"
+                                font.family: root.hintFont
                                 opacity: copyHover.hovered ? 0.7 : 0.4
                             }
                         }
@@ -537,7 +547,7 @@ Window {
 
                         Accessible.role: Accessible.Button
                         Accessible.name: "Email link"
-                        Accessible.description: "Open the current link in your mail client, shortcut Alt E"
+                        Accessible.description: root.mac ? "Open the current link in your mail client, shortcut Option E" : "Open the current link in your mail client, shortcut Alt E"
 
                         RowLayout {
                             id: emailRow
@@ -550,9 +560,9 @@ Window {
                                 opacity: emailHover.hovered ? 0.7 : 0.4
                             }
                             QQC.Label {
-                                text: "alt+e"
+                                text: root.hintAltE
                                 font.pixelSize: 10
-                                font.family: "monospace"
+                                font.family: root.hintFont
                                 opacity: emailHover.hovered ? 0.7 : 0.4
                             }
                         }
@@ -569,17 +579,17 @@ Window {
                     QQC.Label {
                         text: "esc"
                         font.pixelSize: 10
-                        font.family: "monospace"
+                        font.family: root.hintFont
                         opacity: 0.4
                     }
                     QQC.Label {
-                        text: "alt+p private"
+                        text: root.hintAltP
                         font.pixelSize: 10
-                        font.family: "monospace"
+                        font.family: root.hintFont
                         opacity: 0.4
 
                         Accessible.role: Accessible.StaticText
-                        Accessible.name: "Open in private window, shortcut Alt P"
+                        Accessible.name: root.mac ? "Open in private window, shortcut Option P" : "Open in private window, shortcut Alt P"
                     }
                     Item { Layout.fillWidth: true }
                     // Ladder keys: "," narrows the destination (adds a path
@@ -588,13 +598,13 @@ Window {
                     QQC.Label {
                         text: ". widen"
                         font.pixelSize: 10
-                        font.family: "monospace"
+                        font.family: root.hintFont
                         opacity: 0.4
                     }
                     QQC.Label {
                         text: ", narrow"
                         font.pixelSize: 10
-                        font.family: "monospace"
+                        font.family: root.hintFont
                         opacity: 0.4
                     }
                 }
