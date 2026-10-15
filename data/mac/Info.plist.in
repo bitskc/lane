@@ -24,6 +24,38 @@
     <!-- Icon staged by packaging/mac/bundle.sh into Contents/Resources/Lane.icns. -->
     <key>CFBundleIconFile</key>
     <string>Lane</string>
+    <!-- The default-browser list in System Settings is populated from
+         document-type + URL-type handlers; pure CFBundleURLTypes apps
+         never appear. OpenIn (also an LSUIElement router) proves the
+         pattern: html/url/xhtml content types with a handler rank. -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>HTML Document</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.html</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>URL</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.url</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
+    </array>
+
     <!-- http and https only. No mailto/PDF interception. -->
     <key>CFBundleURLTypes</key>
     <array>
