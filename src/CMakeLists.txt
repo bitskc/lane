@@ -202,7 +202,7 @@ elseif(LANE_MAC_DESKTOP)
 
     set_target_properties(lane PROPERTIES
         MACOSX_BUNDLE_BUNDLE_NAME "Lane"
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/data/mac/Info.plist.in"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/data/mac/Info.plist.in"
         MACOSX_BUNDLE_GUI_IDENTIFIER "app.lane.Lane"
     )
     target_compile_definitions(lane PRIVATE LANE_MACOS_BUNDLE=1)
