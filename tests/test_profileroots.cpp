@@ -205,7 +205,12 @@ private Q_SLOTS:
 
         // Both Application Support/zen and /Zen are candidates (the
         // case-insensitive volume case). One profile store is walked.
-        copyTree(support + QStringLiteral("/zen"), support + QStringLiteral("/Zen"));
+        // On a case-insensitive volume the two paths are the same
+        // directory; copying zen onto Zen would self-delete the fixture,
+        // so only stage a second tree when the volume keeps them apart.
+        if (!QFileInfo(support + QStringLiteral("/Zen")).exists()) {
+            copyTree(support + QStringLiteral("/zen"), support + QStringLiteral("/Zen"));
+        }
         const auto withBoth = discoverTargets(p);
         const qsizetype zenProfiles = std::count_if(withBoth.begin(), withBoth.end(), [](const Target &t) {
             return t.bundleId == QLatin1String("app.zen-browser.zen") && t.kind == Kind::BrowserProfile
