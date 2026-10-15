@@ -66,21 +66,18 @@ done < <(find "$APP" -type f)
 
 
 # --- sign every nested Mach-O, then the bundle -------------------------------
-# Factored into a function: the install step must re-run the whole pass at
-# the destination because copying a signed bundle (cp, ditto, anything)
-# invalidates embedded signatures on the copied Mach-Os.
+# Factored into a function: signing must happen at each bundle's final
+# location. Copying a signed bundle breaks embedded signatures on the
+# copied Mach-Os (the exe loses its Info.plist binding), so the install
+# step copies the unsigned bundle and signs the copy in place.
 sign_bundle() {
     local app="$1" f
     local main_exec="$app/Contents/MacOS/lane"
     while IFS= read -r f; do
         # The main executable is signed by the bundle-level codesign call
         # below so its Info.plist slot stays bound; signing it standalone
-        # ("Info.plist=not bound") makes every copied bundle fail verify.
+        # ("Info.plist=not bound") makes copied bundles fail verify.
         if is_macho "$f" && [ "$f" != "$main_exec" ]; then
-            # --remove-signature first: codesign --force over a copied
-            # Mach-O can leave a stale Info.plist hash that fails verify
-            # ("plist or signature have been modified"); a stripped file
-            # signs and verifies clean.
             codesign --remove-signature "$f" 2>/dev/null || true
             codesign --force --sign "$IDENTITY" "$f" >/dev/null || die "codesign failed: $f"
         fi
@@ -99,8 +96,24 @@ verify_bundle() {
     codesign --verify --strict --verbose=2 "$app" || die "bundle signature invalid"
 }
 
+# --- optional install: copy the still-unsigned bundle, then sign at the  -
+# destination. Signing a bundle and then copying it breaks embedded
+# signatures on the copied Mach-Os, so all signing happens in place.
+if [ -n "$INSTALL_DIR" ]; then
+    mkdir -p "$INSTALL_DIR"
+    rm -rf "$INSTALL_DIR/Lane.app"
+    ditto "$APP" "$INSTALL_DIR/Lane.app"
+    # ditto can leave signature-state xattrs behind; strip before signing.
+    xattr -rc "$INSTALL_DIR/Lane.app" 2>/dev/null || true
+fi
+
 sign_bundle "$APP"
 verify_bundle "$APP"
+
+if [ -n "$INSTALL_DIR" ]; then
+    sign_bundle "$INSTALL_DIR/Lane.app"
+    verify_bundle "$INSTALL_DIR/Lane.app"
+fi
 
 # --- no Homebrew or /usr/local paths may survive inside the bundle -----------
 bad=""
@@ -115,15 +128,8 @@ done < <(find "$APP" -type f)
 # --- quarantine strip: no-op when absent, needed if the bundle moved hosts ---
 xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 
-# --- optional install --------------------------------------------------------
+# --- quarantine strip on the installed copy ---------------------------------
 if [ -n "$INSTALL_DIR" ]; then
-    mkdir -p "$INSTALL_DIR"
-    rm -rf "$INSTALL_DIR/Lane.app"
-    ditto "$APP" "$INSTALL_DIR/Lane.app"
-    # Copying invalidates embedded signatures even when bytes survive,
-    # so sign and verify the installed copy, not just the staged one.
-    sign_bundle "$INSTALL_DIR/Lane.app"
-    verify_bundle "$INSTALL_DIR/Lane.app"
     xattr -dr com.apple.quarantine "$INSTALL_DIR/Lane.app" 2>/dev/null || true
     echo "installed: $INSTALL_DIR/Lane.app"
 fi
