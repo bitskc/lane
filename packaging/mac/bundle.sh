@@ -71,8 +71,12 @@ done < <(find "$APP" -type f)
 # invalidates embedded signatures on the copied Mach-Os.
 sign_bundle() {
     local app="$1" f
+    local main_exec="$app/Contents/MacOS/lane"
     while IFS= read -r f; do
-        if is_macho "$f"; then
+        # The main executable is signed by the bundle-level codesign call
+        # below so its Info.plist slot stays bound; signing it standalone
+        # ("Info.plist=not bound") makes every copied bundle fail verify.
+        if is_macho "$f" && [ "$f" != "$main_exec" ]; then
             # --remove-signature first: codesign --force over a copied
             # Mach-O can leave a stale Info.plist hash that fails verify
             # ("plist or signature have been modified"); a stripped file
