@@ -73,11 +73,10 @@
             </array>
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>
-            <!-- LaunchServices needs a handler rank to offer the app in the
-                 default-browser list and for setDefaultApplicationAtURL to
-                 accept it; Alternate = eligible, not pre-seeded. -->
-            <key>LSHandlerRank</key>
-            <string>Alternate</string>
+            <!-- No LSHandlerRank on URL types: every shipping browser or
+                 router (OpenIn, Finicky, Browserosaurus) leaves it off and
+                 ranks only the document types; ranking the scheme is what
+                 kept Lane out of the default-browser list. -->
         </dict>
     </array>
 </dict>
