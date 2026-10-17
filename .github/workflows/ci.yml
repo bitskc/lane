@@ -100,3 +100,33 @@ jobs:
             -DCMAKE_DISABLE_FIND_PACKAGE_KF6WindowSystem=ON \
             -DCMAKE_DISABLE_FIND_PACKAGE_PlasmaActivities=ON
           cmake --build build-minimal
+
+  macos:
+    # Runs on the self-hosted MacBook runner (actions.runner.bitskc-lane
+    # .macbook-lane) instead of macos-latest so the job does not burn
+    # Actions minutes and always tests the real port machine.
+    # Push-only: pull_request jobs from forks must never reach a
+    # self-hosted runner in this workspace.
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, macOS, ARM64]
+    env:
+      QT_QPA_PLATFORM: minimal
+      XDG_RUNTIME_DIR: ${{ runner.temp }}/lane-run
+      PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check toolchain
+        run: |
+          cmake --version | head -1
+          xcode-select -p
+          ls /opt/homebrew/opt/qt/bin/qmake6 2>/dev/null || ls /opt/homebrew/opt/qt/bin/qt-cmake
+      - name: Configure
+        run: |
+          mkdir -p "$XDG_RUNTIME_DIR"
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
