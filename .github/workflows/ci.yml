@@ -111,7 +111,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     env:
       QT_QPA_PLATFORM: minimal
-      XDG_RUNTIME_DIR: ${{ runner.temp }}/lane-run
+      XDG_RUNTIME_DIR: /tmp/lane-ci-run
       PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
     steps:
       - uses: actions/checkout@v4
