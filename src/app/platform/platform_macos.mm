@@ -4,6 +4,7 @@
 // applies AppKit chrome on every show.
 
 #import <AppKit/AppKit.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <ServiceManagement/ServiceManagement.h>
 #import <UserNotifications/UserNotifications.h>
 
@@ -317,23 +318,33 @@ public:
             (*donePtr)(ok);
         };
 
-        // NSWorkspace completions run on an Apple-managed queue, but
-        // `done` lands in Controller and emits Qt signals, so finish work
-        // is marshalled to the main queue.
+        // On macOS 26 `setDefaultApplicationAtURL:toOpenURLsWithScheme:`
+        // fails with permErr (NSError 256 wrapping OSStatus -54 in
+        // LSExternalPriv.mm) for every caller/target, signed or not — the
+        // scheme-handler write path is gated. The content-type variant is
+        // not: setting `public.url` re-points http/https handling
+        // (verified by URLForApplicationToOpenURL resolving to this
+        // bundle), and `public.html` covers local file opens.
+        UTType *urlType = [UTType typeWithIdentifier:@"public.url"];
+        UTType *htmlType = [UTType typeWithIdentifier:@"public.html"];
+        if (!urlType || !htmlType) {
+            finish(false);
+            return;
+        }
         [ws setDefaultApplicationAtURL:ourBundle
-                       toOpenURLsWithScheme:@"https"
+                       toOpenContentType:urlType
                         completionHandler:^(NSError *error) {
             if (error) {
-                qWarning("Lane: setDefaultApplicationAtURL https failed: %s",
+                qWarning("Lane: setDefaultApplicationAtURL public.url failed: %s",
                          qPrintable(nsStr([error localizedDescription])));
                 dispatch_async(dispatch_get_main_queue(), ^{ finish(false); });
                 return;
             }
             [ws setDefaultApplicationAtURL:ourBundle
-                           toOpenURLsWithScheme:@"http"
+                           toOpenContentType:htmlType
                             completionHandler:^(NSError *error2) {
                 if (error2) {
-                    qWarning("Lane: setDefaultApplicationAtURL http failed: %s",
+                    qWarning("Lane: setDefaultApplicationAtURL public.html failed: %s",
                              qPrintable(nsStr([error2 localizedDescription])));
                     dispatch_async(dispatch_get_main_queue(), ^{ finish(false); });
                     return;
