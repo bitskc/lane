@@ -159,11 +159,17 @@ bool &notificationsDenied()
     // LaunchServices consent prompt.
     if ([response.actionIdentifier isEqualToString:@"lane-action"]) {
         const QString key = Lane::nsStr(response.notification.request.identifier);
-        if (!Lane::notificationActions().take(key)) {
-            // Expired or evicted action: the notification still showed,
-            // the button just has nothing to run. Log, never crash.
-            qWarning("Lane: notification action for %s no longer registered", qPrintable(key));
-        }
+        // take() extracts and runs the stored std::function, which lands
+        // in Controller and mutates GUI state; the delegate callback runs
+        // on an arbitrary UserNotifications queue, so marshal the action
+        // run onto the main queue like every other completion in here.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!Lane::notificationActions().take(key)) {
+                // Expired or evicted action: the notification still
+                // showed, the button just has nothing to run.
+                qWarning("Lane: notification action for %s no longer registered", qPrintable(key));
+            }
+        });
     }
     completionHandler();
 }
@@ -308,13 +314,14 @@ public:
         const QString ourPath = nsStr(ourResolvedPath());
         NSWorkspace *ws = [NSWorkspace sharedWorkspace];
 
-        auto finish = [this, donePtr, ourPath](bool ok) {
-            if (!ok) {
-                // A finished attempt that did not make us the handler is
-                // a decline, whether the user cancelled the prompt or the
-                // system rejected the change.
-                m_changeDeclined.store(true);
-            }
+        auto finish = [this, donePtr](bool ok) {
+            // done(false) is reported as a failed request, never a
+            // decline: the declined banner is set only by the
+            // accepted-but-handler-is-not-us path below, which is the
+            // only outcome that proves the user refused the change.
+            // API errors (permErr class included) land here and must
+            // not lie about cause.
+            Q_UNUSED(this);
             (*donePtr)(ok);
         };
 
@@ -324,10 +331,16 @@ public:
         // scheme-handler write path is gated. The content-type variant is
         // not: setting `public.url` re-points http/https handling
         // (verified by URLForApplicationToOpenURL resolving to this
-        // bundle), and `public.html` covers local file opens.
+        // The content-type write path works where the scheme setter is
+        // gated. Claim only `public.url`: that is what re-points
+        // http/https. Do NOT also claim `public.html` — that would make
+        // Lane the preferred opener for local .html/.xhtml documents,
+        // whose opens arrive as file:// URLs the router cannot serve
+        // (verified: a Finder double-click after this call silently does
+        // nothing). Claiming just public.url leaves Safari/etc. owning
+        // file types while Lane owns links.
         UTType *urlType = [UTType typeWithIdentifier:@"public.url"];
-        UTType *htmlType = [UTType typeWithIdentifier:@"public.html"];
-        if (!urlType || !htmlType) {
+        if (!urlType) {
             finish(false);
             return;
         }
@@ -340,24 +353,16 @@ public:
                 dispatch_async(dispatch_get_main_queue(), ^{ finish(false); });
                 return;
             }
-            [ws setDefaultApplicationAtURL:ourBundle
-                           toOpenContentType:htmlType
-                            completionHandler:^(NSError *error2) {
-                if (error2) {
-                    qWarning("Lane: setDefaultApplicationAtURL public.html failed: %s",
-                             qPrintable(nsStr([error2 localizedDescription])));
-                    dispatch_async(dispatch_get_main_queue(), ^{ finish(false); });
-                    return;
-                }
-                // Both calls accepted. Claim success only if a re-query
-                // shows us as the handler for both schemes.
-                const bool ok = handlerForScheme(@"http", ourPath).isUs
-                             && handlerForScheme(@"https", ourPath).isUs;
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    m_changeDeclined.store(!ok);
-                    (*donePtr)(ok);
-                });
-            }];
+            // Claim success only if a re-query shows us as the handler
+            // for both schemes; set m_changeDeclined only when the call
+            // was accepted yet the handler still is not us (a real
+            // decline), not on API errors.
+            const bool ok = handlerForScheme(@"http", ourPath).isUs
+                         && handlerForScheme(@"https", ourPath).isUs;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                m_changeDeclined.store(!ok);
+                (*donePtr)(ok);
+            });
         }];
     }
 

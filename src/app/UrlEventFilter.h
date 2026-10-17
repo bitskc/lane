@@ -21,11 +21,11 @@ namespace Lane
 // set are held in a bounded FIFO and drained when setSink() runs; after
 // that they dispatch inline.
 //
-// Only http and https are accepted; anything else LaunchServices offers
-// (files, mailto handed by mistake) is ignored with a log. The queue is
-// capped at kMaxPending: past it, the oldest pending URL is dropped with
-// a qWarning rather than buffering clicks without bound or dropping the
-// newest intent.
+// Only http and https are routed; a file:// open for .webloc/.url is
+// unwrapped to its embedded link and routed, other local files are
+// ignored with a log. The queue is capped at kMaxPending: past it, the
+// newcomer is dropped with a qWarning so already-queued clicks keep
+// their order (the oldest intent is preserved).
 class UrlEventFilter : public QObject
 {
     Q_OBJECT

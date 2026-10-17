@@ -36,6 +36,7 @@ class Controller : public QObject
     Q_PROPERTY(TargetModel *targetModel READ targetModel CONSTANT)
     Q_PROPERTY(RuleModel *ruleModel READ ruleModel CONSTANT)
     Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
+    Q_PROPERTY(bool quitShortcutEnabled READ quitShortcutEnabled CONSTANT)
     Q_PROPERTY(QString currentUrl READ currentUrl NOTIFY currentChanged)
     Q_PROPERTY(QString currentHost READ currentHost NOTIFY currentChanged)
     Q_PROPERTY(QString currentPrettyUrl READ currentPrettyUrl NOTIFY currentChanged)
@@ -98,6 +99,16 @@ public:
     TargetModel *targetModel() const { return m_targetModel; }
     RuleModel *ruleModel() const { return m_ruleModel; }
     QString appVersion() const;
+    // StandardKey.Quit shortcuts exist for the macOS status-item quit
+    // path (spec: accessory app must offer a discoverable quit). On
+    // Linux the daemon owns routing and shortcut-quit is off-spec.
+    bool quitShortcutEnabled() const {
+#ifdef Q_OS_MACOS
+        return true;
+#else
+        return false;
+#endif
+    }
     QString projectUrl() const;
     QString updateCheckState() const;
     QString updateLatestVersion() const { return m_updateChecker->latestVersion(); }

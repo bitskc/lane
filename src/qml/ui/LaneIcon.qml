@@ -11,7 +11,11 @@ Image {
     property string iconName: ""
 
     source: iconName !== "" ? "image://laneicon/" + iconName : ""
-    sourceSize: Qt.size(width * Screen.devicePixelRatio, height * Screen.devicePixelRatio)
+    // Fixed physical source size: binding sourceSize to width/height is
+    // self-referential (sourceSize feeds implicitWidth/Height which feed
+    // width/height) and RangeErrors at runtime on macOS. 64px covers the
+    // largest use (Settings rows, buttons) at 2x Retina.
+    sourceSize: Qt.size(64, 64)
     fillMode: Image.PreserveAspectFit
     asynchronous: true
     // True once a theme icon actually loaded; callers that want a

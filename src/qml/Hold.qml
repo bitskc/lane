@@ -19,7 +19,7 @@ Window {
     Shortcut { sequence: "Space"; onActivated: controller.cancelHold() }
     Shortcut { sequence: "Return"; onActivated: controller.confirmHold() }
     Shortcut { sequence: "Enter"; onActivated: controller.confirmHold() }
-    Shortcut { sequence: StandardKey.Quit; onActivated: controller.requestQuit() }
+    Shortcut { sequence: StandardKey.Quit; enabled: controller.quitShortcutEnabled; onActivated: controller.requestQuit() }
 
     Rectangle {
         id: dim

@@ -47,7 +47,7 @@ Window {
         if (visible && !active && mac && controller.closeOnFocusLoss) controller.cancelPicker()
     }
 
-    Shortcut { sequence: StandardKey.Quit; onActivated: controller.requestQuit() }
+    Shortcut { sequence: StandardKey.Quit; enabled: controller.quitShortcutEnabled; onActivated: controller.requestQuit() }
 
     Shortcut {
         sequence: "Escape"

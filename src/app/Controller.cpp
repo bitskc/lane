@@ -79,10 +79,13 @@ Controller::Controller(QObject *parent)
 
     connect(m_updateChecker, &UpdateChecker::statusChanged, this, &Controller::updateStateChanged);
 
-    // Quit Lane (task D2): cancel an in-flight pick or hold first; a
-    // second Quit (or one with nothing pending) exits.
+    // Quit Lane (task D2): macOS only. On Linux the daemon owns routing
+    // and the tray spec forbids Quit; on macOS LaunchServices relaunches
+    // Lane for each link anyway, so Quit is safe and expected.
+#ifdef Q_OS_MACOS
     menu->addSeparator();
     menu->addAction(QStringLiteral("Quit Lane"), this, &Controller::requestQuit);
+#endif
 
     connect(m_ruleModel, &RuleModel::rulesChanged, this, [this]() {
         m_config.rules = m_ruleModel->rules();
@@ -1118,8 +1121,12 @@ void Controller::launch(const Target &target, const QString &reason, const QStri
         toast(target, reason, click.host);
     }
     // A launch that just completed is a finished first interaction; the
-    // link-first first-run case lands Settings here.
+    // link-first first-run case lands Settings here. macOS only: on
+    // Linux a link-started first launch must not pop a window the user
+    // did not ask for.
+#ifdef Q_OS_MACOS
     maybeFirstRunSettings();
+#endif
 }
 
 void Controller::requestActivationAndLaunch(const Target &target, const QString &reason, QWindow *window, const Click &click)

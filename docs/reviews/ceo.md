@@ -1,35 +1,41 @@
-# CEO Review: Lane (round 4 — Browser Picker Supremacy)
+# CEO Review: Lane native macOS port (round 5)
 
-Reviewed 2026-09-29. Repo state: `bitskc/lane` @ 30ab52b (v0.3.0 released, automated hardening PRs #50, #53, #54 merged). 
-Review artifact: `docs/designs/linux-browser-picker-supremacy.md` and `openspec/changes/browser-picker-supremacy/`.
-Mode: degraded — self-run 5-lens review by assistant, all independent channels quota-dead until next reset window.
+Reviewed 2026-10-17. Repo state: `bitskc/lane` @ e73f28b, 44 commits since `8ba3be2`. Verified on the MacBook: clone at HEAD, `ctest --test-dir build-mac` 20/20 green, `/Applications/Lane.app` installed and LaunchServices-registered (claimed UTIs `public.html`, `public.url`, `com.apple.default-app.web-browser`, probe run 2026-10-17). Competitor clones `/tmp/finicky` (MIT, Developer ID signed + notarized via `scripts/release.sh`, brew cask) and `/tmp/browserosaurus` (GPLv3, **archived/retired**) reviewed for positioning.
 
 ## Verdict
 
-**APPROVE SPECIFICATION. STRICT SEQUENCING GATE ON IMPLEMENTATION.**
+**APPROVE AS A PORT; NOT YET A PRODUCT.** Execution was disciplined: one seam, one ObjC++ file, real-device gates. But the port leaks two product bugs (Quit on Linux, dead `file://` opens on Mac) and, strategically, Lane now sits on three unresolved questions: who may use it at work (PolyForm NC says no one), how anyone else installs it ($99 Developer ID), and what to do when Apple gates the content-type write path next. Decide those before calling the macOS port shipped.
 
-The 5-pillar design ("Browser Picker Supremacy") is strategically brilliant: it directly addresses the #1 praised feature of macOS commercial competitors ("Clean Links" from Velja), introduces a genuinely unassailable Plasma-native moat (KActivities context routing), defends against the #1 silent churn failure (browser updates hijacking `mimeapps.list`), and removes link-routing friction (`Alt+P` for private windows).
+## Findings
 
-However, from a CEO perspective, **Lane's single greatest risk is feature creep before distribution**. v0.3.0 is out the door. The binaries run flawlessly on Cachy, Beelink, and Garuda. The PKGBUILD is verified. Do NOT write a single line of C++ for these 5 pillars until the AUR package is published and the community launch post is live.
+| # | Severity | Where | Evidence |
+|---|----------|-------|----------|
+| 1 | P1 | `src/app/Controller.cpp:82-85` | **Spec violation on Linux**: `Quit Lane` is added to the tray menu unconditionally, outside any `Q_OS_MACOS` guard. The canonical spec says "the tray SHALL NOT offer Quit" (`openspec/specs/lane/spec.md:252,260`) and the delta repeats "On Linux the tray SHALL NOT offer Quit" (`openspec/changes/native-macos-app/specs/lane/spec.md:4,16`). |
+| 2 | P1 | `src/qml/Picker.qml:49`, `src/qml/Hold.qml:22`, `src/qml/Settings.qml` | Same violation via keyboard: `Shortcut { sequence: StandardKey.Quit }` was added to all three windows with no platform check, so Ctrl+Q on Linux now quits the daemon from any Lane window. The spec added this path "on macOS" only (delta spec line 48). |
+| 3 | P1 | `src/app/platform/platform_macos.mm:334-360` + `src/app/UrlEventFilter.cpp:41-44` | The `toOpenContentType:` workaround sets `public.html` as a default content-type handler, making Lane the default for local `.html` files. Double-clicking one in Finder delivers a `file://` `QFileOpenEvent`, which `UrlEventFilter::enqueue` drops with a log line: the file silently does not open. The commit comment says "public.html covers local file opens" but nothing consumes them. First report of "double-clicked a saved page and nothing happened" lands here. |
+| 4 | P1 | Distribution | **Gatekeeper math**: `gh release view` on v0.3.0 shows **zero release assets**; the MacBook bundle is `Signature=adhoc, TeamIdentifier=not set` (probe 2026-10-17). Ad-hoc plus `xattr -d` works only for a build-you-ship-yourself audience. Every successful competitor distributes a signed binary: Finicky via Developer ID + notarization (`/tmp/finicky/scripts/release.sh:5-6`), Choosy/Velja commercially. $99/yr is the minimum viable macOS distribution cost; "sideload the bundle yourself" is acceptable only if the Mac port is explicitly a maintainer-port, not a product surface. |
+| 5 | P1 | `LICENSE` + `README.md` + `COMMERCIAL.md` | **License contradicts the pitch**: PolyForm Noncommercial forbids use "for the benefit of" a business. Lane's own README leads with "Zen for personal stuff, Firefox for work," and work-personal splitting is the category's flagship use case. Commercial use of link routing needs a paid license Lane does not yet sell ("Pricing is not set yet"). Every corporate Mac user is unlicensed, and "open source" positioning will backfire on a source-available license. Also note Mac App Store rules conflict with PolyForm NC terms, so an eventual paid Mac channel is direct-sale only. |
+| 6 | P2 | `src/app/UpdateChecker.cpp` + `OverviewPage.qml:107-133` | On macOS the manual update check still reports "update-available" for releases that carry no assets, then opens a release page with nothing a Mac user can install. Either gate the check to Linux until Mac release artifacts exist, or accept it as the nudge mechanism for a future cask. |
+| 7 | P2 | `src/qml/pages/OverviewPage.qml:22-23` | No manual fallback for the handler write. When `toOpenContentType:` starts failing (Apple gated `toOpenURLsWithScheme:` with permErr -54 on macOS 26 for every caller, including signed apps; the whole category shares this risk), the UI says "The last change request was declined or dismissed. Try again." One sentence pointing to System Settings > Default web browser closes the product hole. |
+| 8 | P2 | `README.md`, `CHANGELOG.md` | Zero mentions of macOS. "Lane is a link router for KDE Plasma" now undersells a second platform the codebase supports and hides the install path (Xcode/Homebrew Qt + `packaging/mac/bundle.sh`). If Mac stays maintainer-only, say so explicitly; silence invites support questions. |
+| 9 | P2 | Positioning note | Free-tier wedge is real and uncrowded: Browserosaurus is **retired**, Finicky requires writing JS config (`~/.finicky.js`), Choosy is paid, Velja is paid/Setapp. Lane's zero-config discovery of profiles, containers and PWAs plus remember-in-two-keys has no free native rival. But "for KDE Plasma, now also macOS" is a weak frame: on Mac the pitch should be "the free Finicky alternative that needs no config file." |
+| 10 | P2 | `openspec/changes/native-macos-app/tasks.md` | Verification debt is owned honestly but real: 9 unchecked items (6.2, 6.6 owner parts, 7.1, 7.2, 9.3, 9.4, 0.3) including the default-handler button, consent prompt, login item, notifications and every ⌥ key. "The port works" is unproven for first-run UX until the owner sits at the Mac. Do not market macOS before 9.3 closes. |
 
-## Strategic Pillars Evaluation
+## Considered and fine
 
-| Pillar | Strategic Value | Competitive Moat | Effort / ROI | Verdict |
-|---|---|---|---|---|
-| **1. Clean Links** | **Critical** (Immediate user delight) | Medium (Velja has it; Junction doesn't) | High ROI (Cheap `QUrlQuery` filter) | **Build First** |
-| **2. Plasma Activities** | **High** (Unique KDE wedge) | **Unassailable** (Mac/Windows/GNOME can't copy) | High ROI (Existing `KActivities` signal) | **Build Second** |
-| **3. Hijack Watchdog** | **Medium** (Retention protection) | Low (Defensive polish) | Medium ROI (Debounced inotify) | **Build Third** |
-| **4. Alt+P Private** | **High** (Power user daily driver) | Medium (Friction killer) | Very High ROI (Simple hotkey diversion) | **Build First** |
-| **5. Picker Empty Recovery** | **Low-Medium** (Edge polish) | None (Table stakes) | Low ROI (QML text binding) | **Batch with Alt+P** |
+- **"Your Mac first" (D1)**: correct governance. It capped blast radius at one machine, deferred notarization spend until demand exists, and kept the change shippable this week. Splitting "port" from "distribute" was the right call.
+- **Did the port over-build? No.** 3,582 diff lines breaks down as ~460 ObjC++ (all in `platform_macos.mm`, per Decision 1), ~800 tests/fixtures, a 137-line bundle script, and per-OS tables in shared code. No second UI, no new runtime, no mailto/PDF grab (Info.plist.in:63 declares http/https only). The 14-commit signing/ditto fix loop was earned debugging against real codesign behavior, not gold-plating. Design rejected SwiftUI/Electron, a LaunchAgent plist, `/tmp` socket fallback, Cryptex scanning and invented Safari private routes: the right cuts.
+- **`toOpenContentType` durability**: it is a documented Apple API (`setDefaultApplicationAtURL:toOpenContentType:`, 12+), it is what LaunchServices itself consults, and the failure mode is soft (state `Declined`, watchdog re-query). Verdict: real platform risk, correctly confined to 40 lines behind `Platform::makeDefaultHandler`; needs the System Settings fallback message (finding 7), not a redesign.
+- **Ad-hoc signing**: probe-verified sufficient for SMAppService, LaunchServices registration and launch on macOS 26.6.1. The `LANE_SIGN_IDENTITY` escape hatch is the right hedge. Acceptable long-term only under the maintainer-port posture in finding 4.
+- **Security posture**: bundle-id + resolved-path handler identity (`platform_macos.mm:46-67`), `.app` executable containment, full percent-encoding of mailto body, macOS-only custom-target guards, per-user `confstr` socket with no `/tmp` fallback: all verified in source. None widened by the port.
+- **Prior "do not port" reversal**: `docs/designs/port-assessment.md` estimated 8-12 person-weeks; the Platform seam from the Qt 6 port cut it to ~3 days of commits. Revisiting a no-decision when the cost basis changed is exactly what a CEO should do; the superseded doc was annotated, not deleted (task 10.0).
+- **Competitive moat on Mac**: OpenIn (the displaced incumbent on this machine, `app.loshadki.openin-setapp`) is Setapp-gated; Browserosaurus quit; the free-native slot with container/PWA-aware routing is empty. Lane's differentiators (path-scoped memory, PWA/container discovery, hold bar) transfer cleanly.
+- **PolyForm NC + self-distribution**: the license binds users, not the owner; dual-licensing for a later paid channel is preserved (COMMERCIAL.md). No conflict.
 
-## Key Strategic Decisions
+## Open questions
 
-1. **Clean Links is a core privacy wedge**: In community marketing (r/kde, r/linux, Hacker News), leading with "A Wayland link router that automatically cleans surveillance parameters from links before your browser touches them" changes the pitch from a niche convenience tool to an essential privacy utility.
-2. **Plasma Activities is the architectural moat**: Junction (GNOME) cannot do this. Browserosaurus is dead. Velja requires duct-taped macOS Shortcuts. On Linux, Lane becomes the only tool that seamlessly knows your "Work" desktop needs a different browser persona than your "Personal" desktop.
-3. **Distribution gate is non-negotiable**: Publishing `lane` to the AUR (`yay -S lane`) and posting to r/kde / KDE Discourse remains the prerequisite for real-world user feedback.
-
-## Recommendations
-
-1. **Gate implementation on user approval**: Keep all planning artifacts in `openspec/changes/browser-picker-supremacy/` strictly staged.
-2. **Execute Pillar 5 (Packaging & Screenshots) first**: Update README screenshots with the 0.3.0 UI and get the AUR package live.
-3. **Ship Clean Links and Alt+P as v0.4.0**: They are low-risk, high-delight additions with zero desktop environment coupling.
+1. **Port or product?** If port: keep ad-hoc, write one paragraph in README, done. If product: $99 Apple Developer Program + notarization is the minimum viable channel (brew cask still needs a signed binary to avoid "damaged app" friction). Recommendation: gate the spend on evidence of demand (Linux AUR launch first; revisit macOS distribution only if it generates pull).
+2. **PolyForm NC + work use**: who is the paying customer for a dual-license on a tool whose killer use case is work/personal split? If no one is expected to pay, PolyForm Small-Business or a plain copyleft (GPLv3, matching Browserosaurus) would license the actual users. If a paid tier is real, the commercial license needs a name, price and purchase path before the Mac port widens the funnel.
+3. **Apple's next gate**: if `toOpenContentType:` gets the same permErr treatment, does "click a link and the system says no handler" degrade acceptably, or should the picker gain a "set me manually" path? Worth one design note, not code, today.
+4. **One brand, two personalities?** Linux Lane is Plasma-native; Mac Lane is an LSUIElement status item. Do they share a name and release train, or does the Mac build get a distinct identity if it ever becomes a product?
+5. **Who fixes `file://`?** Options: drop `public.html` from `makeDefaultHandler` (Finder assigns it anyway from the plist's CFBundleDocumentTypes), route `file:` opens to the user's resolved browser, or drop with a notification. Needs a product call before the owner hits it.

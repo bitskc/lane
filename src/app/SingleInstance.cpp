@@ -166,12 +166,14 @@ QString singleInstanceSocketPath()
 #else
     const QString path = dir + QLatin1String("/lane-instance.sock");
 #endif
+#ifdef Q_OS_MACOS
     // Darwin sockaddr_un sun_path is 104 bytes including the NUL, so the
     // name must fit in 103. No fallback path: binding somewhere else is
     // how two instances both think they are primary.
     if (path.toLocal8Bit().size() > 103) {
         return {};
     }
+#endif
     return path;
 }
 
