@@ -2,6 +2,7 @@
 
 #include <QHostAddress>
 #include <QAbstractSocket>
+#include <QRegularExpression>
 #include <QSet>
 #include <QUrlQuery>
 
@@ -157,8 +158,31 @@ bool isPrivateOrLocalHost(const QString &host)
         return true;
     }
 
-    const QHostAddress addr(h);
+    QHostAddress addr(h);
+    // Browsers normalize [::ffff:a.b.c.d] and integer/hex/octal IPv4
+    // literals to the real address before connecting, so the guard must
+    // see through the same encodings the fetch will. QHostAddress keeps
+    // IPv4-mapped IPv6 as protocol IPv6, so normalize it explicitly.
+    if (addr.protocol() == QAbstractSocket::IPv6Protocol) {
+        bool ok = false;
+        const quint32 mapped = addr.toIPv4Address(&ok);
+        if (ok) {
+            addr = QHostAddress(mapped);
+        } else if (h.startsWith(QLatin1String("[::ffff:"))) {
+            addr = QHostAddress(h.mid(8, h.size() - 9));
+        }
+    }
     if (addr.isNull()) {
+        // Integer and hex/octal IPv4 literals (2130706433, 0x7f000001,
+        // 0177.0.0.1) all parse to null here but resolve to real hosts in
+        // a browser. Treat any all-numeric dotted or bare numeric host as
+        // private: the worst case is a refused shortener unwrap, and
+        // guessing wrong the other way leaks the redirect to LAN.
+        static const QRegularExpression numericLike(
+            QStringLiteral("^(?:0[xX][0-9a-fA-F]+|0[0-7]*|[0-9]+)(?:\\.(?:0[xX][0-9a-fA-F]+|0[0-7]*|[0-9]+))*$"));
+        if (numericLike.match(h).hasMatch()) {
+            return true;
+        }
         return false;
     }
     if (addr.isLoopback() || addr.isLinkLocal() || addr.isMulticast() || addr.isBroadcast()) {
@@ -191,6 +215,21 @@ bool isPrivateOrLocalHost(const QString &host)
             return true;
         }
         if (a == 198 && b == 51 && c == 100) {
+            return true;
+        }
+        // Reserved/documentation ranges that never route publicly:
+        // 192.0.0.0/24 (IETF protocol assignments), 192.0.2.0/24,
+        // 203.0.113.0/24, 240.0.0.0/4 (future use), 255.x handled above.
+        if (a == 192 && b == 0 && c == 0) {
+            return true;
+        }
+        if (a == 192 && b == 0 && c == 2) {
+            return true;
+        }
+        if (a == 203 && b == 0 && c == 113) {
+            return true;
+        }
+        if (a >= 240) {
             return true;
         }
     }

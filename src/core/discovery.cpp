@@ -1452,13 +1452,16 @@ QList<Target> actionTargets()
     mail.subtitle = QStringLiteral("Mail");
     mail.icon = QStringLiteral("mail-sent");
 #ifdef Q_OS_MACOS
-    // The launcher builds the mailto open invocation itself; this string
-    // is only what `lane --list` prints, so it names the real binary.
+    // The launcher builds the mailto open invocation itself via
+    // macFixedOpenArgs and ignores args entirely; this string is only
+    // what `lane --list` prints, so it names the real binary and carries
+    // no leftover Linux argv.
     mail.exec = QStringLiteral("/usr/bin/open");
+    mail.args = {QStringLiteral("$url")};
 #else
     mail.exec = QStringLiteral("xdg-email");
-#endif
     mail.args = {QStringLiteral("--body"), QStringLiteral("$url")};
+#endif
     return {copy, mail};
 }
 
