@@ -42,8 +42,8 @@ Process: this change is gated on gstack eng and arch sign-off before merge. Item
 
 ## 6. Verification
 - [x] 6.1 `cmake --build build && ctest` green on Linux: 24 passed on the merged tree (was 23 before `test_firstrun`).
-- [ ] 6.2 ASan+UBSan build (`build-asan`) full ctest, no reports.
-- [ ] 6.3 Install and `systemctl --user restart lane.service`: active, D-Bus introspection shows `org.freedesktop.Application`, `lane --list` unchanged, `lane --explain` routes, offscreen Settings smoke on a private bus with no QML errors. Restart exercises the SIGTERM path.
+- [x] 6.2 ASan+UBSan build (`build-asan`) full ctest, 24 passed, no sanitizer reports.
+- [x] 6.3 Installed to `~/.local` and `systemctl --user restart lane.service`: active, D-Bus introspection shows `org.freedesktop.Application` and `org.kde.KDBusService`, `lane --list` is 42 targets, `lane --explain https://example.com/` routes to the picker. Restart came back running (SIGTERM path). Offscreen `lane --settings` against that daemon: journal has no QML load errors.
 - [ ] 6.4 macOS CI job green on the self-hosted runner for the pushed branch. Not claimed verified on the device (see #80).
 - [ ] 6.5 `openspec validate round-2-hardening --strict` clean and a scratch archive dry run clean.
 

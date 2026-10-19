@@ -5,7 +5,8 @@ import QtQuick
 // settingsChanged, which destroyed every delegate and aborted the
 // 250 ms moveDisplaced drag settle. sync() instead matches rows by the
 // `keyRole` property: rows absent from `rows` are removed, new rows are
-// appended, rows that moved are move()d, and rows still in place get
+// inserted at their target index, rows that moved are move()d, and rows
+// still in place get
 // only their changed fields set() so untouched rows keep their
 // delegate (and its identity) alive. Order follows `rows`, keyed by
 // `keyRole`, never by row index.
