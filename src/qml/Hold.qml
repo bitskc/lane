@@ -15,6 +15,11 @@ Window {
 
     readonly property real progress: controller.holdProgress
 
+    // Same hint-font rule as Picker: monospace labels read worse than the
+    // system UI font on macOS.
+    readonly property bool mac: Qt.platform.os === "osx"
+    readonly property string hintFont: mac ? "" : "monospace"
+
     Shortcut { sequence: "Escape"; onActivated: controller.cancelHold() }
     Shortcut { sequence: "Space"; onActivated: controller.cancelHold() }
     Shortcut { sequence: "Return"; onActivated: controller.confirmHold() }
@@ -117,7 +122,7 @@ Window {
                 QQC.Label {
                     text: "enter"
                     font.pixelSize: 10
-                    font.family: "monospace"
+                    font.family: root.hintFont
                     opacity: 0.5
                 }
                 QQC.Label {
@@ -129,7 +134,7 @@ Window {
                 QQC.Label {
                     text: "esc / space"
                     font.pixelSize: 10
-                    font.family: "monospace"
+                    font.family: root.hintFont
                     opacity: 0.5
                 }
                 QQC.Label {

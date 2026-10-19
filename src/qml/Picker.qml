@@ -23,6 +23,9 @@ Window {
     readonly property string hintCopy: mac ? "⌘C" : "^C"
     readonly property string hintAltP: mac ? "⌥P private" : "alt+p private"
     readonly property string hintAltE: mac ? "⌥E" : "alt+e"
+    readonly property string hintAltA: mac ? "⌥A" : "alt+a"
+    readonly property string hintAltS: mac ? "⌥S" : "alt+s"
+    readonly property string hintAltR: mac ? "⌥R" : "alt+r"
     // Hints read better in the system UI font than monospace on macOS.
     readonly property string hintFont: mac ? "" : "monospace"
 
@@ -62,21 +65,35 @@ Window {
         }
     }
     // Zero-target recovery shortcuts: only useful when nothing is
-    // discovered, so they stay disabled while a real list is showing.
+    // discovered, so they stay disabled while a real list is showing or
+    // while a filter is typed. (controller.targetCount is not usable as
+    // the condition; it counts the built-in action targets and is never 0.)
     Shortcut {
         sequence: "Alt+S"
-        enabled: list.count === 0 && controller.targetCount === 0
+        enabled: list.count === 0 && filterField.text.length === 0
         onActivated: controller.openSettings()
     }
     Shortcut {
         sequence: "Alt+R"
-        enabled: list.count === 0 && controller.targetCount === 0
+        enabled: list.count === 0 && filterField.text.length === 0
         onActivated: controller.rediscover()
     }
     Shortcut { sequence: "Return"; onActivated: if (list.count > 0) controller.pick(list.currentIndex) }
     Shortcut { sequence: "Enter"; onActivated: if (list.count > 0) controller.pick(list.currentIndex) }
-    Shortcut { sequence: "Down"; onActivated: list.incrementCurrentIndex() }
-    Shortcut { sequence: "Up"; onActivated: list.decrementCurrentIndex() }
+    Shortcut {
+        sequence: "Down"
+        onActivated: {
+            list.incrementCurrentIndex()
+            controller.clearPickerNotice()
+        }
+    }
+    Shortcut {
+        sequence: "Up"
+        onActivated: {
+            list.decrementCurrentIndex()
+            controller.clearPickerNotice()
+        }
+    }
     Shortcut { sequence: "Alt+A"; onActivated: controller.alwaysForHost = !controller.alwaysForHost }
     Shortcut {
         sequence: "Alt+P"
@@ -197,14 +214,27 @@ Window {
                             : 0
                         controller.clearPickerNotice()
                     }
-                    Keys.onDownPressed: list.incrementCurrentIndex()
-                    Keys.onUpPressed: list.decrementCurrentIndex()
+                    Keys.onDownPressed: {
+                        list.incrementCurrentIndex()
+                        controller.clearPickerNotice()
+                    }
+                    Keys.onUpPressed: {
+                        list.decrementCurrentIndex()
+                        controller.clearPickerNotice()
+                    }
                     // A focused TextField claims plain character keys (digits,
                     // comma, period) and Ctrl+C at the shortcut-override stage
-                    // before a sibling Shortcut{} ever sees them, so those keys
-                    // are handled here instead. Return/Enter/Escape/Up/Down/
+                    // before a sibling Shortcut{} ever sees them, so those
+                    // keys are handled here instead. Moving them to a
+                    // window-level Shortcut would make it impossible to type
+                    // digits into the filter. Return/Enter/Escape/Up/Down/
                     // Alt+A are not claimed that way and stay as Shortcut{}
-                    // above.
+                    // above. The cost of this split: when Tab moves focus off
+                    // the field (to the Always checkbox or ladder buttons)
+                    // digits, comma, period and Ctrl+C stop working until
+                    // focus returns. That is accepted rather than "fixed" by
+                    // moving the handlers, because the number badges only
+                    // advertise while the field is focused and empty anyway.
                     Keys.onPressed: (event) => {
                         if (event.modifiers === Qt.ControlModifier && event.key === Qt.Key_C) {
                             controller.copyCurrent()
@@ -223,15 +253,20 @@ Window {
                             return
                         }
                         if (event.key === Qt.Key_Comma) {
+                            // At the last rung there is nothing left to
+                            // narrow to, but the key is still consumed: with
+                            // an empty filter a comma is a ladder key, not
+                            // text, and letting it fall through would insert
+                            // it into the filter and hide the number badges.
                             if (controller.destinationIndex < controller.destinationLadder.length - 1) {
                                 controller.destinationIndex = controller.destinationIndex + 1
-                                event.accepted = true
                             }
+                            event.accepted = true
                         } else if (event.key === Qt.Key_Period) {
                             if (controller.destinationIndex > 0) {
                                 controller.destinationIndex = controller.destinationIndex - 1
-                                event.accepted = true
                             }
+                            event.accepted = true
                         }
                     }
 
@@ -251,7 +286,12 @@ Window {
                     anchors.fill: parent
                     visible: list.count === 0
 
-                    readonly property bool zeroTargets: controller.targetCount === 0
+                    // "Zero targets" means the picker list itself is empty
+                    // with no filter typed. controller.targetCount is not
+                    // usable here: it counts the built-in copy/email action
+                    // targets too, so it is never 0 and would leave this
+                    // recovery state (and the Alt+S/Alt+R shortcuts) dead.
+                    readonly property bool zeroTargets: list.count === 0 && !filtering
                     readonly property bool filtering: filterField.text.length > 0
 
                     ColumnLayout {
@@ -288,10 +328,14 @@ Window {
                         QQC.Label {
                             Layout.alignment: Qt.AlignHCenter
                             visible: emptyState.zeroTargets
-                            text: "alt+s settings · alt+r rescan"
+                            text: root.hintAltS + " settings · " + root.hintAltR + " rescan"
                             font.pixelSize: 10
                             font.family: root.hintFont
                             opacity: 0.4
+
+                            Accessible.role: Accessible.StaticText
+                            Accessible.name: text
+                            Accessible.description: "Open settings with " + root.hintAltS + " or rescan for browsers with " + root.hintAltR
                         }
                     }
                 }
@@ -306,7 +350,11 @@ Window {
                     currentIndex: 0
                     boundsBehavior: Flickable.StopAtBounds
                     highlightMoveDuration: 80
-                    onCurrentItemChanged: controller.clearPickerNotice()
+                    // The notice clears on keyboard selection change (the
+                    // Up/Down shortcut and Keys handlers above) and on filter
+                    // text change, not here: the row MouseArea moves
+                    // currentIndex on hover, so clearing here would let the
+                    // pointer dismiss a notice without the user reading it.
 
                     Accessible.role: Accessible.List
                     Accessible.name: "Destinations"
@@ -592,6 +640,17 @@ Window {
 
                         Accessible.role: Accessible.StaticText
                         Accessible.name: root.mac ? "Open in private window, shortcut Option P" : "Open in private window, shortcut Alt P"
+                    }
+                    QQC.Label {
+                        // Labels the Alt+A shortcut on the Always checkbox
+                        // in the row above.
+                        text: root.hintAltA + " always"
+                        font.pixelSize: 10
+                        font.family: root.hintFont
+                        opacity: 0.4
+
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: root.mac ? "Toggle always open in this destination, shortcut Option A" : "Toggle always open in this destination, shortcut Alt A"
                     }
                     Item { Layout.fillWidth: true }
                     // Ladder keys: "," narrows the destination (adds a path
