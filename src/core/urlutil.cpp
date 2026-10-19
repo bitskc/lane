@@ -1,5 +1,7 @@
 #include "urlutil.h"
 
+#include <optional>
+
 #include <QHostAddress>
 #include <QAbstractSocket>
 #include <QRegularExpression>
@@ -184,6 +186,32 @@ bool urlInScope(const QString &url, const QString &scope)
     return pathWithinPrefix(u.path(), s.path(), Qt::CaseInsensitive);
 }
 
+// The IPv4 address an IPv6 transition prefix carries, so a redirect to
+// [64:ff9b::7f00:1] is judged as the 127.0.0.1 it reaches.
+//   NAT64 64:ff9b::/96 (RFC 6052): the IPv4 is the last 32 bits. Bytes 4 to
+//     11 must be zero. 64:ff9b:1::/48 (RFC 8215, local use) embeds it
+//     differently and is not decoded, so it is left to the range ladder.
+//   6to4 2002::/16 (RFC 3056): the IPv4 is bits 16 to 47.
+// Returns nothing for any other address.
+static std::optional<quint32> embeddedIPv4(const Q_IPV6ADDR &a)
+{
+    const auto v4 = [&a](int i) {
+        return (quint32(a[i]) << 24) | (quint32(a[i + 1]) << 16) | (quint32(a[i + 2]) << 8) | quint32(a[i + 3]);
+    };
+    if (a[0] == 0x00 && a[1] == 0x64 && a[2] == 0xff && a[3] == 0x9b) {
+        for (int i = 4; i < 12; ++i) {
+            if (a[i] != 0) {
+                return std::nullopt;
+            }
+        }
+        return v4(12);
+    }
+    if (a[0] == 0x20 && a[1] == 0x02) {
+        return v4(2);
+    }
+    return std::nullopt;
+}
+
 bool isPrivateOrLocalHost(const QString &host)
 {
     // A single trailing dot is the DNS absolute form (localhost. is
@@ -213,6 +241,8 @@ bool isPrivateOrLocalHost(const QString &host)
         const quint32 mapped = addr.toIPv4Address(&ok);
         if (ok) {
             addr = QHostAddress(mapped);
+        } else if (const auto embedded = embeddedIPv4(addr.toIPv6Address())) {
+            addr = QHostAddress(*embedded);
         } else if (h.startsWith(QLatin1String("[::ffff:"))) {
             addr = QHostAddress(h.mid(8, h.size() - 9));
         }

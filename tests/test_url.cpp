@@ -159,6 +159,53 @@ private Q_SLOTS:
         QVERIFY(Lane::isPrivateOrLocalHost(QString(QStringLiteral("127.0.0.1")) + QChar(0x3002)));
     }
 
+    // IPv6 transition prefixes carry an IPv4 address that the connection
+    // actually reaches. Expected values come from RFC 6052 (NAT64
+    // 64:ff9b::/96, IPv4 in the last 32 bits) and RFC 3056 (6to4 2002::/16,
+    // IPv4 in bits 16 to 47), not from the implementation.
+    void transitionPrefixes_data()
+    {
+        QTest::addColumn<QString>("host");
+        QTest::addColumn<bool>("isPrivate");
+
+        QTest::newRow("nat64 loopback") << QStringLiteral("64:ff9b::7f00:1") << true;
+        QTest::newRow("nat64 rfc1918 10/8") << QStringLiteral("64:ff9b::a00:1") << true;
+        QTest::newRow("nat64 rfc1918 192.168") << QStringLiteral("64:ff9b::c0a8:101") << true;
+        QTest::newRow("nat64 link-local metadata") << QStringLiteral("64:ff9b::a9fe:a9fe") << true;
+        QTest::newRow("nat64 public 1.1.1.1") << QStringLiteral("64:ff9b::101:101") << false;
+        QTest::newRow("nat64 public 8.8.8.8") << QStringLiteral("64:ff9b::808:808") << false;
+
+        QTest::newRow("6to4 loopback") << QStringLiteral("2002:7f00:1::") << true;
+        QTest::newRow("6to4 rfc1918 10/8") << QStringLiteral("2002:a00:1::") << true;
+        QTest::newRow("6to4 rfc1918 192.168") << QStringLiteral("2002:c0a8:101::") << true;
+        // Offset discriminators: the correct read (bytes 2 to 5) and a
+        // misread (bytes 4 to 7) land on opposite sides of the line, so an
+        // off-by-two cannot hide behind addresses that classify the same.
+        QTest::newRow("6to4 private, misread would be public") << QStringLiteral("2002:a00:808:808::") << true;
+        QTest::newRow("6to4 public, misread would be private") << QStringLiteral("2002:808:7f00:1::") << false;
+        QTest::newRow("6to4 link-local metadata") << QStringLiteral("2002:a9fe:a9fe::") << true;
+        QTest::newRow("6to4 with a subnet and host part") << QStringLiteral("2002:7f00:1:5:1:2:3:4") << true;
+        QTest::newRow("6to4 public 1.1.1.1") << QStringLiteral("2002:101:101::") << false;
+
+        // Not decoded: 64:ff9b:1::/48 (RFC 8215) embeds the IPv4 differently,
+        // so the /96 rule would read the wrong bytes. It is public IPv6 here.
+        QTest::newRow("nat64 local-use prefix is not decoded") << QStringLiteral("64:ff9b:1::7f00:1") << false;
+        // The /96 requires bytes 4 to 11 to be zero. A nonzero middle is not
+        // the well-known prefix, so it must not be read as 127.0.0.1.
+        QTest::newRow("nat64 nonzero middle is not decoded") << QStringLiteral("64:ff9b::1:0:7f00:1") << false;
+
+        // Plain IPv6 is unchanged.
+        QTest::newRow("ipv6 loopback") << QStringLiteral("::1") << true;
+        QTest::newRow("ipv6 public") << QStringLiteral("2606:4700:4700::1111") << false;
+    }
+
+    void transitionPrefixes()
+    {
+        QFETCH(QString, host);
+        QFETCH(bool, isPrivate);
+        QCOMPARE(Lane::isPrivateOrLocalHost(host), isPrivate);
+    }
+
     void displayStripsUserInfo()
     {
         const QString shown = Lane::displayUrl(QStringLiteral("https://user:secret@example.com/path"));
