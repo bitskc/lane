@@ -838,11 +838,6 @@ void Controller::hideTarget(const QString &id, bool hidden)
     Q_EMIT settingsChanged();
 }
 
-void Controller::save()
-{
-    persist();
-}
-
 QString Controller::displayNameFor(const QString &id) const
 {
     if (const Target *t = findTarget(m_targets, id)) {
@@ -1121,7 +1116,6 @@ void Controller::showPicker()
         m_pickerWindow->show();
         m_pickerWindow->requestActivate();
     }
-    Q_EMIT pickerVisibleChanged(true);
 }
 
 void Controller::hidePicker()
@@ -1129,7 +1123,6 @@ void Controller::hidePicker()
     if (m_pickerWindow) {
         m_pickerWindow->hide();
     }
-    Q_EMIT pickerVisibleChanged(false);
 }
 
 void Controller::maybeFirstRunSettings()
@@ -1239,6 +1232,11 @@ QWindow *Controller::ensureEngine(QQmlApplicationEngine *&engine, const QString 
     engine->loadFromModule(module, name);
     if (engine->rootObjects().isEmpty()) {
         qWarning() << qPrintable(QStringLiteral("Lane: %1 QML failed to load").arg(warnPrefix));
+        // Keep nothing from a failed load. Leaving the engine set made every
+        // later call return here at the top as if the window already
+        // existed, so a window that failed once could never be retried.
+        delete engine;
+        engine = nullptr;
         return nullptr;
     }
     return qobject_cast<QWindow *>(engine->rootObjects().constFirst());

@@ -216,7 +216,6 @@ public:
     // No-op after the first call.
     Q_INVOKABLE void maybeFirstRunSettings();
     Q_INVOKABLE void hideTarget(const QString &id, bool hidden);
-    Q_INVOKABLE void save();
     Q_INVOKABLE QString displayNameFor(const QString &id) const;
     Q_INVOKABLE QString rememberedTarget(const QString &host) const;
     Q_INVOKABLE void forgetHost(const QString &host);
@@ -233,7 +232,6 @@ Q_SIGNALS:
     void currentChanged();
     void settingsChanged();
     void defaultBrowserChanged();
-    void pickerVisibleChanged(bool visible);
     void holdProgressChanged();
     void holdChanged();
     void updateStateChanged();
