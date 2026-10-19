@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "linux_handler_state.h"
 #include "app/Autostart.h"
 #include "app/DBusActivation.h"
 
@@ -19,6 +20,7 @@
 #include <QWindow>
 
 #include <memory>
+#include <utility>
 
 #ifdef HAVE_KWAYLANDEXTRAS
 #include <KWaylandExtras>
@@ -185,21 +187,17 @@ public:
 
     DefaultHandlerState defaultHandlerState() override
     {
-        DefaultHandlerState state;
-        state.isDefault = true;
-        state.status = DefaultHandlerState::Status::Registered;
-        for (const QString &scheme : {QStringLiteral("http"), QStringLiteral("https")}) {
+        const auto query = [](const char *scheme) {
             QProcess process;
             process.start(QStringLiteral("xdg-mime"),
-                          {QStringLiteral("query"), QStringLiteral("default"), QStringLiteral("x-scheme-handler/") + scheme});
-            if (!process.waitForFinished(1500) || process.exitCode() != 0
-                || QString::fromUtf8(process.readAllStandardOutput()).trimmed() != QLatin1String("app.lane.Lane.desktop")) {
-                state.isDefault = false;
-                state.status = DefaultHandlerState::Status::Partial;
-                break;
-            }
-        }
-        return state;
+                          {QStringLiteral("query"), QStringLiteral("default"),
+                           QStringLiteral("x-scheme-handler/") + QLatin1String(scheme)});
+            const bool ok = process.waitForFinished(1500) && process.exitCode() == 0;
+            return std::pair<bool, QString>{ok, QString::fromUtf8(process.readAllStandardOutput()).trimmed()};
+        };
+        const auto http = query("http");
+        const auto https = query("https");
+        return linuxDefaultHandlerState(http.first, http.second, https.first, https.second);
     }
 
     void makeDefaultHandler(std::function<void(bool ok)> done) override

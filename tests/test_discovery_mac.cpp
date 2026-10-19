@@ -361,6 +361,104 @@ private Q_SLOTS:
         QCOMPARE(binary->id, QStringLiteral("browser:macapp:com.example.binary:default"));
         QVERIFY(binary->exec.endsWith(QLatin1String("/Binary.app/Contents/MacOS/Binary")));
     }
+
+    // A plist nested past the scan cap must not become a target. A sibling
+    // with the same fields at normal depth must, so a scanner that ignores
+    // the directory cannot fake a pass.
+    void oversizedPlistIsDropped()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+
+        const auto writeBundle = [](const QString &bundle, const QString &id, const QString &plistBody) {
+            const QString macos = bundle + QStringLiteral("/Contents/MacOS");
+            if (!QDir().mkpath(macos)) {
+                return false;
+            }
+            QFile exe(macos + QStringLiteral("/App"));
+            if (!exe.open(QIODevice::WriteOnly)) {
+                return false;
+            }
+            exe.write("#!/bin/sh\n");
+            exe.close();
+            if (!exe.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner)) {
+                return false;
+            }
+            QFile plist(bundle + QStringLiteral("/Contents/Info.plist"));
+            if (!plist.open(QIODevice::WriteOnly)) {
+                return false;
+            }
+            const QByteArray head =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict>"
+                "<key>CFBundleIdentifier</key><string>" + id.toUtf8() + "</string>"
+                "<key>CFBundleName</key><string>App</string>"
+                "<key>CFBundleExecutable</key><string>App</string>"
+                "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLSchemes</key>"
+                "<array><string>https</string></array></dict></array>";
+            plist.write(head);
+            plist.write(plistBody.toUtf8());
+            plist.write("</dict></plist>\n");
+            return true;
+        };
+
+        QString deep;
+        for (int i = 0; i < 40; ++i) {
+            deep += QStringLiteral("<key>n</key><dict>");
+        }
+        for (int i = 0; i < 40; ++i) {
+            deep += QStringLiteral("</dict>");
+        }
+        QVERIFY(writeBundle(tmp.path() + QStringLiteral("/Deep.app"), QStringLiteral("app.example.deep"), deep));
+
+        QString wide;
+        for (int i = 0; i < 20001; ++i) {
+            wide += QStringLiteral("<key>k%1</key><string>v</string>").arg(i);
+        }
+        QVERIFY(writeBundle(tmp.path() + QStringLiteral("/Wide.app"), QStringLiteral("app.example.wide"), wide));
+        QVERIFY(writeBundle(tmp.path() + QStringLiteral("/Shallow.app"), QStringLiteral("app.example.shallow"),
+                            QStringLiteral("<key>ok</key><string>1</string>")));
+
+        DiscoveryPaths p;
+        p.home = tmp.path() + QStringLiteral("/home");
+        p.configHome = tmp.path() + QStringLiteral("/config");
+        p.dataHome = tmp.path() + QStringLiteral("/data");
+        p.applicationDirs = {};
+        p.bundleDirs = {tmp.path()};
+        p.applicationSupport = tmp.path() + QStringLiteral("/appsupport");
+        const auto targets = discoverTargets(p);
+        const auto has = [&](const char *id) {
+            return std::any_of(targets.begin(), targets.end(), [id](const Target &t) {
+                return t.bundleId == QLatin1String(id);
+            });
+        };
+        QVERIFY(!has("app.example.deep"));
+        QVERIFY(!has("app.example.wide"));
+        QVERIFY(has("app.example.shallow"));
+    }
+
+    // Protects the publish-and-replace of the bundle path map (D4). The
+    // icon loader reads whatever the last scan stored, including from
+    // another thread, so a bundle that was installed and then left must
+    // not keep a stale path. Fails if the scan merges into the old map
+    // (or skips the write when the new one is empty) instead of swapping
+    // it.
+    void rescanDropsBundlePathsThatLeft()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        discoverTargets(stage(tmp.path()));
+        const QString brave = QStringLiteral("com.brave.Browser");
+        const QString bravePath = macBundlePathForId(brave);
+        QVERIFY2(!bravePath.isEmpty(), "fixture scan must publish Brave");
+
+        DiscoveryPaths gone = stage(tmp.path());
+        gone.bundleDirs.clear();
+        discoverTargets(gone);
+        QCOMPARE(macBundlePathForId(brave), QString());
+
+        discoverTargets(stage(tmp.path()));
+        QCOMPARE(macBundlePathForId(brave), bravePath);
+    }
 };
 
 QTEST_MAIN(DiscoveryMacTest)

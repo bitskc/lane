@@ -48,6 +48,24 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Fixed
 
+- The Settings section list is reachable from the keyboard. Tab lands on
+  it, Up and Down move, and Enter or Space opens the section. Each
+  entry exposes its name and whether it is selected.
+
+- A Settings, picker, or hold window that fails to load is tried again
+  the next time you open it, instead of staying blank for the rest of
+  the session.
+
+- NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`) addresses are classified
+  by the IPv4 they reach. A public address is not treated as local. A
+  loopback, private, or link-local address still is.
+
+- In the picker, comma and period at either end of the destination
+  ladder are no longer typed into the filter. Hovering a row no longer
+  dismisses the "no private mode" notice. The empty-list shortcut hint
+  uses the same per-platform labels as the other hints, and it appears
+  when the destination list is actually empty.
+
 - Duplicate same-name containers in a Firefox/Zen profile's
   containers.json (stale rows left when a container is re-created) no
   longer flood the picker. Discovery now keeps the first of each name

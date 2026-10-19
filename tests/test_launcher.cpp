@@ -73,6 +73,16 @@ private Q_SLOTS:
         QVERIFY(!args.first().contains(QLatin1Char(' ')));
     }
 
+    void percentUDoesNotMatchLongerToken()
+    {
+        Target t;
+        t.args = {QStringLiteral("--user-data-dir=%user"), QStringLiteral("%u"), QStringLiteral("--url=%u")};
+        const auto args = expandArgs(t, QStringLiteral("https://example.com"));
+        QCOMPARE(args.at(0), QStringLiteral("--user-data-dir=%user"));
+        QCOMPARE(args.at(1), QStringLiteral("https://example.com"));
+        QCOMPARE(args.at(2), QStringLiteral("--url=https://example.com"));
+    }
+
     void appendsWhenMissing()
     {
         Target t;
@@ -425,6 +435,22 @@ private Q_SLOTS:
                   QStringLiteral("app.id"), QStringLiteral("$url")};
         QVERIFY(!launchTarget(t, QStringLiteral("https://example.com")));
         QVERIFY(!QFile::exists(outPath));
+    }
+
+    void windowsInterpreterBasenamesAreBlocked()
+    {
+        const QStringList blocked = {
+            QStringLiteral("C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"),
+            QStringLiteral("pwsh.exe"),
+            QStringLiteral("python.exe"),
+            QStringLiteral("wscript.exe"),
+            QStringLiteral("cscript.exe"),
+            QStringLiteral("mshta.exe"),
+        };
+        for (const QString &path : blocked) {
+            QVERIFY2(isBlockedInterpreter(path), qPrintable(path));
+        }
+        QVERIFY(!isBlockedInterpreter(QStringLiteral("C:/Program Files/Mozilla Firefox/firefox.exe")));
     }
 };
 

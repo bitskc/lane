@@ -28,6 +28,7 @@ target_link_libraries(lane-core
 set(LANE_APP_SRCS
     app/Controller.cpp
     app/PickerModel.cpp
+    app/ClickGate.cpp
     app/TargetModel.cpp
     app/RuleModel.cpp
     app/SourceInfo.cpp
@@ -74,6 +75,9 @@ if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
         qml/ui/ThemedShadow.qml
         qml/ui/LaneIcon.qml
         qml/ui/DragHandle.qml
+        qml/ui/SidebarNav.qml
+        qml/ui/ModelSync.qml
+        qml/ui/RenameQueue.qml
         qml/ui/AbstractFormDelegate.qml
         qml/ui/FormSwitchDelegate.qml
         qml/ui/FormComboBoxDelegate.qml

@@ -1,5 +1,7 @@
 #include "urlutil.h"
 
+#include <optional>
+
 #include <QHostAddress>
 #include <QAbstractSocket>
 #include <QRegularExpression>
@@ -38,7 +40,11 @@ static const QSet<QString> kShorteners = {
 ParsedUrl parseUrl(const QString &raw)
 {
     ParsedUrl out;
-    const QUrl url = QUrl::fromUserInput(raw.trimmed());
+    // One URL policy: normalizeInput decides what a click means (keeps the
+    // origin, adds a scheme only to a bare host). Re-parsing the raw string
+    // with fromUserInput here would re-invent the host "https" for
+    // "https://example.com.." that normalizeInput deliberately left alone.
+    const QUrl url(normalizeInput(raw), QUrl::TolerantMode);
     out.url = url;
     out.valid = url.isValid() && !url.host().isEmpty();
     out.scheme = url.scheme();
@@ -48,17 +54,49 @@ ParsedUrl parseUrl(const QString &raw)
     return out;
 }
 
+// True when the string holds a character that must never reach an argv,
+// a notification body or a log line as a raw character. Shared by
+// normalizeInput and isSafeOpenUrl so the two cannot disagree on it.
+static bool hasForbiddenControl(const QString &s)
+{
+    for (const QChar c : s) {
+        if (c == QLatin1Char('\n') || c == QLatin1Char('\r') || c == QChar(0) || c == QChar(0x2028)
+            || c == QChar(0x2029)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 QString normalizeInput(const QString &raw)
 {
     const QString trimmed = raw.trimmed();
     if (trimmed.isEmpty()) {
         return trimmed;
     }
-    const QUrl url = QUrl::fromUserInput(trimmed);
-    if (url.isValid()) {
-        return url.toString();
+    // A forbidden control character is returned untouched so that
+    // isSafeOpenUrl still refuses the click. Encoding it here to %0A
+    // would launder it into a string that looks safe.
+    if (hasForbiddenControl(trimmed)) {
+        return trimmed;
     }
-    return trimmed;
+    if (trimmed.contains(QLatin1String("://"))) {
+        // An explicit scheme is never repaired. QUrl::fromUserInput, given
+        // an authority it cannot parse ("https://example.com..",
+        // "http://example.com:99999/"), guesses a scheme and moves the
+        // original one into the host, producing a valid-looking URL whose
+        // host is "https". TolerantMode still re-encodes a stray % or a
+        // literal space, as the old code did, but keeps the origin.
+        const QUrl url(trimmed, QUrl::TolerantMode);
+        if (!url.isValid() || url.scheme().isEmpty() || url.host().isEmpty()) {
+            return trimmed;
+        }
+        return url.toString(QUrl::FullyEncoded);
+    }
+    // No scheme: this is a bare host or host/path typed or passed by a
+    // script, which is what fromUserInput is for.
+    const QUrl url = QUrl::fromUserInput(trimmed);
+    return url.isValid() ? url.toString(QUrl::FullyEncoded) : trimmed;
 }
 
 QString hostOf(const QString &raw)
@@ -148,9 +186,44 @@ bool urlInScope(const QString &url, const QString &scope)
     return pathWithinPrefix(u.path(), s.path(), Qt::CaseInsensitive);
 }
 
+// The IPv4 address an IPv6 transition prefix carries, so a redirect to
+// [64:ff9b::7f00:1] is judged as the 127.0.0.1 it reaches.
+//   NAT64 64:ff9b::/96 (RFC 6052): the IPv4 is the last 32 bits. Bytes 4 to
+//     11 must be zero. 64:ff9b:1::/48 (RFC 8215, local use) embeds it
+//     differently and is not decoded, so it is left to the range ladder.
+//   6to4 2002::/16 (RFC 3056): the IPv4 is bits 16 to 47.
+// Returns nothing for any other address.
+static std::optional<quint32> embeddedIPv4(const Q_IPV6ADDR &a)
+{
+    const auto v4 = [&a](int i) {
+        return (quint32(a[i]) << 24) | (quint32(a[i + 1]) << 16) | (quint32(a[i + 2]) << 8) | quint32(a[i + 3]);
+    };
+    if (a[0] == 0x00 && a[1] == 0x64 && a[2] == 0xff && a[3] == 0x9b) {
+        for (int i = 4; i < 12; ++i) {
+            if (a[i] != 0) {
+                return std::nullopt;
+            }
+        }
+        return v4(12);
+    }
+    if (a[0] == 0x20 && a[1] == 0x02) {
+        return v4(2);
+    }
+    return std::nullopt;
+}
+
 bool isPrivateOrLocalHost(const QString &host)
 {
-    const QString h = host.trimmed().toLower();
+    // A single trailing dot is the DNS absolute form (localhost. is
+    // localhost). U+3002 and U+FF0E are the dots QUrl already folds into
+    // that ASCII dot. Leaving them on made 127.0.0.1. and localhost. miss
+    // every name and numeric check below.
+    QString h = host.trimmed().toLower();
+    h.replace(QChar(0x3002), QLatin1Char('.'));
+    h.replace(QChar(0xFF0E), QLatin1Char('.'));
+    while (h.endsWith(QLatin1Char('.'))) {
+        h.chop(1);
+    }
     if (h.isEmpty() || h == QLatin1String("localhost") || h == QLatin1String("localhost.localdomain")
         || h.endsWith(QLatin1String(".localhost")) || h.endsWith(QLatin1String(".local"))
         || h.endsWith(QLatin1String(".internal")) || h.endsWith(QLatin1String(".lan"))
@@ -168,6 +241,8 @@ bool isPrivateOrLocalHost(const QString &host)
         const quint32 mapped = addr.toIPv4Address(&ok);
         if (ok) {
             addr = QHostAddress(mapped);
+        } else if (const auto embedded = embeddedIPv4(addr.toIPv6Address())) {
+            addr = QHostAddress(*embedded);
         } else if (h.startsWith(QLatin1String("[::ffff:"))) {
             addr = QHostAddress(h.mid(8, h.size() - 9));
         }
@@ -242,11 +317,13 @@ bool isSafeOpenUrl(const QString &raw)
     if (trimmed.isEmpty() || trimmed.size() > 8192) {
         return false;
     }
-    if (trimmed.contains(QLatin1Char('\n')) || trimmed.contains(QLatin1Char('\r'))
-        || trimmed.contains(QChar(0))) {
+    if (hasForbiddenControl(trimmed)) {
         return false;
     }
-    QUrl url = QUrl::fromUserInput(trimmed);
+    // StrictMode never repairs. The click has already been through
+    // normalizeInput, which re-encodes spaces and stray % but keeps the
+    // origin, so a strict parse here only rejects what is truly malformed.
+    const QUrl url(trimmed, QUrl::StrictMode);
     if (!url.isValid() || url.isRelative() || url.host().isEmpty()) {
         return false;
     }
@@ -265,7 +342,7 @@ QString sanitizedOpenUrl(const QString &raw)
     if (!isSafeOpenUrl(raw)) {
         return {};
     }
-    QUrl url = QUrl::fromUserInput(raw.trimmed());
+    QUrl url(raw.trimmed(), QUrl::StrictMode);
     url.setUserName({});
     url.setPassword({});
     return url.toString();

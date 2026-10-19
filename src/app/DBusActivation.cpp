@@ -56,7 +56,14 @@ public Q_SLOTS:
     void Open(const QStringList &uris, const QVariantMap &platform_data)
     {
         withActivationToken(platform_data, [this, &uris]() {
+            // openUrl consumes the env token on the first URI. Put it back
+            // for each later URI in this same Open; one activation covers
+            // the whole list.
+            const QByteArray token = qgetenv("XDG_ACTIVATION_TOKEN");
             for (const QString &uri : uris) {
+                if (!token.isEmpty()) {
+                    qputenv("XDG_ACTIVATION_TOKEN", token);
+                }
                 m_openUrl(uri);
             }
         });

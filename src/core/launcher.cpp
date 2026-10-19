@@ -52,7 +52,15 @@ const QSet<QString> &blockedInterpreters()
         QStringLiteral("osascript"),
         QStringLiteral("cmd.exe"),
         QStringLiteral("powershell"),
+        QStringLiteral("powershell.exe"),
         QStringLiteral("pwsh"),
+        QStringLiteral("pwsh.exe"),
+        // Windows reports these with the extension. fileName() does not
+        // strip it, so "powershell" alone does not catch powershell.exe.
+        QStringLiteral("python.exe"),
+        QStringLiteral("wscript.exe"),
+        QStringLiteral("cscript.exe"),
+        QStringLiteral("mshta.exe"),
         // re-exec / process-wrapper binaries: each one's whole job is to
         // run something else, named in its own argv rather than in exec
         QStringLiteral("env"),
@@ -251,12 +259,29 @@ QStringList expandArgs(const Target &target, const QString &url)
             a.replace(QStringLiteral("$urlEncoded"), encodedUrl);
             placed = true;
         }
-        if (a.contains(QLatin1String("$url")) || a.contains(QLatin1String("%url%"))
-            || a.contains(QLatin1String("%u"))) {
+        if (a.contains(QLatin1String("$url"))) {
             a.replace(QStringLiteral("$url"), url);
-            a.replace(QStringLiteral("%url%"), url);
-            a.replace(QStringLiteral("%u"), url);
             placed = true;
+        }
+        if (a.contains(QLatin1String("%url%"))) {
+            a.replace(QStringLiteral("%url%"), url);
+            placed = true;
+        }
+        // %u is a desktop field code. It is not a prefix of %url% (already
+        // replaced) or of a longer token such as %user.
+        int from = 0;
+        while ((from = a.indexOf(QLatin1String("%u"), from)) >= 0) {
+            const int after = from + 2;
+            if (after < a.size()) {
+                const QChar next = a.at(after);
+                if (next.isLetterOrNumber() || next == QLatin1Char('_') || next == QLatin1Char('%')) {
+                    from = after;
+                    continue;
+                }
+            }
+            a.replace(from, 2, url);
+            placed = true;
+            from += url.size();
         }
         out << a;
     }

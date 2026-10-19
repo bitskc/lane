@@ -23,8 +23,8 @@ public:
 
     // Registers an action for a notification identifier; returns the key
     // to embed as the UNNotificationRequest identifier. Over capacity,
-    // the least recently used entry is evicted (its action is dropped:
-    // the notification still shows, the button is just inert).
+    // the oldest entry is evicted (its action is dropped: the notification
+    // still shows, the button is just inert).
     QString add(std::function<void()> action)
     {
         if (!action) {
@@ -77,11 +77,11 @@ public:
 
 
 private:
+    // Keys come from add()'s monotonic counter, so a key is never inserted
+    // twice and the oldest entry is the one to evict.
     void insert(const QString &key, std::function<void()> action)
     {
-        if (m_map.count(key)) {
-            m_lru.remove(key);
-        } else if (m_map.size() >= static_cast<size_t>(kMaxEntries)) {
+        if (m_map.size() >= static_cast<size_t>(kMaxEntries)) {
             const QString oldest = m_lru.back();
             m_lru.pop_back();
             m_map.erase(oldest);

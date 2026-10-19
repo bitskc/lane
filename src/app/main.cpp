@@ -16,8 +16,28 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
-
+#include <QSocketNotifier>
+#include <cerrno>
+#include <csignal>
 #include <cstdio>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
+
+namespace
+{
+int g_sigtermPipe[2] = {-1, -1};
+
+void handleSigterm(int)
+{
+    // write() is async-signal-safe. The GUI thread turns the byte into quit().
+    char byte = 1;
+    if (g_sigtermPipe[1] >= 0) {
+        const ssize_t n = ::write(g_sigtermPipe[1], &byte, 1);
+        (void)n;
+    }
+}
+}
 
 static const char *actionName(Lane::Decision::Action action)
 {
@@ -193,10 +213,38 @@ int main(int argc, char **argv)
     // on macOS it only opens Settings via --settings, so the bare-start
     // case needs this. When a link did start Lane the flag survives until
     // the pick or launch completes, and maybeFirstRun fires from launch().
-    if (parser.positionalArguments().isEmpty() && !parser.isSet(daemonOpt) && !parser.isSet(settingsOpt)) {
+    // --rediscover and --pick are commands, not a bare launch. Opening
+    // Settings on top of them hides the thing the user just asked for.
+    if (parser.positionalArguments().isEmpty() && !parser.isSet(daemonOpt) && !parser.isSet(settingsOpt)
+        && !parser.isSet(rediscoverOpt) && !parser.isSet(pickOpt)) {
         controller.maybeFirstRunSettings();
     }
 #endif
+
+    // systemctl restart sends SIGTERM. Without this, the process dies
+    // inside the unshorten loop and never runs ~Controller. The pipe hop
+    // is what makes the handler allowed to call into Qt.
+    // pipe2 sets close-on-exec atomically. A plain pipe() would leak both
+    // ends into every browser Lane launches. The write end is non-blocking
+    // so a burst of SIGTERMs can never block inside the signal handler.
+    if (::pipe2(g_sigtermPipe, O_CLOEXEC | O_NONBLOCK) != 0) {
+        std::fprintf(stderr, "lane: could not set up SIGTERM handling (%s); a restart will not shut down cleanly\n",
+                     std::strerror(errno));
+    } else {
+        auto *sigterm = new QSocketNotifier(g_sigtermPipe[0], QSocketNotifier::Read, &app);
+        QObject::connect(sigterm, &QSocketNotifier::activated, &app, [sigterm] {
+            sigterm->setEnabled(false);
+            char byte = 0;
+            const ssize_t n = ::read(g_sigtermPipe[0], &byte, 1);
+            (void)n;
+            QCoreApplication::quit();
+        });
+        struct sigaction action{};
+        action.sa_handler = handleSigterm;
+        sigemptyset(&action.sa_mask);
+        action.sa_flags = 0;
+        ::sigaction(SIGTERM, &action, nullptr);
+    }
 
     return app.exec();
 }
