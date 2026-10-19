@@ -1,5 +1,7 @@
 # Lane fuzz review
 
+Fixing commits: findings 1 through 6 are `bd6f588`. Open question 1 (NAT64 `64:ff9b::/96` and 6to4 `2002::/16` treated as the IPv4 they reach) is `f688994`.
+
 Follow-up: the three P2s are fixed. `isPrivateOrLocalHost` strips trailing dots (and U+3002 / U+FF0E) before the name and numeric checks. `.webloc` reads only the plist URL key and decodes `&amp;`; `.url` reads only a `URL=` line. Link files that are not regular files, including a fifo and a symlink to `/dev/zero`, are ignored before `open`. `isSafeOpenUrl` uses strict parsing and rejects U+2028 / U+2029. `%u` no longer matches inside a longer token such as `%user`.
 
 

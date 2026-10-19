@@ -1,5 +1,7 @@
 # Lane code quality and test audit
 
+Fixing commits: finding 1 and finding 2 are `bd6f588` (`linuxDefaultHandlerState`, `test_linux_handler`, `linkFilesUnwrapToTheirEmbeddedUrl`). Finding 3 and finding 4 are `25ac107` (`Controller::save`, `pickerVisibleChanged`, and the unreachable LRU branch are gone; `ensureEngine` drops the engine when the load has no root object).
+
 Scope: `src/app/Controller.cpp` (1315 lines) and `Controller.h` (382), the 20 ctest targets in `tests/CMakeLists.txt`, and the error paths in `unshortenSync` and `forwardToPrimary`. Round-1 rows 9-19 in `docs/designs/gstack-full-analysis.md` are not repeated here.
 
 ## Verdict

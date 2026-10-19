@@ -45,10 +45,10 @@ Process: this change is gated on gstack eng and arch sign-off before merge. Item
 - [x] 6.2 ASan+UBSan build (`build-asan`) full ctest, 24 passed, no sanitizer reports.
 - [x] 6.3 Installed to `~/.local` and `systemctl --user restart lane.service`: active, D-Bus introspection shows `org.freedesktop.Application` and `org.kde.KDBusService`, `lane --list` is 42 targets, `lane --explain https://example.com/` routes to the picker. Restart came back running (SIGTERM path). Offscreen `lane --settings` against that daemon: journal has no QML load errors.
 - [ ] 6.4 macOS CI job green on the self-hosted runner for the pushed branch. Not claimed verified on the device (see #80).
-- [ ] 6.5 `openspec validate round-2-hardening --strict` clean and a scratch archive dry run clean.
+- [x] 6.5 `openspec validate round-2-hardening --strict` clean. Scratch archive in a throwaway worktree: `lane` spec +6 added, ~2 modified, then discarded. Not archived in this repo yet (task 7.3).
 
 ## 7. Close-out
-- [ ] 7.1 CHANGELOG entry. Reviews in `docs/reviews/` cross-reference the fixing commit.
+- [x] 7.1 CHANGELOG entry is `5382f1a`. Reviews name the fixing commits: concurrency and fuzz findings `bd6f588`, NAT64 `f688994`, quality findings 3 and 4 `25ac107`, QML keyboard and lists `49653e1`, picker hints `58a7547`.
 - [ ] 7.2 gstack PR review; fix findings; merge; close #71, #72, #73, #78, #81 with the commit.
 - [ ] 7.3 Archive the change after merge. Dep: 7.2.
 

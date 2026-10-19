@@ -1,5 +1,7 @@
 # Concurrency and lifecycle
 
+Fixing commit: `bd6f588`. That is the mutex publication of `g_macBundlePaths`, GUI-thread `bundle:` icons, `ExcludeUserInputEvents`, the quit flag, the SIGTERM self-pipe, deferred commands, `QPointer` callbacks, and the per-URI activation token.
+
 Follow-up: the two cross-thread and re-entry holes below are fixed in the tree. `g_macBundlePaths` is published as one map under a mutex, and `bundle:` icons load on the GUI thread so `QFileIconProvider` does not run on the image loader. `unshortenSync` excludes user input. `aboutToQuit` sets a flag that stops `openUrl` from routing, launching, or draining after `quit()` unwinds the nested loop. `SIGTERM` writes one byte to a pipe and quits on the GUI thread, so `systemctl restart` runs `~Controller`. `--rediscover` and `--settings` that arrive during `openUrl` run after that click. A D-Bus `Open` of several URIs restores the activation token before each one. Notification, default-handler, and activation callbacks hold a `QPointer`. The pending-URL cap logs the URL it drops. An open picker's rows are still the decision that opened it; reload does not rebuild them mid-choice.
 
 ## Verdict

@@ -1,5 +1,7 @@
 # QML audit
 
+Fixing commits: findings 2, 3, 4, and 7 are `49653e1` (focusable `SidebarNav`, 1px divider, `Layout.fillWidth` rule rows, `ModelSync`, `RenameQueue`). Findings 1, 5, and 8 are `58a7547` (one hint table, notice not cleared by hover, comma and period consumed at the ladder ends). Finding 6 stays: those keys live on the filter field on purpose, so a digit can still be typed. Findings 9 through 12 are outside this change.
+
 Scope: every file under `src/qml/` (pages, windows, `src/qml/ui`). There is no `src/ui/` tree; the form controls live in `src/qml/ui`. Product code was not modified. Rows 9-19 of `docs/designs/gstack-full-analysis.md` are not repeated. The LaneIcon `sourceSize` loop fixed in `2734da6` is checked below and stays closed.
 
 ## Verdict
