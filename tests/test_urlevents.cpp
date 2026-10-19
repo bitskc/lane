@@ -5,10 +5,15 @@
 
 #include <QCoreApplication>
 #include <QEvent>
+#include <QFile>
 #include <QFileOpenEvent>
 #include <QStringList>
+#include <QElapsedTimer>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QUrl>
+
+#include <sys/stat.h>
 
 #include "../src/app/UrlEventFilter.h"
 
@@ -86,6 +91,79 @@ private Q_SLOTS:
         filter.setSink([&delivered](const QString &url) { delivered << url; });
         post(filter, QStringLiteral("https://live.example/"));
         QCOMPARE(delivered, QStringList({QStringLiteral("https://live.example/")}));
+        QCOMPARE(filter.pendingCount(), 0);
+    }
+
+    void linkFilesUnwrapToTheirEmbeddedUrl()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString webloc = tmp.filePath(QStringLiteral("Page.webloc"));
+        const QString shortcut = tmp.filePath(QStringLiteral("Page.url"));
+        const QString html = tmp.filePath(QStringLiteral("Page.html"));
+        QFile weblocFile(webloc);
+        QVERIFY(weblocFile.open(QIODevice::WriteOnly));
+        weblocFile.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                         "<plist version=\"1.0\"><dict><key>URL</key>"
+                         "<string>https://example.com/from-webloc</string></dict></plist>\n");
+        weblocFile.close();
+        QFile shortcutFile(shortcut);
+        QVERIFY(shortcutFile.open(QIODevice::WriteOnly));
+        shortcutFile.write("[InternetShortcut]\nURL=https://example.com/from-url\n");
+        shortcutFile.close();
+        QFile htmlFile(html);
+        QVERIFY(htmlFile.open(QIODevice::WriteOnly));
+        htmlFile.write("<html></html>\n");
+        htmlFile.close();
+
+        UrlEventFilter filter;
+        post(filter, QUrl::fromLocalFile(webloc).toString());
+        post(filter, QUrl::fromLocalFile(shortcut).toString());
+        post(filter, QUrl::fromLocalFile(html).toString());
+        QCOMPARE(filter.pendingCount(), 2);
+
+        QStringList delivered;
+        filter.setSink([&delivered](const QString &url) { delivered << url; });
+        QCOMPARE(delivered, QStringList({QStringLiteral("https://example.com/from-webloc"),
+                                         QStringLiteral("https://example.com/from-url")}));
+    }
+
+    void weblocIgnoresDecoyUrlLine()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString webloc = tmp.filePath(QStringLiteral("Page.webloc"));
+        QFile file(webloc);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                   "<plist version=\"1.0\"><dict>"
+                   "<key>Note</key><string>URL=https://evil.example/phish</string>"
+                   "<key>URL</key><string>https://bank.example/real?a=1&amp;b=2</string>"
+                   "</dict></plist>\n");
+        file.close();
+
+        UrlEventFilter filter;
+        post(filter, QUrl::fromLocalFile(webloc).toString());
+        QStringList delivered;
+        filter.setSink([&delivered](const QString &url) { delivered << url; });
+        QCOMPARE(delivered, QStringList({QStringLiteral("https://bank.example/real?a=1&b=2")}));
+    }
+
+    void deviceAndFifoLinkFilesDoNotBlock()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString fifo = tmp.filePath(QStringLiteral("fifo.webloc"));
+        QVERIFY(mkfifo(fifo.toLocal8Bit().constData(), 0600) == 0);
+        const QString zero = tmp.filePath(QStringLiteral("zero.url"));
+        QVERIFY(QFile::link(QStringLiteral("/dev/zero"), zero));
+
+        UrlEventFilter filter;
+        QElapsedTimer timer;
+        timer.start();
+        post(filter, QUrl::fromLocalFile(fifo).toString());
+        post(filter, QUrl::fromLocalFile(zero).toString());
+        QVERIFY(timer.elapsed() < 1000);
         QCOMPARE(filter.pendingCount(), 0);
     }
 };

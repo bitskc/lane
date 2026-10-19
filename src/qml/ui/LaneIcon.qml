@@ -17,7 +17,9 @@ Image {
     // largest use (Settings rows, buttons) at 2x Retina.
     sourceSize: Qt.size(64, 64)
     fillMode: Image.PreserveAspectFit
-    asynchronous: true
+    // bundle: icons go through QFileIconProvider, whose macOS backend talks
+    // to AppKit. That has to stay on the GUI thread. Theme icons stay async.
+    asynchronous: !iconName.startsWith("bundle:")
     // True once a theme icon actually loaded; callers that want a
     // collapsing slot (button rows) bind visible to this.
     readonly property bool loaded: iconName !== "" && status === Image.Ready

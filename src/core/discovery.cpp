@@ -14,6 +14,7 @@
 #include <QProcess>
 #include <QSettings>
 #include <QHash>
+#include <QMutex>
 #include <QStandardPaths>
 #include <QSet>
 #include <QDebug>
@@ -1234,15 +1235,29 @@ QList<Target> discoverPwas(const DiscoveryPaths &paths)
     return out;
 }
 
+// A real Info.plist is a shallow tree of a few hundred nodes. Past these
+// caps the file is hostile (stack blow-up or a multi-megabyte dict) and
+// the scan drops the bundle instead of parsing it.
+constexpr int kPlistMaxDepth = 32;
+constexpr int kPlistMaxNodes = 20000;
+
 // Reads one plist value node with the cursor on its start element.
 // Scalar types Lane does not need (integer, real, date, data, true,
-// false) are consumed but produce an invalid QVariant.
-QVariant readPlistValue(QXmlStreamReader &xml)
+// false) are consumed but produce an invalid QVariant. `nodes` counts
+// every element visited, including ones that are skipped.
+QVariant readPlistValue(QXmlStreamReader &xml, int depth, int &nodes)
 {
+    if (depth > kPlistMaxDepth || ++nodes > kPlistMaxNodes) {
+        xml.raiseError(QStringLiteral("plist exceeds size limits"));
+        return {};
+    }
     const QStringView tag = xml.name();
     if (tag == QLatin1String("dict")) {
         QVariantMap map;
         while (xml.readNextStartElement()) {
+            if (xml.hasError()) {
+                return {};
+            }
             if (xml.name() != QLatin1String("key")) {
                 xml.skipCurrentElement();
                 continue;
@@ -1251,14 +1266,23 @@ QVariant readPlistValue(QXmlStreamReader &xml)
             if (!xml.readNextStartElement()) {
                 break;
             }
-            map.insert(key, readPlistValue(xml));
+            map.insert(key, readPlistValue(xml, depth + 1, nodes));
+            if (xml.hasError()) {
+                return {};
+            }
         }
         return map;
     }
     if (tag == QLatin1String("array")) {
         QVariantList list;
         while (xml.readNextStartElement()) {
-            list.append(readPlistValue(xml));
+            if (xml.hasError()) {
+                return {};
+            }
+            list.append(readPlistValue(xml, depth + 1, nodes));
+            if (xml.hasError()) {
+                return {};
+            }
         }
         return list;
     }
@@ -1282,7 +1306,12 @@ QVariantMap parseXmlPlist(const QByteArray &data)
         if (!xml.readNextStartElement()) {
             break;
         }
-        return readPlistValue(xml).toMap();
+        int nodes = 0;
+        const QVariantMap map = readPlistValue(xml, 1, nodes).toMap();
+        if (xml.hasError()) {
+            return {};
+        }
+        return map;
     }
     return {};
 }
@@ -1309,6 +1338,10 @@ QVariantMap readInfoPlist(const QString &path)
             return {};
         }
         data = plutil.readAllStandardOutput();
+        if (data.size() > 8 * 1024 * 1024) {
+            qDebug() << "Lane: skipping" << path << "- converted plist exceeds 8 MiB";
+            return {};
+        }
 #else
         qDebug() << "Lane: skipping" << path
                  << "- binary Info.plist conversion needs /usr/bin/plutil (macOS only)";
@@ -1329,10 +1362,13 @@ QVariantMap readInfoPlist(const QString &path)
 // target. Results are deduped by bundle id (shorter bundle path wins,
 // then lexicographic) and by resolved real path.
 QHash<QString, QString> g_macBundlePaths;
+QMutex g_macBundlePathsMutex;
 
 QList<DesktopApp> scanMacBundles(const QStringList &dirs)
 {
-    g_macBundlePaths.clear();
+    // Built locally and published in one assignment. The icon provider
+    // reads this map from Qt's image-loader thread.
+    QHash<QString, QString> paths;
     QList<DesktopApp> apps;
     QHash<QString, int> byId;
     QSet<QString> seenCanonical;
@@ -1416,7 +1452,7 @@ QList<DesktopApp> scanMacBundles(const QStringList &dirs)
             if (it == byId.constEnd()) {
                 byId.insert(bundleId, apps.size());
                 apps.append(app);
-                g_macBundlePaths.insert(bundleId, app.bundlePath);
+                paths.insert(bundleId, app.bundlePath);
             } else {
                 // Same bundle id installed twice: keep the shorter bundle
                 // path, breaking a tie lexicographically.
@@ -1424,11 +1460,13 @@ QList<DesktopApp> scanMacBundles(const QStringList &dirs)
                 if (bundlePath.size() < current.size()
                     || (bundlePath.size() == current.size() && bundlePath < current)) {
                     apps[it.value()] = app;
-                    g_macBundlePaths.insert(bundleId, app.bundlePath);
+                    paths.insert(bundleId, app.bundlePath);
                 }
             }
         }
     }
+    const QMutexLocker lock(&g_macBundlePathsMutex);
+    g_macBundlePaths = paths;
     return apps;
 }
 
@@ -1469,6 +1507,7 @@ QList<Target> actionTargets()
 
 QString macBundlePathForId(const QString &bundleId)
 {
+    const QMutexLocker lock(&g_macBundlePathsMutex);
     return g_macBundlePaths.value(bundleId);
 }
 

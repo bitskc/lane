@@ -35,7 +35,11 @@ QString unshortenSync(const QString &url, int timeoutMs)
     QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     timer.start(timeoutMs);
-    loop.exec();
+    // User input stays queued. A tray click or Return on the still-visible
+    // previous picker would otherwise run while this URL is unresolved.
+    // Socket and timer events still run, so the HEAD reply and the timeout
+    // can finish the loop.
+    loop.exec(QEventLoop::ExcludeUserInputEvents);
 
     QString result = url;
     if (reply->isFinished()) {

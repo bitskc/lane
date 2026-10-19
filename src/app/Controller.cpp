@@ -25,8 +25,10 @@
 #include <QDesktopServices>
 #include <QFileInfo>
 #include <QFile>
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QPointer>
 #include <QLocale>
 #include <QMenu>
 #include <QQmlContext>
@@ -54,6 +56,7 @@ Controller::Controller(QObject *parent)
     // starts Lane with a URL still counts as "no config yet" and gets
     // Settings after the pick finishes, not before.
     m_firstRun = !QFile::exists(m_configPath);
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this] { m_gate.quit(); });
     reload();
 #ifdef Q_OS_MACOS
     // No icon theme on macOS: the bundled SVG is the source, and a mask
@@ -66,6 +69,9 @@ Controller::Controller(QObject *parent)
 #endif
     m_tray = new QSystemTrayIcon(trayIcon, this);
     m_tray->setToolTip(QStringLiteral("Lane\nLink router"));
+    // QMenu's parent must be a QWidget. The tray does not take ownership
+    // (Qt docs), and Controller is not a widget, so the menu is deleted
+    // in the destructor instead.
     auto *menu = new QMenu();
     menu->addAction(QStringLiteral("Settings"), this, &Controller::openSettings);
     menu->addAction(QStringLiteral("Rediscover browsers"), this, &Controller::rediscover);
@@ -310,7 +316,11 @@ void Controller::onMimeappsChanged()
                         QStringLiteral("app.lane.Lane"),
                         QStringLiteral("restore"),
                         QStringLiteral("Restore Lane"),
-                        [this]() { makeDefaultBrowser(); });
+                        [self = QPointer<Controller>(this)]() {
+                            if (self) {
+                                self->makeDefaultBrowser();
+                            }
+                        });
 }
 
 QString Controller::pickerPolicy() const
@@ -565,25 +575,26 @@ void Controller::openUrl(const QString &url, bool forcePicker)
         qunsetenv("XDG_ACTIVATION_TOKEN");
     }
 
-    // Re-entrancy guard: runPipeline → unshortenSync runs a nested
-    // QEventLoop::exec() for up to ~1.8 s on shortener URLs.  A second
-    // D-Bus openRequested during that nested loop would re-enter
-    // openUrl, overwrite m_click mid-pipeline, and stop the running
-    // hold animation.  Queue the second call and drain it after this
-    // invocation finishes applyDecision, each with its own captured token.
-    if (m_inOpenUrl) {
-        // Bound the queue: a burst of opens during one nested unshorten
-        // loop would otherwise serialize into a train of stale windows
-        // minutes later. Keep the newest clicks (the ones the user most
-        // likely still means) and drop the oldest.
-        constexpr qsizetype kMaxPendingUrls = 4;
-        m_pendingUrls.append({url, forcePicker, token});
-        while (m_pendingUrls.size() > kMaxPendingUrls) {
-            m_pendingUrls.removeFirst();
+    QString dropped;
+    switch (m_gate.enter({url, forcePicker, token}, &dropped)) {
+    case ClickGate::Entry::Quit:
+        // Lane is quitting. A click arriving now would start a full resolve
+        // (a network round trip per shortener hop) only to be discarded,
+        // so it never starts.
+        return;
+    case ClickGate::Entry::Queued:
+        // A click is being resolved: runPipeline -> unshortenSync runs a
+        // nested event loop for up to ~1.8 s per hop. Opening now would
+        // overwrite m_click mid-pipeline and stop the running hold. The
+        // gate kept it, with its own activation token.
+        if (!dropped.isEmpty()) {
+            qWarning("Lane: dropping a queued link open past the cap of %lld: %s",
+                     static_cast<long long>(ClickGate::kMaxPending), qPrintable(dropped));
         }
         return;
+    case ClickGate::Entry::Run:
+        break;
     }
-    m_inOpenUrl = true;
 
     m_pendingActivationToken = token;
 
@@ -594,6 +605,12 @@ void Controller::openUrl(const QString &url, bool forcePicker)
 
     const auto src = activeSource();
     m_click = runPipeline(url, m_config, unshortenFn());
+    // quit() also exits the unshorten loop. Do not route or launch a click
+    // the user already abandoned.
+    if (m_gate.quitting()) {
+        m_gate.finish();
+        return;
+    }
     m_click.forcePicker = forcePicker;
     m_click.processName = src.processName;
     m_click.windowTitle = src.windowTitle;
@@ -615,13 +632,23 @@ void Controller::openUrl(const QString &url, bool forcePicker)
     Q_EMIT currentChanged();
     applyDecision(d);
 
-    m_inOpenUrl = false;
+    m_gate.finish();
 
-    // Drain the queue: process the next pending URL with its own
-    // captured activation token (restored to the environment so openUrl
-    // captures it the same way as the original call).
-    if (!m_pendingUrls.isEmpty()) {
-        const auto next = m_pendingUrls.takeFirst();
+    // Commands that arrived during the nested loop run now that nothing is
+    // in flight. Settings reloads, so it covers a rediscover that arrived
+    // with it. Both are no-ops after quit.
+    const ClickGate::Followup followup = m_gate.takeFollowup();
+    if (followup.settings) {
+        openSettings();
+    } else if (followup.rediscover) {
+        reload();
+    }
+
+    // Drain the queue one link at a time, each with its own captured
+    // activation token restored to the environment so openUrl captures it
+    // the same way as the original call.
+    ClickGate::Pending next;
+    if (m_gate.takeNext(&next)) {
         if (!next.activationToken.isEmpty()) {
             qputenv("XDG_ACTIVATION_TOKEN", next.activationToken.toLocal8Bit());
         }
@@ -726,6 +753,16 @@ void Controller::emailCurrent()
 
 void Controller::openSettings()
 {
+    // A Settings open during unshorten would reload targets under the click
+    // that is still being routed, so it waits for that click. At quit it is
+    // refused outright.
+    if (!m_gate.requestSettings()) {
+        return;
+    }
+    // An explicit Settings open does the onboarding job the first-run flag
+    // was waiting to do, so it is consumed here and the later launch does
+    // not open Settings a second time.
+    m_firstRun = false;
     // Rescan browsers/profiles/containers when settings opens so the
     // Browsers & apps page and picker are not stuck on whatever the daemon
     // discovered at startup (e.g. after a Lane upgrade or a new Flatpak
@@ -752,14 +789,21 @@ void Controller::openSettings()
 
 void Controller::rediscover()
 {
+    // Deferred while a click is being resolved, refused at quit.
+    if (!m_gate.requestRediscover()) {
+        return;
+    }
     reload();
 }
 
 void Controller::makeDefaultBrowser()
 {
-    platform()->makeDefaultHandler([this](bool) {
-        refreshDefaultBrowserState();
-        Q_EMIT defaultBrowserChanged();
+    platform()->makeDefaultHandler([self = QPointer<Controller>(this)](bool) {
+        if (!self) {
+            return;
+        }
+        self->refreshDefaultBrowserState();
+        Q_EMIT self->defaultBrowserChanged();
     });
 }
 
@@ -1144,14 +1188,16 @@ void Controller::requestActivationAndLaunch(const Target &target, const QString 
     // m_click may already belong to a newer click by the time the
     // compositor answers, so the URL to open must come from the
     // snapshot, never from m_click at fire time.
-    auto finish = [this, target, reason, click, resolved](const QString &token) {
-        if (*resolved) {
+    auto finish = [self = QPointer<Controller>(this), target, reason, click, resolved](const QString &token) {
+        if (*resolved || !self) {
             // Either the compositor already answered and the fallback
             // timer fired anyway, or vice versa; only the first launches.
+            // A quit in between drops the launch instead of using a
+            // controller that is already going away.
             return;
         }
         *resolved = true;
-        launch(target, reason, token, click);
+        self->launch(target, reason, token, click);
     };
     // The 300ms fallback against a compositor that never answers lives in
     // the platform implementation now (see Platform::requestActivationToken).

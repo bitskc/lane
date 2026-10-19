@@ -28,6 +28,7 @@ target_link_libraries(lane-core
 set(LANE_APP_SRCS
     app/Controller.cpp
     app/PickerModel.cpp
+    app/ClickGate.cpp
     app/TargetModel.cpp
     app/RuleModel.cpp
     app/SourceInfo.cpp

@@ -2,6 +2,7 @@
 
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
 #include <QFileOpenEvent>
 #include <QRegularExpression>
 #include <QUrl>
@@ -43,26 +44,56 @@ bool UrlEventFilter::eventFilter(QObject *watched, QEvent *event)
 // are plist/XML or INI-ish text files; parse the URL field and return
 // it as a normal http(s) open, or QString() when the file cannot yield
 // a routeable URL.
+static QString decodeXmlText(QString text)
+{
+    text.replace(QLatin1String("&lt;"), QLatin1String("<"));
+    text.replace(QLatin1String("&gt;"), QLatin1String(">"));
+    text.replace(QLatin1String("&quot;"), QLatin1String("\""));
+    text.replace(QLatin1String("&apos;"), QLatin1String("'"));
+    text.replace(QLatin1String("&amp;"), QLatin1String("&"));
+    return text;
+}
+
 static QString urlFromLinkFile(const QUrl &fileUrl)
 {
     const QString path = fileUrl.toLocalFile();
-    if (!path.endsWith(QLatin1String(".webloc"), Qt::CaseInsensitive)
-        && !path.endsWith(QLatin1String(".url"), Qt::CaseInsensitive)) {
+    const bool webloc = path.endsWith(QLatin1String(".webloc"), Qt::CaseInsensitive);
+    const bool shortcut = path.endsWith(QLatin1String(".url"), Qt::CaseInsensitive);
+    if (!webloc && !shortcut) {
+        return {};
+    }
+    // stat, do not open, until the path is a regular file. A fifo blocks
+    // in open(), and /dev/zero reports size 0 so a size cap never stops
+    // readAll(). Symlinks are followed: a link to a real file still
+    // works, a link to a device does not.
+    const QFileInfo info(path);
+    if (!info.isFile() || info.size() < 0 || info.size() > 65536) {
         return {};
     }
     QFile f(path);
-    if (!f.open(QIODevice::ReadOnly) || f.size() > 65536) {
+    if (!f.open(QIODevice::ReadOnly)) {
         return {};
     }
-    const QString text = QString::fromUtf8(f.readAll());
-    // .webloc: <string>URL</string> inside a plist dict keyed "URL".
-    // .url:   "URL=..." line (Internet shortcut format).
-    static const QRegularExpression re(
-        QStringLiteral("(?:<key>URL</key>\\s*<string>|^\\s*URL\\s*=\\s*)([^<\\s][^<\\r\\n]*)"),
-        QRegularExpression::CaseInsensitiveOption
-            | QRegularExpression::MultilineOption);
-    const auto m = re.match(text);
-    return m.hasMatch() ? m.captured(1).trimmed() : QString();
+    const QByteArray bytes = f.read(65536);
+    if (bytes.size() == 65536 && !f.atEnd()) {
+        return {};
+    }
+    const QString text = QString::fromUtf8(bytes);
+    // .webloc is a plist. Only the URL key counts. A URL= line inside a
+    // note must not win. .url is an Internet shortcut and uses URL= only.
+    // U+2028 and U+2029 end the value the same way CR and LF do.
+    static const QRegularExpression weblocRe(
+        QStringLiteral("<key>URL</key>\\s*<string>([^<\\s][^<\\r\\n\\x{2028}\\x{2029}]*)"),
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression shortcutRe(
+        QStringLiteral("^\\s*URL\\s*=\\s*([^<\\s][^<\\r\\n\\x{2028}\\x{2029}]*)"),
+        QRegularExpression::CaseInsensitiveOption | QRegularExpression::MultilineOption);
+    const auto m = (webloc ? weblocRe : shortcutRe).match(text);
+    if (!m.hasMatch()) {
+        return {};
+    }
+    const QString captured = m.captured(1).trimmed();
+    return webloc ? decodeXmlText(captured) : captured;
 }
 
 void UrlEventFilter::enqueue(const QUrl &url)

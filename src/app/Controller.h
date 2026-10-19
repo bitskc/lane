@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ClickGate.h"
 #include "PickerModel.h"
 #include "RuleModel.h"
 #include "TargetModel.h"
@@ -361,17 +362,11 @@ private:
     qreal m_holdProgress = 0;
     QStringList m_destinationLadder;
     int m_destinationIndex = 0;
-    // Re-entrancy guard for openUrl: unshortenSync() runs a nested
-    // QEventLoop::exec() during which a second D-Bus openRequested can
-    // re-enter openUrl and overwrite m_click mid-pipeline.  Pending
-    // calls are queued and drained one at a time after applyDecision.
-    struct PendingUrl {
-        QString url;
-        bool forcePicker = false;
-        QString activationToken;
-    };
-    QList<PendingUrl> m_pendingUrls;
-    bool m_inOpenUrl = false;
+    // Ordering rules for one in-flight click (queue, deferred commands,
+    // abandon at quit). unshortenSync() runs a nested event loop during
+    // which another link, --rediscover, --settings or a quit can arrive;
+    // ClickGate decides what each does and Controller performs it.
+    ClickGate m_gate;
 
     // True until the first interaction completes (pick, launch, or a
     // first launch with no link): opens Settings once, per decision D2's

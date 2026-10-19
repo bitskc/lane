@@ -1,0 +1,45 @@
+# Lane fuzz review
+
+Follow-up: the three P2s are fixed. `isPrivateOrLocalHost` strips trailing dots (and U+3002 / U+FF0E) before the name and numeric checks. `.webloc` reads only the plist URL key and decodes `&amp;`; `.url` reads only a `URL=` line. Link files that are not regular files, including a fifo and a symlink to `/dev/zero`, are ignored before `open`. `isSafeOpenUrl` uses strict parsing and rejects U+2028 / U+2029. `%u` no longer matches inside a longer token such as `%user`.
+
+
+
+Throwaway harnesses in `/tmp/lane-fuzz` (not committed) compiled the current `src/core/urlutil.cpp`, `launcher.cpp`, `discovery.cpp`, and `src/app/UrlEventFilter.cpp` with ASan/UBSan and called the real functions. A second `discovery.cpp` build used `-O2` and no sanitizer for the plist depth cases. No product source was modified by this run.
+
+## Verdict
+
+No P0. No ASan/UBSan fault, no crash, and no hang in the URL, command, notification, or capped-plist runs. Three P2s: a trailing-dot bypass of `isPrivateOrLocalHost`, a `.webloc` regex that prefers a decoy `URL=` line over the plist URL key, and an unbounded read that hangs on `/dev/zero` and on a fifo. Three P3s.
+
+Rows 9-19 of `docs/designs/gstack-full-analysis.md` are not re-filed. The mapped-IPv6, integer/hex/octal, and reserved-range cases named in row 14 were classified private in this run. A 500-deep dict and a 500-deep array (row 15's shape) did not crash; `readPlistValue` now stops at depth 32 and 20,000 nodes.
+
+## Findings
+
+| # | Sev | Location | Finding |
+|---|-----|----------|---------|
+| 1 | P2 | `src/core/urlutil.cpp:153-186`, consumed at `src/core/unshorten.cpp:61` and `src/core/pipeline.cpp:166` | A single trailing dot makes a private host look public. `isPrivateOrLocalHost` compares `localhost`, `.local`, `.internal`, `.lan`, and `metadata.google.internal` without stripping a final dot, and the numeric-literal regex is anchored at `$`, so `127.0.0.1.` and `2130706433.` miss it. `isSafeOpenUrl("http://127.0.0.1./")` and `isSafeOpenUrl("http://localhost./")` are true while `isPrivateOrLocalHost` on those hosts is false. QUrl turns U+3002 into that same ASCII dot (`http://127.0.0.1\u3002/` sanitizes to `http://127.0.0.1./`). Observed: a Qt HEAD to `http://localhost.:<port>/` was accepted by a `QTcpServer` on 127.0.0.1; curl's attempt at `http://127.0.0.1.:9/` addressed 127.0.0.1 (connection refused). QNAM itself returns host-not-found for `127.0.0.1.`. The unwrap gate uses this predicate and then launches the resulting URL in the browser, so a shortener redirect to `http://localhost./` or `http://127.0.0.1./` is treated as a public target. |
+| 2 | P2 | `src/app/UrlEventFilter.cpp:60-65` | `urlFromLinkFile` is one regex applied to both `.webloc` and `.url`, first match wins, and the `^URL=` alternative is not limited to `.url` files. A well-formed plist whose URL key is `https://bank.example/real` and whose Note string contains a line `URL=https://evil.example/phish` was delivered as the evil URL (`safe=1`). The same pass leaves `&amp;` literal (`https://good.example/?a=1&amp;b=2`) and will capture a NUL (`https://good.example/\0.evil.example/` reached the sink; `isSafeOpenUrl` then rejects it, so this second case does not launch). |
+| 3 | P2 | `src/app/UrlEventFilter.cpp:53-57` | The 65536-byte cap trusts `QFile::size()` and then `readAll()`. A symlink named `zero.webloc` or `zero.url` pointing at `/dev/zero` reports size 0, passes the cap, and `readAll()` never returns (process killed after 2s, no return). A fifo named `fifo.webloc` blocks in `open()` the same way. The filter runs on the thread that delivers `QFileOpenEvent`; that install is macOS-only (`src/app/main.cpp:82-87`). The hang is the same `QFile` calls. |
+| 4 | P3 | `src/core/urlutil.cpp:245-247`, `src/app/UrlEventFilter.cpp:61` | CR, LF, and U+0000 are rejected. U+2028 and U+2029 are not. `isSafeOpenUrl` accepted `https://example.com/` + U+2028 + `Injected`, and `sanitizedOpenUrl` kept the line separator (`sanHas2028=1`). The link regex's `[^<\r\n]*` also captured it: a `.url` file produced `https://good.example/x` + U+2028 + `Injected: 1` with `safe=1`. |
+| 5 | P3 | `src/core/urlutil.cpp:249`, `src/core/urlutil.cpp:268` | `QUrl::fromUserInput` repairs some inputs into a different origin, and both the safety check and the sanitized string follow that repair. `https://example.com..` became `http://https//example.com..` (host `https`). `http://example.com:99999/` and `http://example.com:-1/` became `http://http//example.com:99999/` (host `http`). `isSafeOpenUrl` returned true for all three. Curl spent the timeout resolving those hostnames; this is a rewritten URL, not a loopback connect. |
+| 6 | P3 | `src/core/launcher.cpp:254-258` | `%u`, `%url%`, and `$url` are replaced as substrings, and the replacements run in that order on the already-substituted text. A custom argv token `--user-data-dir=%user` expanded to `--user-data-dir=https://example.com/aser` for a normal https URL. `launchTarget` passes `sanitizedOpenUrl` output in, and that encoding turns a literal `%u` in the URL into `%25u`, so the `$url` template does not double-expand a sanitized URL. The substring match on the template still fires. |
+
+## Considered and fine
+
+URL gate, 637 cases (fixed edges plus 500 deterministic random strings with unicode, NULs, CR/LF, `%00`, `%u`, `$url`, trailing dots, userinfo, and IPv6). No sanitizer fault and no call over 200ms. Invariants that held: unsafe input yields an empty `sanitizedOpenUrl`; a safe result stays safe, is http(s), has a host, and has no userinfo and no raw CR/LF/NUL. Size 8192 is accepted and 8193 is rejected (`QString::size()`, UTF-16 code units). Embedded U+0000 is rejected. `https://user:pass@`, `https://user@`, and `https://:pass@` are rejected. `https://example.com@evil.test/` is rejected because Qt records userinfo. `https://@example.com/` is accepted and sanitized to `https://example.com/` (empty user and password). Row 14's listed forms were private, including `[::ffff:127.0.0.1]`, `[::ffff:7f00:1]`, `[::ffff:169.254.169.254]`, `2130706433`, `0x7f000001`, `0177.0.0.1`, `10.0.0.0/8`, `192.168.0.0/16`, `169.254.169.254`, `100.64.0.1`, `240.0.0.0/4`, `[::]`, `[fe80::1%25eth0]`, and `[fc00::1]`.
+
+`parseCustomCommand`: empty input, `sh`, `env`, and `find` are rejected; a NUL in the command string is rejected; 5,000 quotes and a 20,000-character argument returned. A newline between `/usr/bin/true` and `/bin/sh -c id` leaves the executable as `true` and `/bin/sh` as an argument. No spawn was performed.
+
+`expandArgs` on a `$url` or `%u` template round-trips a sanitized URL that does not itself contain those substrings. `$urlEncoded` becomes `QUrl::toPercentEncoding` output. Argv is not re-split on spaces in the URL.
+
+Plist, current `readPlistValue` (`src/core/discovery.cpp:1241-1252`, read cap `discovery.cpp:1329`): depth-30 nest still produced a `com.example.Deep` target; depth 31, 32, 33, and 500 did not, under ASan and under `-O2`, with no crash (2-4ms). A 500-deep `<array>` likewise did not crash. A 7,340,016-byte `<array>` of `<string>x</string>` was rejected in 89ms with no sanitizer fault. An 8,388,608-byte plist that closed inside the window was discovered; the same document whose closing tags start one byte past the window was dropped; a complete document plus one extra byte (8,388,609) was still discovered. A `bplist00` file was skipped on Linux. A billion-laughs doctype was dropped. An external entity pointing at `/etc/passwd` did not change the browser name (it stayed `Deep`). `skipCurrentElement` on a 100,000-deep `<data>` tree and on a 100,000-deep non-key element did not crash (37ms at `-O2`, 163ms under ASan) and the sibling URL keys were still accepted.
+
+`NotificationActionMap`: at 32, size is 32 and evicted is 0; the 33rd add evicts the oldest and size stays 32; take of the evicted key is false; take of a survivor runs once. An action that re-enters `add`/`take`/`size` did not deadlock (the lock is dropped before the callback). Four threads doing 2,000 add/take cycles never observed size above 32. Eight threads taking one key produced exactly one winner.
+
+Link files that behaved: a normal `.webloc` and `.url`, `javascript:` and `file:` dropped, raw CR LF ends the capture, files of 65536 bytes are read and 65537 are ignored, UTF-16 `.url` yields nothing, a directory and a missing file yield nothing, and 2,000 near-miss `<key>URL</key>` prefixes still matched in under 1ms.
+
+## Open questions
+
+1. `https://[64:ff9b::7f00:1]/` (NAT64 well-known prefix embedding 127.0.0.1) is `isSafeOpenUrl` and not private. No local connect was attempted for that address here. Same for `https://[2002:7f00:1::]/`.
+2. macOS browser handling of `http://127.0.0.1./` was not run. curl on this Linux host did address 127.0.0.1; Qt's own HTTP stack returned host-not-found.
+3. `http://metadata.google.internal./` misses the exact-name check. `getaddrinfo` on this machine did not resolve it. A resolver that strips the root dot would.
+4. The `plutil` 8MiB cap (`discovery.cpp:1341-1344`) is inside `Q_OS_MACOS` and was not executed.
