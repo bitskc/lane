@@ -435,6 +435,30 @@ private Q_SLOTS:
         QVERIFY(!has("app.example.wide"));
         QVERIFY(has("app.example.shallow"));
     }
+
+    // Protects the publish-and-replace of the bundle path map (D4). The
+    // icon loader reads whatever the last scan stored, including from
+    // another thread, so a bundle that was installed and then left must
+    // not keep a stale path. Fails if the scan merges into the old map
+    // (or skips the write when the new one is empty) instead of swapping
+    // it.
+    void rescanDropsBundlePathsThatLeft()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        discoverTargets(stage(tmp.path()));
+        const QString brave = QStringLiteral("com.brave.Browser");
+        const QString bravePath = macBundlePathForId(brave);
+        QVERIFY2(!bravePath.isEmpty(), "fixture scan must publish Brave");
+
+        DiscoveryPaths gone = stage(tmp.path());
+        gone.bundleDirs.clear();
+        discoverTargets(gone);
+        QCOMPARE(macBundlePathForId(brave), QString());
+
+        discoverTargets(stage(tmp.path()));
+        QCOMPARE(macBundlePathForId(brave), bravePath);
+    }
 };
 
 QTEST_MAIN(DiscoveryMacTest)

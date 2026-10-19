@@ -215,6 +215,10 @@ public:
     // link, or after the first pick/launch when a link started Lane.
     // No-op after the first call.
     Q_INVOKABLE void maybeFirstRunSettings();
+    // Test seam, not a QML API: the flag is otherwise only observable by
+    // whether Settings happens to open.
+    bool firstRunPending() const { return m_firstRun; }
+    QWindow *settingsWindow() const { return m_settingsWindow; }
     Q_INVOKABLE void hideTarget(const QString &id, bool hidden);
     Q_INVOKABLE QString displayNameFor(const QString &id) const;
     Q_INVOKABLE QString rememberedTarget(const QString &host) const;
