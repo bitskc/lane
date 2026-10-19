@@ -37,13 +37,12 @@ LaneUi.ScrollableFormPage {
         return matchCount(allModel) + matchCount(privateModel)
     }
 
-    Timer {
-        id: renameTimer
-        property string targetId
-        property string newName
-        interval: 1
-        onTriggered: controller.renameTarget(targetId, newName)
+    LaneUi.RenameQueue {
+        id: renameQueue
+        onRename: (targetId, newName) => controller.renameTarget(targetId, newName)
     }
+
+    LaneUi.ModelSync { id: modelSync }
 
     ListModel { id: allModel }
     ListModel { id: privateModel }
@@ -96,9 +95,7 @@ LaneUi.ScrollableFormPage {
                             var id = model.targetId
                             var nm = text.trim()
                             if (nm !== model.name) {
-                                renameTimer.targetId = id
-                                renameTimer.newName = nm
-                                renameTimer.start()
+                                renameQueue.push(id, nm)
                             }
                         }
                         Keys.onEscapePressed: {
@@ -185,9 +182,7 @@ LaneUi.ScrollableFormPage {
                         var id = model.targetId
                         var nm = text.trim()
                         if (nm !== model.name) {
-                            renameTimer.targetId = id
-                            renameTimer.newName = nm
-                            renameTimer.start()
+                            renameQueue.push(id, nm)
                         }
                     }
                     Keys.onEscapePressed: {
@@ -214,26 +209,18 @@ LaneUi.ScrollableFormPage {
     }
 
     function syncModels() {
-        allModel.clear()
-        var all = controller.targetModel.orderableTargets()
-        for (var i = 0; i < all.length; i++) {
-            allModel.append(all[i])
-        }
-        privateModel.clear()
-        var privates = controller.targetModel.incognitoTargets()
-        for (var j = 0; j < privates.length; j++) {
-            privateModel.append(privates[j])
-        }
+        modelSync.sync(allModel, controller.targetModel.orderableTargets(), "targetId")
+        modelSync.sync(privateModel, controller.targetModel.incognitoTargets(), "targetId")
     }
 
     Component.onCompleted: syncModels()
     Connections {
         target: controller
-        // Qt.callLater defers the rebuild off the signal call stack: a
+        // Qt.callLater defers the resync off the signal call stack: a
         // drag's onDropped triggers moveTarget() → settingsChanged()
-        // synchronously, and clear()+rebuild inside that callback would
-        // destroy the delegate that is still executing it and eat the
-        // moveDisplaced settle animation.
+        // synchronously, and removing or moving a row inside that
+        // callback would destroy the delegate that is still executing
+        // it and eat the moveDisplaced settle animation.
         function onSettingsChanged() { Qt.callLater(syncModels) }
     }
 

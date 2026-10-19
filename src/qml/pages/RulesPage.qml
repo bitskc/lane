@@ -52,7 +52,7 @@ LaneUi.ScrollableFormPage {
                 readonly property int ruleIndex: index
                 readonly property bool targetMissing: page.settingsRevision >= 0 && !controller.targetExists(targetId)
                 spacing: 0
-                width: parent ? parent.width : 100
+                Layout.fillWidth: true
 
                 LaneUi.FormTextFieldDelegate {
                     label: "When the link matches"

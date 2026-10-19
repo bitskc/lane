@@ -13,9 +13,6 @@ QQC.ApplicationWindow {
     visible: true
     color: root.palette.window
 
-    function selectPage(index) {
-        nav.currentIndex = index
-    }
     Shortcut { sequence: StandardKey.Quit; enabled: controller.quitShortcutEnabled; onActivated: controller.requestQuit() }
 
     RowLayout {
@@ -53,61 +50,23 @@ QQC.ApplicationWindow {
                     }
                 }
 
-                ListView {
+                LaneUi.SidebarNav {
                     id: nav
+                    objectName: "settingsNav"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    currentIndex: 0
                     model: ListModel {
                         ListElement { label: "Overview"; iconName: "help-about" }
                         ListElement { label: "Browsers & apps"; iconName: "internet-web-browser" }
                         ListElement { label: "Rules"; iconName: "view-filter" }
                         ListElement { label: "Preferences"; iconName: "settings-configure" }
                     }
-                    delegate: Rectangle {
-                        id: navItem
-                        required property int index
-                        required property string label
-                        required property string iconName
-                        width: ListView.view.width
-                        height: 36
-                        radius: 8
-                        color: ListView.isCurrentItem
-                               ? Qt.rgba(root.palette.highlight.r, root.palette.highlight.g, root.palette.highlight.b, 0.22)
-                               : "transparent"
-
-                        Accessible.role: Accessible.ListItem
-                        Accessible.name: label
-                        Accessible.selected: ListView.isCurrentItem
-
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: nav.currentIndex = index
-                        }
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 8
-                            anchors.rightMargin: 8
-                            spacing: 8
-                            LaneUi.LaneIcon {
-                                iconName: navItem.iconName
-                                Layout.preferredWidth: 16
-                                Layout.preferredHeight: 16
-                            }
-                            QQC.Label {
-                                text: label
-                                font.pixelSize: 13
-                                font.weight: navItem.ListView.isCurrentItem ? Font.DemiBold : Font.Normal
-                                Layout.fillWidth: true
-                            }
-                        }
-                    }
                 }
             }
         }
 
         Rectangle {
-            width: 1
+            implicitWidth: 1
             Layout.fillHeight: true
             color: Qt.rgba(root.palette.windowText.r, root.palette.windowText.g, root.palette.windowText.b, 0.08)
         }
