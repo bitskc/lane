@@ -348,6 +348,7 @@ Window {
 
                 ListView {
                     id: list
+                    objectName: "pickerList"
                     anchors.fill: parent
                     visible: count > 0
                     model: controller.pickerModel

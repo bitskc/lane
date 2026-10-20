@@ -19,6 +19,7 @@
 #include <QTest>
 #include <QWindow>
 
+#include <QQuickItem>
 #include <QtQml/qqmlextensionplugin.h>
 
 Q_IMPORT_QML_PLUGIN(LaneUiPlugin)
@@ -66,6 +67,7 @@ class PickerHintsTest : public QObject
 
 private Q_SLOTS:
     void fieldHintsHideWithFocus();
+    void altPReadsTargetIdFromDelegate();
 };
 
 void PickerHintsTest::fieldHintsHideWithFocus()
@@ -122,6 +124,48 @@ void PickerHintsTest::fieldHintsHideWithFocus()
     QVERIFY(copyHint->property("visible").toBool());
     QVERIFY(widenHint->property("visible").toBool());
     QVERIFY(narrowHint->property("visible").toBool());
+}
+
+void PickerHintsTest::altPReadsTargetIdFromDelegate()
+{
+    // Regression for #57: Alt+P used list.currentItem.targetId, but the
+    // delegate once omitted the required property, so pickPrivate got an
+    // empty string and returned silently. The role and the property must
+    // agree on a real id, and pickPrivate must not take the unknown-id path.
+    seedTarget();
+
+    Controller c;
+    c.openUrl(QStringLiteral("https://example.com/page"), /*forcePicker=*/true);
+    QWindow *window = c.pickerWindow();
+    QVERIFY2(window, "the picker must actually load");
+    QVERIFY2(c.pickerModel()->rowCount() > 0, "seeded row required");
+
+    QObject *list = nullptr;
+    QTRY_VERIFY_WITH_TIMEOUT(
+        (list = window->findChild<QObject *>(QStringLiteral("pickerList"))) != nullptr, 5000);
+
+    QQuickItem *row = nullptr;
+    QTRY_VERIFY_WITH_TIMEOUT(
+        (QMetaObject::invokeMethod(list, "itemAtIndex", Q_RETURN_ARG(QQuickItem *, row), Q_ARG(int, 0)),
+         row != nullptr),
+        5000);
+
+    const QString fromDelegate = row->property("targetId").toString();
+    QVERIFY2(!fromDelegate.isEmpty(),
+             "delegate must expose targetId; Alt+P reads it off currentItem");
+    QCOMPARE(fromDelegate, c.pickerModel()->targetAt(0).id);
+
+    // Empty id must still surface the fail-closed notice (the silent path).
+    c.pickPrivate(QString());
+    QCOMPARE(c.property("pickerNotice").toString(), QStringLiteral("No private mode available"));
+    c.clearPickerNotice();
+
+    // A real id must not take that unknown-id branch. A custom /bin/true
+    // target has no private counterpart, so the named notice is the proof
+    // pickPrivate resolved the target.
+    c.pickPrivate(fromDelegate);
+    QVERIFY2(c.property("pickerNotice").toString().startsWith(QStringLiteral("No private mode for ")),
+             qPrintable(c.property("pickerNotice").toString()));
 }
 
 int main(int argc, char **argv)
