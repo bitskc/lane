@@ -28,6 +28,11 @@ Window {
     readonly property string hintAltR: mac ? "⌥R" : "alt+r"
     // Hints read better in the system UI font than monospace on macOS.
     readonly property string hintFont: mac ? "" : "monospace"
+    // Digits, Ctrl+C, comma and period are bound to the filter field's
+    // Keys.onPressed, so their badges and labels must track that focus.
+    // A single gate keeps the row badge, the accessible name, and the
+    // footer hints honest together.
+    readonly property bool fieldHintsActive: filterField.activeFocus && filterField.text.length === 0
 
     onVisibleChanged: {
         if (visible) {
@@ -199,6 +204,7 @@ Window {
                 }
                 QQC.TextField {
                     id: filterField
+                    objectName: "pickerFilter"
                     anchors.fill: parent
                     anchors.leftMargin: 10
                     anchors.rightMargin: 10
@@ -380,7 +386,7 @@ Window {
                                : "transparent"
 
                         Accessible.role: Accessible.ListItem
-                        Accessible.name: name + (shortcut.length > 0 && filterField.text.length === 0 ? ", shortcut " + shortcut : "")
+                        Accessible.name: name + (shortcut.length > 0 && root.fieldHintsActive ? ", shortcut " + shortcut : "")
                         Accessible.description: kind === "pwa" ? "App" : (kind === "action" ? "Action" : subtitle)
 
                         MouseArea {
@@ -453,7 +459,11 @@ Window {
                                 }
                             }
                             Rectangle {
-                                visible: shortcut.length > 0 && filterField.text.length === 0
+                                id: shortcutBadge
+                                // Digits only reach the pick row while the filter has
+                                // focus (see Keys.onPressed above), so the badge must
+                                // disappear with it, not just when text hides it.
+                                visible: shortcut.length > 0 && root.fieldHintsActive
                                 width: 20
                                 height: 20
                                 radius: 5
@@ -500,6 +510,7 @@ Window {
                     spacing: 10
                     QQC.CheckBox {
                         id: alwaysBox
+                        objectName: "alwaysBox"
                         checked: controller.alwaysForHost
                         onToggled: controller.alwaysForHost = checked
                         text: {
@@ -574,10 +585,15 @@ Window {
                                 opacity: copyHover.hovered ? 0.7 : 0.4
                             }
                             QQC.Label {
+                                objectName: "hintCopyLabel"
                                 text: root.hintCopy
                                 font.pixelSize: 10
                                 font.family: root.hintFont
                                 opacity: copyHover.hovered ? 0.7 : 0.4
+                                // Ctrl+C is handled by the filter field, so its
+                                // hint must not linger once focus moves on. The
+                                // chip itself stays: it is a real button.
+                                visible: root.fieldHintsActive
                             }
                         }
                         HoverHandler {
@@ -657,16 +673,22 @@ Window {
                     // segment), "." widens it (back toward the bare host) --
                     // see the Keys.onPressed handler above.
                     QQC.Label {
+                        objectName: "widenHintLabel"
                         text: ". widen"
                         font.pixelSize: 10
                         font.family: root.hintFont
                         opacity: 0.4
+                        // Comma and period are filter-field keys too (above),
+                        // so these hints must not linger after Tab.
+                        visible: root.fieldHintsActive
                     }
                     QQC.Label {
+                        objectName: "narrowHintLabel"
                         text: ", narrow"
                         font.pixelSize: 10
                         font.family: root.hintFont
                         opacity: 0.4
+                        visible: root.fieldHintsActive
                     }
                 }
             }

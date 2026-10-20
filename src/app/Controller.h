@@ -219,6 +219,7 @@ public:
     // whether Settings happens to open.
     bool firstRunPending() const { return m_firstRun; }
     QWindow *settingsWindow() const { return m_settingsWindow; }
+    QWindow *pickerWindow() const { return m_pickerWindow; }
     Q_INVOKABLE void hideTarget(const QString &id, bool hidden);
     Q_INVOKABLE QString displayNameFor(const QString &id) const;
     Q_INVOKABLE QString rememberedTarget(const QString &host) const;

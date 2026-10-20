@@ -1,0 +1,151 @@
+// Picker key hints that only work while the filter field has focus must
+// not linger once focus moves on: the number badge, the Ctrl+C label, and
+// the comma/period ladder labels are all bound to filterField's
+// Keys.onPressed, so keeping them visible after Tab advertises dead keys.
+// Fails if root.fieldHintsActive stays true, or if any of the footer
+// field-scoped labels stay visible, after the Always checkbox takes focus.
+
+#include "app/Controller.h"
+
+#include <QApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QStandardPaths>
+#include <QTemporaryDir>
+#include <QTest>
+#include <QWindow>
+
+#include <QtQml/qqmlextensionplugin.h>
+
+Q_IMPORT_QML_PLUGIN(LaneUiPlugin)
+
+using namespace Lane;
+
+namespace
+{
+
+QString configFile()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+        + QStringLiteral("/lane/config.json");
+}
+
+void seedTarget()
+{
+    // A discovered browser is unavailable in the sandbox, but a custom
+    // target is a real row all the same: it gets a shortcut badge, and it
+    // is enough for the picker to have something to hint.
+    QJsonObject t;
+    t[QStringLiteral("id")] = QStringLiteral("custom:test-browser");
+    t[QStringLiteral("name")] = QStringLiteral("Test Browser");
+    t[QStringLiteral("browserName")] = QStringLiteral("test");
+    t[QStringLiteral("exec")] = QStringLiteral("/bin/true");
+    t[QStringLiteral("args")] = QJsonArray::fromStringList({});
+    t[QStringLiteral("icon")] = QStringLiteral("application-x-executable");
+    t[QStringLiteral("kind")] = QStringLiteral("custom");
+
+    QJsonObject root;
+    root[QStringLiteral("customTargets")] = QJsonArray{t};
+
+    const QString path = configFile();
+    QVERIFY2(QDir().mkpath(QFileInfo(path).absolutePath()), "config dir");
+    QFile file(path);
+    QVERIFY2(file.open(QIODevice::WriteOnly | QIODevice::Truncate), "config file");
+    file.write(QJsonDocument(root).toJson());
+}
+
+} // namespace
+
+class PickerHintsTest : public QObject
+{
+    Q_OBJECT
+
+private Q_SLOTS:
+    void fieldHintsHideWithFocus();
+};
+
+void PickerHintsTest::fieldHintsHideWithFocus()
+{
+    seedTarget();
+
+    Controller c;
+    c.openUrl(QStringLiteral("https://example.com/page"), /*forcePicker=*/true);
+    QWindow *window = c.pickerWindow();
+    QVERIFY2(window, "the picker must actually load");
+    QVERIFY(window->isVisible());
+    QVERIFY2(c.pickerModel()->rowCount() > 0,
+             "the seeded custom target must be a picker row");
+
+    QObject *filter = window->findChild<QObject *>(QStringLiteral("pickerFilter"));
+    QObject *copyHint = window->findChild<QObject *>(QStringLiteral("hintCopyLabel"));
+    QObject *widenHint = window->findChild<QObject *>(QStringLiteral("widenHintLabel"));
+    QObject *narrowHint = window->findChild<QObject *>(QStringLiteral("narrowHintLabel"));
+    QVERIFY2(filter, "pickerFilter not found");
+    QVERIFY2(copyHint, "hintCopyLabel not found");
+    QVERIFY2(widenHint, "widenHintLabel not found");
+    QVERIFY2(narrowHint, "narrowHintLabel not found");
+
+    // Focused, empty filter: the shared gate and every footer field-hint
+    // advertise a working key. (The row number badge shares the same gate;
+    // ListView delegates are not reachable via QObject::findChild from the
+    // window, so the gate is what the test can observe for that path.)
+    QTRY_VERIFY_WITH_TIMEOUT(filter->property("activeFocus").toBool(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(window->property("fieldHintsActive").toBool(), 5000);
+    QVERIFY(copyHint->property("visible").toBool());
+    QVERIFY(widenHint->property("visible").toBool());
+    QVERIFY(narrowHint->property("visible").toBool());
+
+    // Tab-equivalent: focus moves to the Always checkbox. Digits, Ctrl+C
+    // and comma/period are all bound to the field, so the gate and every
+    // field-scoped label must drop.
+    QObject *alwaysBox = window->findChild<QObject *>(QStringLiteral("alwaysBox"));
+    QVERIFY2(alwaysBox, "the Always checkbox needs an objectName to take focus");
+    QVERIFY(QMetaObject::invokeMethod(alwaysBox, "forceActiveFocus"));
+    QTRY_VERIFY_WITH_TIMEOUT(!filter->property("activeFocus").toBool(), 5000);
+    QVERIFY2(!window->property("fieldHintsActive").toBool(),
+             "fieldHintsActive must clear once the filter loses focus");
+    QVERIFY2(!copyHint->property("visible").toBool(),
+             "the Ctrl+C label must not linger after Tab");
+    QVERIFY2(!widenHint->property("visible").toBool(),
+             "the . label must not linger after Tab");
+    QVERIFY2(!narrowHint->property("visible").toBool(),
+             "the , label must not linger after Tab");
+
+    // Focus back on the field restores the hints: they describe live keys
+    // again.
+    QVERIFY(QMetaObject::invokeMethod(filter, "forceActiveFocus"));
+    QTRY_VERIFY_WITH_TIMEOUT(window->property("fieldHintsActive").toBool(), 5000);
+    QVERIFY(copyHint->property("visible").toBool());
+    QVERIFY(widenHint->property("visible").toBool());
+    QVERIFY(narrowHint->property("visible").toBool());
+}
+
+int main(int argc, char **argv)
+{
+    QTemporaryDir tmp;
+    if (!tmp.isValid()) {
+        std::fprintf(stderr, "temp dir failed\n");
+        return 2;
+    }
+    const QString run = tmp.path() + QStringLiteral("/run");
+    QDir().mkpath(run);
+    QFile::setPermissions(run, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+    qputenv("HOME", tmp.path().toUtf8());
+    qputenv("XDG_CONFIG_HOME", (tmp.path() + QStringLiteral("/cfg")).toUtf8());
+    qputenv("XDG_DATA_HOME", (tmp.path() + QStringLiteral("/data")).toUtf8());
+    qputenv("XDG_DATA_DIRS", (tmp.path() + QStringLiteral("/share")).toUtf8());
+    qputenv("XDG_RUNTIME_DIR", run.toUtf8());
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+    qputenv("QT_QUICK_BACKEND", "software");
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Fusion");
+
+    QApplication app(argc, argv);
+    PickerHintsTest test;
+    return QTest::qExec(&test, argc, argv);
+}
+
+#include "test_pickerhints.moc"

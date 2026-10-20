@@ -105,4 +105,34 @@ if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
     add_test(NAME test_firstrun COMMAND test_firstrun)
     set_tests_properties(test_firstrun PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Fusion")
+
+    # Same shape as test_firstrun: embed the full app.lane module so
+    # loadFromModule can resolve every type, then drive the picker.
+    add_executable(test_pickerhints test_pickerhints.cpp)
+    target_link_libraries(test_pickerhints PRIVATE lane-app laneuiplugin Qt6::Test)
+    set(_pickerhints_qml ${_firstrun_qml})
+    foreach(_qml ${_pickerhints_qml})
+        get_filename_component(_alias ${_qml} NAME)
+        set_source_files_properties(${_qml} PROPERTIES QT_RESOURCE_ALIAS ${_alias})
+    endforeach()
+    qt_add_qml_module(test_pickerhints
+        URI app.lane
+        VERSION 1.0
+        RESOURCE_PREFIX /qt/qml
+        OUTPUT_DIRECTORY pickerhints/app/lane
+        QML_FILES ${_pickerhints_qml}
+    )
+    if(LANE_KDE_DESKTOP)
+        target_link_libraries(test_pickerhints PRIVATE Qt6::DBus LayerShellQt::Interface)
+    endif()
+    if(LANE_MAC_DESKTOP)
+        target_link_libraries(test_pickerhints PRIVATE
+            "-framework AppKit"
+            "-framework UserNotifications"
+            "-framework ServiceManagement"
+            "-framework CoreServices")
+    endif()
+    add_test(NAME test_pickerhints COMMAND test_pickerhints)
+    set_tests_properties(test_pickerhints PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Fusion")
 endif()
