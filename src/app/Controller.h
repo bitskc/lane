@@ -275,14 +275,6 @@ private:
     // default state against a fresh check and raises the takeover alert
     // only on a real loss.
     void onMimeappsChanged();
-    // Automatic counterpart to the manual clearDeadRemembered() above:
-    // called from reload() on every daemon start/Settings open/Rediscover,
-    // so it must not delete a remembered host the first time discovery
-    // fails to see its target (see m_rememberedMissCounts below). Only
-    // clearDeadRemembered() itself (the Settings "Clear dead" button)
-    // prunes immediately, because that is an explicit, user-confirmed
-    // action rather than an automatic side effect of reloading.
-    void pruneStaleRemembered();
     // Looks up the display name for an Activity ID. Returns an empty
     // string when there is no Plasma activities support or the service
     // has not described the Activity yet.
@@ -319,17 +311,6 @@ private:
     // direct silent launch; the picker and hold paths request their own
     // fresh token instead (see requestActivationAndLaunch()).
     QString m_pendingActivationToken;
-    // Consecutive reload() passes each currently-dangling remembered-host
-    // key (see danglingRememberedKeys()) has stayed dangling. A discovery
-    // false negative (Flatpak export dir mid-update, a bare systemd unit
-    // with no XDG_DATA_DIRS, etc.) looks identical to the target actually
-    // being uninstalled on any single pass, so pruneStaleRemembered() only
-    // deletes a remembered host once its miss count reaches the grace
-    // period (see shouldPruneRemembered() in router.h); a key that
-    // reappears as installed is dropped from this map again. Not part of
-    // Controller's public/QML-facing API: entries come and go purely as a
-    // side effect of reload().
-    QHash<QString, int> m_rememberedMissCounts;
     // Current Plasma Activity snapshot, fed by KActivities::Consumer when
     // Lane is built against PlasmaActivities. Left empty forever
     // otherwise, which keeps every Activity-aware code path inert.

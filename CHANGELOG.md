@@ -75,6 +75,12 @@ version is 0, minor releases may still contain breaking changes.
   field. Those keys only work while the field is focused, so leaving
   the hints up advertised dead shortcuts.
 
+- Remembered destinations that point at a missing browser are no longer
+  deleted by reload, Rediscover, or opening Settings. A discovery miss
+  that lasts for the daemon's lifetime looked identical to an uninstall,
+  so the old grace period still wiped routing decisions. Broken entries
+  stay on the Rules page until Clear dead is pressed.
+
 - In the picker, comma and period at either end of the destination
   ladder are no longer typed into the filter. Hovering a row no longer
   dismisses the "no private mode" notice. The empty-list shortcut hint
