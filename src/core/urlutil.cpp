@@ -80,7 +80,13 @@ QString normalizeInput(const QString &raw)
     if (hasForbiddenControl(trimmed)) {
         return trimmed;
     }
-    if (trimmed.contains(QLatin1String("://"))) {
+    // A scheme can only sit at the very start, ahead of the first '/', '?'
+    // or '#'. Looking for "://" anywhere let a bare host whose query holds
+    // a URL ("example.com/login?next=https://...") skip the scheme repair
+    // and then fail the strict check as a relative URL.
+    const qsizetype authorityStart = trimmed.indexOf(QLatin1String("://"));
+    const qsizetype firstDelimiter = trimmed.indexOf(QRegularExpression(QStringLiteral("[/?#]")));
+    if (authorityStart != -1 && (firstDelimiter == -1 || firstDelimiter > authorityStart)) {
         // An explicit scheme is never repaired. QUrl::fromUserInput, given
         // an authority it cannot parse ("https://example.com..",
         // "http://example.com:99999/"), guesses a scheme and moves the
@@ -128,11 +134,18 @@ QString unwrapO365(const QString &raw)
     }
     const QUrl url = QUrl::fromUserInput(raw);
     const QUrlQuery query(url);
+    // Decoded once, to undo the wrapper's own encoding. What comes out may
+    // hold a literal space, so it goes back through normalizeInput before
+    // the strict safety check sees it.
     QString nested = query.queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
     if (nested.isEmpty()) {
         nested = query.queryItemValue(QStringLiteral("data"), QUrl::FullyDecoded);
     }
-    if (nested.isEmpty() || !isSafeOpenUrl(nested)) {
+    if (nested.isEmpty()) {
+        return raw;
+    }
+    nested = normalizeInput(nested);
+    if (!isSafeOpenUrl(nested)) {
         return raw;
     }
     return nested;
@@ -345,7 +358,17 @@ QString sanitizedOpenUrl(const QString &raw)
     QUrl url(raw.trimmed(), QUrl::StrictMode);
     url.setUserName({});
     url.setPassword({});
-    return url.toString();
+    // Encoded, because the browser launch and the unshorten result both go
+    // back through isSafeOpenUrl, whose strict parse refuses a literal space.
+    return url.toString(QUrl::FullyEncoded);
+}
+
+QString redirectCandidate(const QUrl &location)
+{
+    // Encoded for the same reason as sanitizedOpenUrl. PrettyDecoded turned
+    // %20 into a space, so a destination such as a SharePoint document path
+    // failed the safety check and the click stayed on the shortener host.
+    return location.toString(QUrl::FullyEncoded);
 }
 
 QString displayUrl(const QString &raw)

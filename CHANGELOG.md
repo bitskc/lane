@@ -60,6 +60,21 @@ version is 0, minor releases may still contain breaking changes.
   by the IPv4 they reach. A public address is not treated as local. A
   loopback, private, or link-local address still is.
 
+- A link whose address contains an encoded space (`%20`) now opens with
+  the space still encoded. The browser launch used to get a literal
+  space, which Lane's own safety check then refused when the result
+  came back around. A shortened link that redirects to a path like
+  `Shared%20Documents/a.docx` is now followed to its real host, so rules
+  for that host match instead of the shortener's. A Microsoft SafeLinks
+  wrapper around such a link is unwrapped, and a bare host with a URL in
+  its query (`example.com/login?next=https://example.com/home`) is no
+  longer blocked as relative.
+
+- Number badges, the Ctrl/Cmd+C label, and the comma/period ladder
+  hints in the picker now hide when Tab moves focus off the filter
+  field. Those keys only work while the field is focused, so leaving
+  the hints up advertised dead shortcuts.
+
 - In the picker, comma and period at either end of the destination
   ladder are no longer typed into the filter. Hovering a row no longer
   dismisses the "no private mode" notice. The empty-list shortcut hint

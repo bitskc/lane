@@ -57,7 +57,7 @@ QString unshortenSync(const QString &url, int timeoutMs)
             if (loc.isRelative()) {
                 loc = QUrl(url).resolved(loc);
             }
-            const QString candidate = loc.toString();
+            const QString candidate = redirectCandidate(loc);
             if (isSafeOpenUrl(candidate) && !isPrivateOrLocalHost(hostOf(candidate))) {
                 result = sanitizedOpenUrl(candidate);
             }

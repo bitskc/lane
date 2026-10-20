@@ -110,6 +110,11 @@ private Q_SLOTS:
                                                  << QStringLiteral("http://example.com/x");
         QTest::newRow("uppercase scheme and host") << QStringLiteral("HTTPS://EXAMPLE.COM/X") << true
                                                    << QStringLiteral("https://example.com/X");
+        // A scheme-less input whose query holds a URL is still a bare host.
+        // "contains ://" is not a scheme test.
+        QTest::newRow("bare host with url in query") << QStringLiteral("example.com/login?next=https://example.com/home")
+                                                     << true
+                                                     << QStringLiteral("http://example.com/login?next=https://example.com/home");
     }
 
     void clickChain()
@@ -129,6 +134,41 @@ private Q_SLOTS:
             QVERIFY(Lane::hostOf(normalized) != QLatin1String("https"));
             QVERIFY(Lane::hostOf(normalized) != QLatin1String("http"));
         }
+    }
+
+    // sanitizedOpenUrl feeds the browser launch and the unshorten result,
+    // and pipeline.cpp feeds that result back into isSafeOpenUrl. Its output
+    // has to survive that round trip. A PrettyDecoded toString() turned %20
+    // into a literal space, which the strict parse then refuses.
+    void sanitizedOutputRoundTrips_data()
+    {
+        QTest::addColumn<QString>("raw");
+        QTest::newRow("encoded space") << QStringLiteral("https://example.com/a%20b");
+        QTest::newRow("encoded space in query") << QStringLiteral("https://example.com/s?q=a%20b&r=2");
+        QTest::newRow("sharepoint path")
+            << QStringLiteral("https://contoso.sharepoint.com/sites/x/Shared%20Documents/a.docx");
+        QTest::newRow("encoded json") << QStringLiteral("https://example.com/p?x=%7Bj%7D");
+        QTest::newRow("unicode path") << QStringLiteral("https://example.com/%E6%97%A5%E6%9C%AC");
+    }
+
+    void sanitizedOutputRoundTrips()
+    {
+        QFETCH(QString, raw);
+        const QString open = Lane::sanitizedOpenUrl(raw);
+        QVERIFY2(!open.isEmpty(), "a safe URL must sanitize to something");
+        QVERIFY2(!open.contains(QLatin1Char(' ')), qPrintable(open));
+        QVERIFY2(Lane::isSafeOpenUrl(open), qPrintable(open));
+        QCOMPARE(Lane::sanitizedOpenUrl(open), open);
+    }
+
+    // A redirect target as the unshortener builds it: a QUrl rendered to a
+    // string. The destination must be accepted as a destination.
+    void redirectTargetWithEncodedSpaceIsSafe()
+    {
+        const QUrl loc(QStringLiteral("https://contoso.sharepoint.com/sites/x/Shared%20Documents/a.docx"));
+        const QString candidate = Lane::redirectCandidate(loc);
+        QVERIFY2(Lane::isSafeOpenUrl(candidate), qPrintable(candidate));
+        QCOMPARE(Lane::hostOf(candidate), QStringLiteral("contoso.sharepoint.com"));
     }
 
     void privateHosts()
@@ -219,6 +259,21 @@ private Q_SLOTS:
         const QString wrapped = QStringLiteral(
             "https://nam.safelinks.protection.outlook.com/?url=file%3A%2F%2F%2Fetc%2Fpasswd");
         QCOMPARE(Lane::unwrapO365(wrapped), wrapped);
+    }
+
+    // SafeLinks nests the real URL percent-encoded. Decoding it fully turns
+    // a %20 into a space, which is not a URL the strict check accepts, so the
+    // wrapper stayed wrapped and the click routed as a Microsoft host.
+    void o365UnwrapsNestedUrlWithEncodedSpace()
+    {
+        const QString wrapped = QStringLiteral(
+            "https://nam.safelinks.protection.outlook.com/?url=https%3A%2F%2Fexample.com%2Fa%2520b&data=x");
+        QCOMPARE(Lane::unwrapO365(wrapped), QStringLiteral("https://example.com/a%20b"));
+        const QString literalSpace = QStringLiteral(
+            "https://nam.safelinks.protection.outlook.com/?url=https%3A%2F%2Fexample.com%2Fa%20b&data=x");
+        const QString unwrapped = Lane::unwrapO365(literalSpace);
+        QCOMPARE(unwrapped, QStringLiteral("https://example.com/a%20b"));
+        QVERIFY(Lane::isSafeOpenUrl(unwrapped));
     }
 };
 

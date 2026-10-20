@@ -37,5 +37,8 @@ bool isSafeOpenUrl(const QString &raw);
 bool isPrivateOrLocalHost(const QString &host);
 QString displayUrl(const QString &raw);
 QString sanitizedOpenUrl(const QString &raw);
+// The string form of a redirect Location, for the safety check and the
+// click. Lives here so the unshortener and the tests share one rendering.
+QString redirectCandidate(const QUrl &location);
 
 } // namespace Lane

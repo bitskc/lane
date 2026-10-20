@@ -1,4 +1,5 @@
 #include "core/pipeline.h"
+#include "core/urlutil.h"
 
 #include <QTest>
 
@@ -48,6 +49,22 @@ private Q_SLOTS:
         const Click c = runPipeline(QStringLiteral("https://bit.ly/47EZHSl"), cfg, fn);
         QCOMPARE(c.matchUrl, QStringLiteral("https://github.com/aloneguid/bt"));
         QCOMPARE(c.openUrl, c.matchUrl);
+    }
+
+    // The unshortener hands back a URL it built from a redirect Location.
+    // A Location with an encoded space is ordinary (SharePoint, Drive). The
+    // click must route on the destination host, not stay on the shortener.
+    void unshortenKeepsEncodedSpaceDestination()
+    {
+        Config cfg;
+        cfg.unshorten = true;
+        auto fn = [](const QString &) {
+            return Lane::redirectCandidate(
+                QUrl(QStringLiteral("https://contoso.sharepoint.com/sites/x/Shared%20Documents/a.docx")));
+        };
+        const Click c = runPipeline(QStringLiteral("https://bit.ly/x"), cfg, fn);
+        QCOMPARE(c.host, QStringLiteral("contoso.sharepoint.com"));
+        QCOMPARE(c.matchUrl, QStringLiteral("https://contoso.sharepoint.com/sites/x/Shared%20Documents/a.docx"));
     }
 
     void unshortenFollowsChainedRedirects()
