@@ -42,6 +42,17 @@ Exactly one Lane process SHALL own the user session's click routing at a time; a
 - **WHEN** Lane starts as a daemon and the D-Bus name `app.lane.Lane` is already owned
 - **THEN** it exits nonzero rather than running a second unrouted daemon (preserving systemd Type=dbus readiness semantics)
 
+### Requirement: Single-instance socket trust boundary
+The local-socket handoff SHALL trust the same boundary as the session D-Bus path: filesystem DAC plus same-UID. Lane SHALL NOT claim to reject a same-UID peer that pre-binds the socket path, snoops or drops forwarded clicks, or injects URL frames. A peer-credential check (`SO_PEERCRED` / `LOCAL_PEERCRED`) SHALL NOT be treated as closing that risk, because it only distinguishes UIDs and the documented attacker is already same-UID.
+
+#### Scenario: Same-UID injection is an accepted residual
+- **WHEN** another process running as the same user connects to Lane's local socket and sends a well-formed handoff frame
+- **THEN** Lane accepts and routes it the same way a same-UID D-Bus caller would be accepted
+
+#### Scenario: Different-UID access is denied by the filesystem
+- **WHEN** a process running as a different user attempts to connect to the socket file
+- **THEN** the operating system's DAC on the socket path rejects the connection before Lane handles a frame
+
 ### Requirement: Desktop notifications with actions
 Lane SHALL deliver its notifications through the platform-native mechanism and SHALL preserve actionable buttons where the platform supports them. Notifications SHALL carry the application desktop-entry hint so the desktop attributes them to Lane.
 
