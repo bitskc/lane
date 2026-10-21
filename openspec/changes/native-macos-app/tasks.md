@@ -7,7 +7,7 @@ Build host for all macOS work: the MacBook over `ssh andys-macbook-pro` (existin
 ## 0. Review gates for this spec
 - [x] 0.1 Round 1 reviews (one internal agent, three `devin/swe-2` runs) adjudicated and folded; `## Review log` in `design.md` filled in. Owner decision D2 recorded.
 - [x] 0.2 Round 2 re-review (one `devin/swe-2` run, fold-in leftovers only) adjudicated; 8 findings folded (binary-plist test scope, Linux-only tray activation scenario, template icon task, email exec display, coverage row, first-launch precedence, Hold quit shortcut, dead Linux source).
-- [ ] 0.3 `openspec validate native-macos-app --strict` clean; scratch-copy archive dry run clean (the change contains one MODIFIED requirement); coverage table below has no empty row.
+- [x] 0.3 `openspec validate --all --strict` clean (3/3); scratch-copy archive dry run clean (+12 cross-platform, +4 and ~1 lane, post-archive validate clean); coverage table has no empty cell. Fixed on the way: tasks 7.1 and 7.2 sat under the group-6 heading (missing `## 7.` heading), which strict mode reports as a warning.
 
 ## 1. Linux zero-regression seam refactor (blocks everything)
 - [x] 1.1 Linux baseline recorded: 16/16 ctest green, `lane --list` 42 targets, `--explain` routes, D-Bus introspects org.freedesktop.Application + org.kde.KDBusService, daemon active under systemd. Dep: none.
@@ -41,6 +41,8 @@ Build host for all macOS work: the MacBook over `ssh andys-macbook-pro` (existin
 - [x] 6.4 `reduceMotion` property reads `accessibilityDisplayShouldReduceMotion` live and gates the Hold ring and dim-fade `Behavior`s; light/dark follows the menubar automatically (mask icon + Qt palette). Dep: 3.4.
 - [x] 6.5 `showPicker` sets the picker window's screen to `QGuiApplication::screenAt(QCursor::pos())` before show. Dep: 6.1.
 - [ ] 6.6 `requestQuit()` cancels a pending pick or hold, else `QCoreApplication::quit()`; status-item "Quit Lane" entry; `QIcon::setIsMask` template icon from the bundled SVG so it follows light/dark; `Shortcut { sequence: StandardKey.Quit }` in Settings, picker, and Hold; first run opens Settings with no config.json and no link, and after the pick or launch when a link started Lane (m_firstRun + maybeFirstRunSettings). LSUIElement is in the plist and verified (no Dock icon in the earlier spike). NOT verified on-device: status item visibility/click and ⌘Q delivery need the owner. Dep: 3.4.
+
+## 7. Notifications and login item
 - [ ] 7.1 `notify` via `UNUserNotificationCenter`: lazy authorization on first post, a permanent delegate routes the action button through `NotificationActionMap` (bounded LRU, 32), denied state lands `notificationsDenied` and an Overview banner. `test_notifymap` (4 cases) passes on both OSes. NOT verified: a real toast or the auth prompt; needs the owner. Dep: 3.4, 2.2.
 - [ ] 7.2 `autostartSet/Enabled` via `SMAppService.mainAppService` with `AutostartStatus` mapping (enabled / requires-approval / invalid-signature) feeding `autostartMessage` on the Settings toggle. NOT verified: the register/unregister round trip on the real bundle needs the owner to toggle the switch once (login items aren't SSH-testable without AX). Dep: 3.4, 2.2, 1.2.
 
