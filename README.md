@@ -1,15 +1,15 @@
 # Lane
 
-Lane is a link router for KDE Plasma. It becomes your default browser,
-then sends each click to the right browser profile, web app, or custom
-handler.
+Lane is a link router. It becomes your default browser, then sends each
+click to the right browser profile, web app, or custom handler. It runs
+on KDE Plasma (Linux) and macOS.
 
 If you run Zen for personal stuff, Firefox for work, and a GitHub PWA
 for repos, Lane sorts that out without you thinking about it.
 
 It is a Qt 6 Quick app that stays running in the background, so the
-picker shows up instantly on Wayland. Same idea as Browser Tamer, Choosy,
-or Velja, but native to Plasma.
+picker shows up instantly. Same idea as Browser Tamer, Choosy,
+or Velja, but native to Plasma (and now macOS).
 
 ![Picker overlay](docs/screenshots/picker.png)
 *The overlay you get when Lane does not already know where to send a link.*
@@ -205,6 +205,32 @@ new entry.
 
 Launch Lane from the app menu, then click "Use Lane as default browser".
 Turn on "Start Lane when I log in" so the first click is instant.
+
+## Build (macOS)
+
+The macOS app is a plain Qt 6 bundle: `Lane.app`, `LSUIElement`, lives in
+the menu bar, no Dock icon. Requires macOS 13 or newer on Apple Silicon.
+
+```bash
+brew install qt cmake ninja
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+cmake --build build
+ctest --test-dir build --output-on-failure
+packaging/mac/bundle.sh build /Applications
+```
+
+`bundle.sh` renders `Lane.icns` from the SVG, runs `macdeployqt`, rewrites
+Homebrew library paths to `@rpath`, and ad-hoc signs the bundle (set
+`LANE_SIGN_IDENTITY` for an Apple Development identity). Installing to
+`/Applications` matters: the System Settings default-browser list only
+scans `/Applications`, not `~/Applications`.
+
+On first run Lane asks for notification permission and offers "Use Lane
+as default browser", which triggers the macOS consent prompt for
+http/https. Lane stays in the menu bar; open it again (or click the
+status item) to reach Settings. ⌘Q and the status-item "Quit Lane" both
+quit the app.
 
 ## License
 
