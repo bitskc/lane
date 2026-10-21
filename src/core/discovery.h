@@ -2,6 +2,8 @@
 
 #include "types.h"
 
+class QProcess;
+
 namespace Lane
 {
 
@@ -28,5 +30,10 @@ QList<Target> discoverTargets(const DiscoveryPaths &paths);
 QString macBundlePathForId(const QString &bundleId);
 QList<Target> applyConfigToTargets(QList<Target> targets, const Config &config);
 QStringList moveIdAmongSiblings(const QList<Target> &targets, const QString &id, int newIndex);
+
+// Reads a running process's stdout up to maxBytes, killing it if the
+// bound or timeout is hit. Used by binary Info.plist conversion so a
+// hostile expansion cannot buffer unboundedly in QProcess first.
+QByteArray readStdoutBounded(QProcess &proc, qsizetype maxBytes, int timeoutMs);
 
 } // namespace Lane

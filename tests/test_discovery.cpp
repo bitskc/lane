@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QProcess>
 #include <QTemporaryDir>
 #include <algorithm>
 #include <QFile>
@@ -1067,6 +1068,32 @@ private Q_SLOTS:
         QVERIFY(!std::any_of(targets.begin(), targets.end(), [](const Target &t) {
             return t.profileKey == QLatin1String("Profile 9") || t.name == QLatin1String("Ghost");
         }));
+    }
+
+    // A converter that floods stdout past the bound must be killed and
+    // return empty. Waiting for exit then checking size would let the
+    // flood sit in QProcess buffers first; this is the regression the
+    // stream-bounded path exists to catch.
+    void readStdoutBoundedKillsPastLimit()
+    {
+        QProcess flood;
+        flood.setProcessChannelMode(QProcess::SeparateChannels);
+        // ~64 KiB of 'x' per write, well over a 4 KiB test bound.
+        // `yes` floods stdout forever; available on Linux and macOS CI.
+        flood.start(QStringLiteral("yes"), {QStringLiteral("x")});
+        QVERIFY(flood.waitForStarted(2000));
+        const QByteArray got = readStdoutBounded(flood, 4096, 5000);
+        QVERIFY(got.isEmpty());
+        QCOMPARE(flood.state(), QProcess::NotRunning);
+    }
+
+    void readStdoutBoundedKeepsSmallOutput()
+    {
+        QProcess echo;
+        echo.setProcessChannelMode(QProcess::SeparateChannels);
+        echo.start(QStringLiteral("/bin/echo"), {QStringLiteral("-n"), QStringLiteral("ok")});
+        QVERIFY(echo.waitForStarted(2000));
+        QCOMPARE(readStdoutBounded(echo, 4096, 5000), QByteArrayLiteral("ok"));
     }
 };
 
