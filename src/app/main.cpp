@@ -182,7 +182,33 @@ int main(int argc, char **argv)
         for (const QJsonValue &v : payload.value(QStringLiteral("args")).toArray()) {
             args << v.toString();
         }
+#ifdef Q_OS_MACOS
+        // A second Finder/Spotlight launch of an LSUIElement app forwards
+        // an empty argv. Without a window that feels like a dead click.
+        // Cold start stays tray-only when already configured (login item);
+        // only this secondary path opens Settings.
+        QStringList rest = args;
+        if (!rest.isEmpty()) {
+            rest.removeFirst();
+        }
+        bool bareRelaunch = true;
+        for (const QString &a : rest) {
+            if (a == QLatin1String("--daemon")) {
+                bareRelaunch = false;
+                break;
+            }
+            if (!a.startsWith(QLatin1Char('-'))) {
+                bareRelaunch = false; // URL: handleArgs opens the picker
+                break;
+            }
+        }
+#endif
         controller.handleArgs(args);
+#ifdef Q_OS_MACOS
+        if (bareRelaunch) {
+            controller.openSettings();
+        }
+#endif
         if (!token.isEmpty()) {
             qunsetenv("XDG_ACTIVATION_TOKEN");
         }
