@@ -33,6 +33,10 @@ Window {
     // A single gate keeps the row badge, the accessible name, and the
     // footer hints honest together.
     readonly property bool fieldHintsActive: filterField.activeFocus && filterField.text.length === 0
+    // Ctrl+C is handled by the field before the empty-text early return
+    // (Keys.onPressed above), so it stays live while the user types. Its
+    // hint gates on focus only, not on the empty field.
+    readonly property bool copyHintActive: filterField.activeFocus
 
     onVisibleChanged: {
         if (visible) {
@@ -460,7 +464,6 @@ Window {
                                 }
                             }
                             Rectangle {
-                                id: shortcutBadge
                                 // Digits only reach the pick row while the filter has
                                 // focus (see Keys.onPressed above), so the badge must
                                 // disappear with it, not just when text hides it.
@@ -573,7 +576,7 @@ Window {
 
                         Accessible.role: Accessible.Button
                         Accessible.name: "Copy link"
-                        Accessible.description: root.mac ? "Copy the current link to the clipboard, shortcut Command C" : "Copy the current link to the clipboard, shortcut Control C"
+                        Accessible.description: "Copy the current link to the clipboard" + (root.copyHintActive ? (root.mac ? ", shortcut Command C" : ", shortcut Control C") : "")
 
                         RowLayout {
                             id: copyRow
@@ -594,7 +597,7 @@ Window {
                                 // Ctrl+C is handled by the filter field, so its
                                 // hint must not linger once focus moves on. The
                                 // chip itself stays: it is a real button.
-                                visible: root.fieldHintsActive
+                                visible: root.copyHintActive
                             }
                         }
                         HoverHandler {

@@ -50,36 +50,36 @@ private Q_SLOTS:
         QVERIFY(ladder.isEmpty());
     }
 
-    void lookupRememberedMatchesExactKey()
+    void bestKeyMatchesExactKey()
     {
         QMap<QString, QString> remembered;
         remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:brave"));
-        QCOMPARE(lookupRemembered(QStringLiteral("https://github.com/bitskc/lane"), remembered),
-                 QStringLiteral("browser:brave"));
+        QCOMPARE(destinationKeyMatchesBest(QStringLiteral("https://github.com/bitskc/lane"), remembered),
+                 QStringLiteral("github.com/bitskc"));
     }
 
-    void lookupRememberedDoesNotStealSibling()
+    void bestKeyDoesNotStealSibling()
     {
         QMap<QString, QString> remembered;
         remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:brave"));
-        QVERIFY(lookupRemembered(QStringLiteral("https://github.com/other"), remembered).isEmpty());
+        QVERIFY(destinationKeyMatchesBest(QStringLiteral("https://github.com/other"), remembered).isEmpty());
     }
 
-    void lookupRememberedPicksLongestMatch()
+    void bestKeyPicksLongestMatch()
     {
         QMap<QString, QString> remembered;
         remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:zen"));
         remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:brave"));
-        QCOMPARE(lookupRemembered(QStringLiteral("https://github.com/bitskc/lane"), remembered),
-                 QStringLiteral("browser:brave"));
+        QCOMPARE(destinationKeyMatchesBest(QStringLiteral("https://github.com/bitskc/lane"), remembered),
+                 QStringLiteral("github.com/bitskc"));
     }
 
     void hostOnlyMemoryMatchesWithQuery()
     {
         QMap<QString, QString> remembered;
         remembered.insert(QStringLiteral("news.ycombinator.com"), QStringLiteral("browser:brave:personal"));
-        QCOMPARE(lookupRemembered(QStringLiteral("https://news.ycombinator.com/item?id=1"), remembered),
-                 QStringLiteral("browser:brave:personal"));
+        QCOMPARE(destinationKeyMatchesBest(QStringLiteral("https://news.ycombinator.com/item?id=1"), remembered),
+                 QStringLiteral("news.ycombinator.com"));
     }
 
     void pwaOriginWideAutoOpensChromePaths()

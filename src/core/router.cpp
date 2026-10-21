@@ -55,6 +55,42 @@ QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &c
     return out;
 }
 
+const Target *firstLiveRemembered(const QList<Target> &targets, const Config &config, const QString &matchUrl,
+                                  QString *honoredKey)
+{
+    // The longest matching key wins. If its target no longer exists, no
+    // reload path auto-prunes it, so stopping there would let a dead
+    // browser shadow a live shorter entry (e.g. "github.com" -> Brave
+    // behind "github.com/bitskc" -> an uninstalled browser) until the
+    // user pressed Clear dead; walk to the next matching key instead.
+    // A *hidden* target is different: hiding is a deliberate choice, so
+    // the more specific key still speaks for the user and the walk stops
+    // there with no result (the click falls through to PWA/default, as it
+    // always did) rather than borrowing a broader key's browser.
+    QStringList matchingKeys;
+    for (auto it = config.remembered.begin(); it != config.remembered.end(); ++it) {
+        if (destinationKeyMatches(it.key(), matchUrl)) {
+            matchingKeys.append(it.key());
+        }
+    }
+    std::sort(matchingKeys.begin(), matchingKeys.end(),
+              [](const QString &a, const QString &b) { return a.size() > b.size(); });
+    for (const QString &key : std::as_const(matchingKeys)) {
+        const Target *t = findTarget(targets, config.remembered.value(key));
+        if (!t) {
+            continue;
+        }
+        if (t->hidden) {
+            return nullptr;
+        }
+        if (honoredKey) {
+            *honoredKey = key;
+        }
+        return t;
+    }
+    return nullptr;
+}
+
 const Target *defaultTarget(const QList<Target> &targets, const Config &config, const QString &activityId)
 {
     // A per-Activity fallback only applies while Activity routing is in
@@ -145,7 +181,7 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
     const auto pwas = pwaMatches(click, targets);
     if (!pwas.isEmpty()) {
         suggestedId = pwas.front()->id;
-    } else if (const Target *t = findTarget(targets, lookupRemembered(click.matchUrl, config.remembered))) {
+    } else if (const Target *t = firstLiveRemembered(targets, config, click.matchUrl)) {
         suggestedId = t->id;
     }
 
@@ -235,15 +271,19 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
         return d;
     }
 
+    // memoryKey defaults to the longest matching key, even a dangling or
+    // hidden-target one, so a click that does not launch from memory still
+    // shows and offers that key (hold bar, --explain). When a remembered
+    // launch happens it is overwritten with the key that actually won, so
+    // a dead long entry cannot shadow a working shorter one.
     d.memoryKey = destinationKeyMatchesBest(click.matchUrl, config.remembered);
-    const QString rememberedId = lookupRemembered(click.matchUrl, config.remembered);
-    if (const Target *t = findTarget(targets, rememberedId)) {
-        if (!t->hidden) {
-            d.action = Decision::Action::Launch;
-            d.target = *t;
-            d.reason = QStringLiteral("remembered");
-            return d;
-        }
+    QString honoredKey;
+    if (const Target *t = firstLiveRemembered(targets, config, click.matchUrl, &honoredKey)) {
+        d.memoryKey = honoredKey;
+        d.action = Decision::Action::Launch;
+        d.target = *t;
+        d.reason = QStringLiteral("remembered");
+        return d;
     }
 
     const auto pwas = pwaMatches(click, targets);

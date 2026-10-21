@@ -66,14 +66,12 @@ if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
     add_test(NAME test_qml COMMAND test_qml)
     set_tests_properties(test_qml PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Fusion")
 
-    # Controller lives in lane-app. This test constructs a real one under
-    # offscreen Qt. The app.lane module is compiled into the lane
-    # executable, not lane-app, so the test embeds the same QML or
-    # Settings never loads (the build-tree qmldir prefers a qrc path
-    # this binary does not have).
-    add_executable(test_firstrun test_firstrun.cpp)
-    target_link_libraries(test_firstrun PRIVATE lane-app laneuiplugin Qt6::Test)
-    set(_firstrun_qml
+    # Controller lives in lane-app. These tests construct a real one
+    # under offscreen Qt. The app.lane module is compiled into the lane
+    # executable, not lane-app, so each test embeds the same QML or
+    # Settings/Picker never loads (the build-tree qmldir prefers a qrc
+    # path the binary does not have).
+    set(_lane_test_qml
         ../src/qml/Picker.qml
         ../src/qml/Hold.qml
         ../src/qml/Settings.qml
@@ -82,86 +80,40 @@ if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
         ../src/qml/pages/RulesPage.qml
         ../src/qml/pages/PreferencesPage.qml
     )
-    foreach(_qml ${_firstrun_qml})
+    foreach(_qml ${_lane_test_qml})
         get_filename_component(_alias ${_qml} NAME)
         set_source_files_properties(${_qml} PROPERTIES QT_RESOURCE_ALIAS ${_alias})
     endforeach()
-    qt_add_qml_module(test_firstrun
-        URI app.lane
-        VERSION 1.0
-        RESOURCE_PREFIX /qt/qml
-        QML_FILES ${_firstrun_qml}
-    )
-    if(LANE_KDE_DESKTOP)
-        target_link_libraries(test_firstrun PRIVATE Qt6::DBus LayerShellQt::Interface)
-    endif()
-    if(LANE_MAC_DESKTOP)
-        target_link_libraries(test_firstrun PRIVATE
-            "-framework AppKit"
-            "-framework UserNotifications"
-            "-framework ServiceManagement"
-            "-framework CoreServices")
-    endif()
-    add_test(NAME test_firstrun COMMAND test_firstrun)
-    set_tests_properties(test_firstrun PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Fusion")
 
-    # Same shape as test_firstrun: embed the full app.lane module so
-    # loadFromModule can resolve every type, then drive the picker.
-    add_executable(test_pickerhints test_pickerhints.cpp)
-    target_link_libraries(test_pickerhints PRIVATE lane-app laneuiplugin Qt6::Test)
-    set(_pickerhints_qml ${_firstrun_qml})
-    foreach(_qml ${_pickerhints_qml})
-        get_filename_component(_alias ${_qml} NAME)
-        set_source_files_properties(${_qml} PROPERTIES QT_RESOURCE_ALIAS ${_alias})
-    endforeach()
-    qt_add_qml_module(test_pickerhints
-        URI app.lane
-        VERSION 1.0
-        RESOURCE_PREFIX /qt/qml
-        OUTPUT_DIRECTORY pickerhints/app/lane
-        QML_FILES ${_pickerhints_qml}
-    )
-    if(LANE_KDE_DESKTOP)
-        target_link_libraries(test_pickerhints PRIVATE Qt6::DBus LayerShellQt::Interface)
-    endif()
-    if(LANE_MAC_DESKTOP)
-        target_link_libraries(test_pickerhints PRIVATE
-            "-framework AppKit"
-            "-framework UserNotifications"
-            "-framework ServiceManagement"
-            "-framework CoreServices")
-    endif()
-    add_test(NAME test_pickerhints COMMAND test_pickerhints)
-    set_tests_properties(test_pickerhints PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Fusion")
+    function(lane_add_qml_test name)
+        add_executable(${name} ${name}.cpp)
+        target_link_libraries(${name} PRIVATE lane-app laneuiplugin Qt6::Test)
+        qt_add_qml_module(${name}
+            URI app.lane
+            VERSION 1.0
+            RESOURCE_PREFIX /qt/qml
+            OUTPUT_DIRECTORY ${name}/app/lane
+            QML_FILES ${_lane_test_qml}
+        )
+        if(LANE_KDE_DESKTOP)
+            target_link_libraries(${name} PRIVATE Qt6::DBus LayerShellQt::Interface)
+        endif()
+        if(LANE_MAC_DESKTOP)
+            target_link_libraries(${name} PRIVATE
+                "-framework AppKit"
+                "-framework UserNotifications"
+                "-framework ServiceManagement"
+                "-framework CoreServices")
+        endif()
+        add_test(NAME ${name} COMMAND ${name})
+        set_tests_properties(${name} PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Fusion")
+    endfunction()
 
-    # reload() must never auto-prune dangling remembered hosts (#55).
-    add_executable(test_remembered test_remembered.cpp)
-    target_link_libraries(test_remembered PRIVATE lane-app laneuiplugin Qt6::Test)
-    set(_remembered_qml ${_firstrun_qml})
-    foreach(_qml ${_remembered_qml})
-        get_filename_component(_alias ${_qml} NAME)
-        set_source_files_properties(${_qml} PROPERTIES QT_RESOURCE_ALIAS ${_alias})
-    endforeach()
-    qt_add_qml_module(test_remembered
-        URI app.lane
-        VERSION 1.0
-        RESOURCE_PREFIX /qt/qml
-        OUTPUT_DIRECTORY remembered/app/lane
-        QML_FILES ${_remembered_qml}
-    )
-    if(LANE_KDE_DESKTOP)
-        target_link_libraries(test_remembered PRIVATE Qt6::DBus LayerShellQt::Interface)
-    endif()
-    if(LANE_MAC_DESKTOP)
-        target_link_libraries(test_remembered PRIVATE
-            "-framework AppKit"
-            "-framework UserNotifications"
-            "-framework ServiceManagement"
-            "-framework CoreServices")
-    endif()
-    add_test(NAME test_remembered COMMAND test_remembered)
-    set_tests_properties(test_remembered PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_QUICK_CONTROLS_STYLE=Fusion")
+    # First-run flag + Settings open (#82 area); picker focus/hint
+    # gating and Alt+P delegate ids (#57/#83); reload() must never
+    # auto-prune dangling remembered hosts (#55).
+    lane_add_qml_test(test_firstrun)
+    lane_add_qml_test(test_pickerhints)
+    lane_add_qml_test(test_remembered)
 endif()

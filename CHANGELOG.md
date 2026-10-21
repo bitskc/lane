@@ -79,7 +79,16 @@ version is 0, minor releases may still contain breaking changes.
   deleted by reload, Rediscover, or opening Settings. A discovery miss
   that lasts for the daemon's lifetime looked identical to an uninstall,
   so the old grace period still wiped routing decisions. Broken entries
-  stay on the Rules page until Clear dead is pressed.
+  stay on the Rules page until Clear dead is pressed. A remembered entry
+  for a deeper path (like `github.com/bitskc`) that points at an
+  uninstalled browser no longer shadows a working entry for the site:
+  routing now falls through to the next matching remembered key instead
+  of stopping at the dead one.
+
+- The picker's Ctrl/Cmd+C label now stays up while the filter has text
+  (the key still works there) and only hides when the filter loses
+  focus. Screen readers no longer announce the shortcut after focus
+  moves off the field.
 
 - In the picker, comma and period at either end of the destination
   ladder are no longer typed into the filter. Hovering a row no longer

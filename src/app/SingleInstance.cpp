@@ -2,7 +2,6 @@
 
 #include <QCoreApplication>
 #include <QDebug>
-#include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -95,7 +94,6 @@ ForwardResult forwardToPrimary(const QString &path, QLockFile *claimLock = nullp
 
     QJsonObject payload;
     payload.insert(QStringLiteral("args"), QJsonArray::fromStringList(QCoreApplication::arguments()));
-    payload.insert(QStringLiteral("workingDir"), QDir::currentPath());
     payload.insert(QStringLiteral("activationToken"), qEnvironmentVariable("XDG_ACTIVATION_TOKEN"));
     const QByteArray frame = QJsonDocument(payload).toJson(QJsonDocument::Compact) + '\n';
 

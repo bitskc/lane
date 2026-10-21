@@ -117,6 +117,72 @@ private Q_SLOTS:
         QCOMPARE(d.reason, QStringLiteral("remembered"));
     }
 
+    // A dangling long remembered key must not shadow a live shorter one.
+    // 795f8c7 removed reload-time auto-pruning, so the dead entry can sit
+    // in the config forever; decide() must walk past it to the next
+    // matching key instead of falling through to the picker.
+    void rememberedDanglingLongKeyFallsBackToShorter()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal")),
+                              makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};
+        Config cfg;
+        cfg.remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:brave:personal"));
+        cfg.remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:gone:uninstalled"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/bitskc/lane");
+        c.host = QStringLiteral("github.com");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.reason, QStringLiteral("remembered"));
+        QCOMPARE(d.target.id, QStringLiteral("browser:brave:personal"));
+        QCOMPARE(d.memoryKey, QStringLiteral("github.com"));
+    }
+
+    // A fully dangling remembered set still falls through to the rest of
+    // the ladder (picker on NoRule here), it does not produce a Launch
+    // aimed at a dead target.
+    void rememberedAllDanglingFallsThrough()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::NoRule;
+        cfg.remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:gone:uninstalled"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/bitskc/lane");
+        c.host = QStringLiteral("github.com");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.action, Decision::Action::Pick);
+    }
+
+    // A hidden target on the longer key is a deliberate choice, unlike a
+    // dead one: the walk must stop there instead of borrowing the broader
+    // key's browser. github.com/work -> hidden Work profile must not open
+    // in whatever github.com is remembered for.
+    void rememberedHiddenLongKeyDoesNotBorrowShorterKey()
+    {
+        Target work = makeBrowser(QStringLiteral("browser:zen:work"), QStringLiteral("Work"));
+        work.hidden = true;
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal")),
+                              work};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::NoRule;
+        cfg.remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:brave:personal"));
+        cfg.remembered.insert(QStringLiteral("github.com/work"), QStringLiteral("browser:zen:work"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/work/repo");
+        c.host = QStringLiteral("github.com");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.action, Decision::Action::Pick);
+        QVERIFY(d.reason != QStringLiteral("remembered"));
+        QCOMPARE(d.memoryKey, QStringLiteral("github.com/work"));
+
+        // The forced picker agrees: nothing is suggested.
+        const auto ranked = rankForPicker(c, targets, cfg);
+        for (const auto &row : ranked) {
+            QVERIFY2(!row.suggested, qPrintable(row.id));
+        }
+    }
+
     void pickerWhenNoRule()
     {
         QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};
@@ -273,6 +339,25 @@ private Q_SLOTS:
         cfg.remembered.insert(QStringLiteral("news.ycombinator.com"), QStringLiteral("browser:brave:personal"));
         Click c;
         c.matchUrl = QStringLiteral("https://news.ycombinator.com/item?id=1");
+        const auto ranked = rankForPicker(c, targets, cfg);
+        QCOMPARE(ranked.size(), 2);
+        QCOMPARE(ranked.at(1).id, QStringLiteral("browser:brave:personal"));
+        QCOMPARE(ranked.at(1).suggested, true);
+        QCOMPARE(ranked.at(0).suggested, false);
+    }
+
+    // The forced picker must suggest the same target route() would have
+    // auto-opened: a dangling longer key cannot hide the live shorter one
+    // from the Suggested badge and the initial selection.
+    void pickerSuggestsLiveKeyPastDanglingLongerKey()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal"))};
+        Config cfg;
+        cfg.remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:brave:personal"));
+        cfg.remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:gone:uninstalled"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/bitskc/lane");
         const auto ranked = rankForPicker(c, targets, cfg);
         QCOMPARE(ranked.size(), 2);
         QCOMPARE(ranked.at(1).id, QStringLiteral("browser:brave:personal"));

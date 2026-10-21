@@ -85,7 +85,8 @@ QString normalizeInput(const QString &raw)
     // a URL ("example.com/login?next=https://...") skip the scheme repair
     // and then fail the strict check as a relative URL.
     const qsizetype authorityStart = trimmed.indexOf(QLatin1String("://"));
-    const qsizetype firstDelimiter = trimmed.indexOf(QRegularExpression(QStringLiteral("[/?#]")));
+    static const QRegularExpression firstDelimiterRe(QStringLiteral("[/?#]"));
+    const qsizetype firstDelimiter = trimmed.indexOf(firstDelimiterRe);
     if (authorityStart != -1 && (firstDelimiter == -1 || firstDelimiter > authorityStart)) {
         // An explicit scheme is never repaired. QUrl::fromUserInput, given
         // an authority it cannot parse ("https://example.com..",
@@ -141,10 +142,17 @@ QString unwrapO365(const QString &raw)
     if (nested.isEmpty()) {
         nested = query.queryItemValue(QStringLiteral("data"), QUrl::FullyDecoded);
     }
-    if (nested.isEmpty()) {
+    // Order matters: this explicit-scheme check must stay ahead of
+    // normalizeInput. fromUserInput invents "http://" for a value with no
+    // scheme (an opaque data= blob, a relative url=), and isSafeOpenUrl
+    // then accepts the fabricated URL. Looks redundant beside the
+    // parsed-scheme check there; removing it brings back the #84 bug.
+    const QString trimmedNested = nested.trimmed();
+    if (!trimmedNested.startsWith(QLatin1String("http://"), Qt::CaseInsensitive)
+        && !trimmedNested.startsWith(QLatin1String("https://"), Qt::CaseInsensitive)) {
         return raw;
     }
-    nested = normalizeInput(nested);
+    nested = normalizeInput(trimmedNested);
     if (!isSafeOpenUrl(nested)) {
         return raw;
     }
@@ -380,6 +388,33 @@ QString displayUrl(const QString &raw)
     url.setUserName({});
     url.setPassword({});
     QString s = url.toString(QUrl::PrettyDecoded | QUrl::RemoveScheme | QUrl::RemoveUserInfo);
+    // PrettyDecoded turns %0A, %E2%80%AE and friends back into literal
+    // control/format characters. The wire side refuses raw controls, so
+    // the display side must not re-inject decoded ones into a picker
+    // label, a hold-bar subtitle, or the clipboard fallback. They are
+    // re-encoded rather than dropped, so the label still matches the URL
+    // that actually opens. Covers C0/C1 controls, line/paragraph
+    // separators, bidi embeddings/isolates/marks (LRM, RLM, ALM), the
+    // zero-width characters, and the BOM.
+    const auto invisible = [](char16_t u) {
+        return u < 0x20 || (u >= 0x7f && u <= 0x9f) || (u >= 0x200b && u <= 0x200f)
+            || u == 0x2028 || u == 0x2029 || (u >= 0x202a && u <= 0x202e)
+            || (u >= 0x2060 && u <= 0x2064) || (u >= 0x2066 && u <= 0x2069)
+            || u == 0x061c || u == 0xfeff;
+    };
+    QString encoded;
+    encoded.reserve(s.size());
+    for (const QChar c : s) {
+        if (invisible(c.unicode())) {
+            for (const char b : QString(c).toUtf8()) {
+                encoded += QLatin1Char('%')
+                    + QStringLiteral("%1").arg(uchar(b), 2, 16, QLatin1Char('0')).toUpper();
+            }
+        } else {
+            encoded += c;
+        }
+    }
+    s = encoded;
     if (s.startsWith(QLatin1String("//"))) {
         s = s.mid(2);
     }

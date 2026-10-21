@@ -174,15 +174,6 @@ QString destinationKeyMatchesBest(const QString &url, const QMap<QString, QStrin
     return best;
 }
 
-QString lookupRemembered(const QString &url, const QMap<QString, QString> &remembered)
-{
-    const QString key = destinationKeyMatchesBest(url, remembered);
-    if (key.isEmpty()) {
-        return {};
-    }
-    return remembered.value(key);
-}
-
 int suggestedLadderIndex(const QString &url, const Target *target)
 {
     const QStringList ladder = destinationLadder(url);

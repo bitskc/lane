@@ -14,6 +14,14 @@ const Target *findTarget(const QList<Target> &targets, const QString &id);
 // activityId the lookup is exactly the historic global default.
 const Target *defaultTarget(const QList<Target> &targets, const Config &config, const QString &activityId = QString());
 QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &config);
+// The remembered target for matchUrl: the longest matching key whose target
+// exists. A dangling longer key (target uninstalled) never shadows a live
+// shorter one. A longer key whose target is hidden stops the walk with no
+// result: hiding is deliberate, so a broader key's browser is not borrowed.
+// honoredKey, when given, receives the key that won.
+// Returns nullptr when no matching key resolves to a visible target.
+const Target *firstLiveRemembered(const QList<Target> &targets, const Config &config, const QString &matchUrl,
+                                  QString *honoredKey = nullptr);
 
 // Resolves the private/incognito sibling of a target for the picker's
 // Alt+P shortcut. Already-incognito targets return themselves. Container

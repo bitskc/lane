@@ -41,7 +41,7 @@ public:
     // is primary (it now owns the listening socket; newConnection will
     // invoke `onMessage` for every later invocation's forwarded payload).
     // Returns false after this process has forwarded its own invocation
-    // (args/workingDir/activationToken) to the already-running primary
+    // (args/activationToken) to the already-running primary
     // *and that primary acknowledged it*; the caller must exit(0) in
     // that case. Blocks for up to a few seconds while forwarding, since
     // the primary acks from its event loop and may be busy with its own
@@ -55,7 +55,7 @@ public:
 
     // Invoked on the primary instance for every payload a later `lane`
     // invocation forwards. Payload shape:
-    // {"args": [...], "workingDir": "...", "activationToken": "..."}
+    // {"args": [...], "activationToken": "..."}
     std::function<void(const QJsonObject &)> onMessage;
 
 private:
