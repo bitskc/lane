@@ -9,6 +9,13 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Added
 
+- Native macOS app (`Lane.app`) for Apple Silicon: menu-bar status item
+  (`LSUIElement`, no Dock icon), AppKit URL delivery and reopen-to-Settings,
+  `NSWorkspace` default-handler registration for http/https, User
+  Notifications, `SMAppService` login item, overlay that follows the
+  active Space, and a monochrome tray glyph separate from the color app
+  icon. Install via `packaging/mac/bundle.sh` into `/Applications`.
+
 - Clipboard-to-Lane: "Open clipboard URL" in the tray/status-item menu
   (greyed when the clipboard holds no URL), `lane --clipboard`, and a
   Linux desktop Action (right-click Lane in the KDE menu). The clipboard
