@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Monochrome template for the macOS status item (setIsMask).
+       Alpha only: solid black shapes; transparent elsewhere.
+       Motif: looking down a two-lane road (outer fog lines + dashed center). -->
+  <rect x="2" y="1" width="1.75" height="14" rx="0.5" fill="#000"/>
+  <rect x="12.25" y="1" width="1.75" height="14" rx="0.5" fill="#000"/>
+  <rect x="7.125" y="1" width="1.75" height="3.25" rx="0.5" fill="#000"/>
+  <rect x="7.125" y="6.375" width="1.75" height="3.25" rx="0.5" fill="#000"/>
+  <rect x="7.125" y="11.75" width="1.75" height="3.25" rx="0.5" fill="#000"/>
+</svg>
