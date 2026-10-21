@@ -117,6 +117,42 @@ private Q_SLOTS:
         QCOMPARE(d.reason, QStringLiteral("remembered"));
     }
 
+    // A dangling long remembered key must not shadow a live shorter one.
+    // 795f8c7 removed reload-time auto-pruning, so the dead entry can sit
+    // in the config forever; decide() must walk past it to the next
+    // matching key instead of falling through to the picker.
+    void rememberedDanglingLongKeyFallsBackToShorter()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal")),
+                              makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};
+        Config cfg;
+        cfg.remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:brave:personal"));
+        cfg.remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:gone:uninstalled"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/bitskc/lane");
+        c.host = QStringLiteral("github.com");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.reason, QStringLiteral("remembered"));
+        QCOMPARE(d.target.id, QStringLiteral("browser:brave:personal"));
+        QCOMPARE(d.memoryKey, QStringLiteral("github.com"));
+    }
+
+    // A fully dangling remembered set still falls through to the rest of
+    // the ladder (picker on NoRule here), it does not produce a Launch
+    // aimed at a dead target.
+    void rememberedAllDanglingFallsThrough()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::NoRule;
+        cfg.remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:gone:uninstalled"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/bitskc/lane");
+        c.host = QStringLiteral("github.com");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.action, Decision::Action::Pick);
+    }
+
     void pickerWhenNoRule()
     {
         QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};

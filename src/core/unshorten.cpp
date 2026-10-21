@@ -43,28 +43,35 @@ QString unshortenSync(const QString &url, int timeoutMs)
 
     QString result = url;
     if (reply->isFinished()) {
-        QUrl loc = reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
-        if (!loc.isValid()) {
-            loc = reply->header(QNetworkRequest::LocationHeader).toUrl();
-        }
-        if (!loc.isValid()) {
-            const QByteArray raw = reply->rawHeader("Location");
-            if (!raw.isEmpty() && !raw.contains('\0') && raw.size() < 4096) {
-                loc = QUrl::fromEncoded(raw);
-            }
-        }
-        if (loc.isValid()) {
-            if (loc.isRelative()) {
-                loc = QUrl(url).resolved(loc);
-            }
-            const QString candidate = redirectCandidate(loc);
-            if (isSafeOpenUrl(candidate) && !isPrivateOrLocalHost(hostOf(candidate))) {
-                result = sanitizedOpenUrl(candidate);
-            }
-        }
+        result = redirectLocationToCandidate(url, reply);
     }
     reply->deleteLater();
     return result.isEmpty() ? url : result;
+}
+
+QString redirectLocationToCandidate(const QString &url, QNetworkReply *reply)
+{
+    QUrl loc = reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
+    if (!loc.isValid()) {
+        loc = reply->header(QNetworkRequest::LocationHeader).toUrl();
+    }
+    if (!loc.isValid()) {
+        const QByteArray raw = reply->rawHeader("Location");
+        if (!raw.isEmpty() && !raw.contains('\0') && raw.size() < 4096) {
+            loc = QUrl::fromEncoded(raw);
+        }
+    }
+    if (!loc.isValid()) {
+        return url;
+    }
+    if (loc.isRelative()) {
+        loc = QUrl(url).resolved(loc);
+    }
+    const QString candidate = redirectCandidate(loc);
+    if (isSafeOpenUrl(candidate) && !isPrivateOrLocalHost(hostOf(candidate))) {
+        return sanitizedOpenUrl(candidate);
+    }
+    return url;
 }
 
 } // namespace Lane

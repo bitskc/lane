@@ -15,3 +15,4 @@ compile_commands.json
 # every run; they are regenerated, not source.
 /tests/fixtures/config/zen/
 /tests/fixtures/config/mozilla/
+/build-asan/

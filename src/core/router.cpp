@@ -235,10 +235,26 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
         return d;
     }
 
-    d.memoryKey = destinationKeyMatchesBest(click.matchUrl, config.remembered);
-    const QString rememberedId = lookupRemembered(click.matchUrl, config.remembered);
-    if (const Target *t = findTarget(targets, rememberedId)) {
-        if (!t->hidden) {
+    // The longest matching key wins, but only if its target is still
+    // installed and visible. Since 795f8c7 no reload path auto-prunes a
+    // dangling entry, so stopping at the longest key would let a dead
+    // browser shadow a live shorter entry (e.g. "github.com" -> Brave
+    // hidden forever behind "github.com/bitskc" -> an uninstalled
+    // browser) until the user pressed Clear dead. Walk the remaining
+    // matching keys longest-first and honor the first live one.
+    QStringList matchingKeys;
+    for (auto it = config.remembered.begin(); it != config.remembered.end(); ++it) {
+        if (destinationKeyMatches(it.key(), click.matchUrl)) {
+            matchingKeys.append(it.key());
+        }
+    }
+    std::sort(matchingKeys.begin(), matchingKeys.end(),
+              [](const QString &a, const QString &b) { return a.size() > b.size(); });
+    d.memoryKey = matchingKeys.isEmpty() ? QString() : matchingKeys.first();
+    for (const QString &key : std::as_const(matchingKeys)) {
+        const Target *t = findTarget(targets, config.remembered.value(key));
+        if (t && !t->hidden) {
+            d.memoryKey = key;
             d.action = Decision::Action::Launch;
             d.target = *t;
             d.reason = QStringLiteral("remembered");

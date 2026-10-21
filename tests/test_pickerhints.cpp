@@ -1,9 +1,12 @@
-// Picker key hints that only work while the filter field has focus must
-// not linger once focus moves on: the number badge, the Ctrl+C label, and
-// the comma/period ladder labels are all bound to filterField's
-// Keys.onPressed, so keeping them visible after Tab advertises dead keys.
-// Fails if root.fieldHintsActive stays true, or if any of the footer
-// field-scoped labels stay visible, after the Always checkbox takes focus.
+// Two regressions share this file: the picker key hints that only work
+// while the filter field has focus must not linger once focus moves on
+// (#83: number badge, comma/period ladder labels bound to
+// fieldHintsActive; the Ctrl+C label follows copyHintActive since Ctrl+C
+// stays live on a non-empty filter), and Alt+P must read a real targetId
+// off the live ListView delegate (#57: a delegate that omits the
+// required property leaves pickPrivate an empty string and it returns
+// silently). Fails if the focus gate stays on after Tab, if any
+// field-scoped label stays visible, or if the delegate drops targetId.
 
 #include "app/Controller.h"
 
@@ -101,6 +104,22 @@ void PickerHintsTest::fieldHintsHideWithFocus()
     QVERIFY(widenHint->property("visible").toBool());
     QVERIFY(narrowHint->property("visible").toBool());
 
+    // Typed text kills the digit/comma/period keys but Ctrl+C is handled
+    // before the empty-text early return, so its hint must stay up while
+    // the field is focused. The other field hints must drop with the
+    // keys they advertise.
+    filter->setProperty("text", QStringLiteral("ex"));
+    QTRY_VERIFY_WITH_TIMEOUT(!window->property("fieldHintsActive").toBool(), 5000);
+    QVERIFY2(window->property("copyHintActive").toBool(),
+             "Ctrl+C still works on a non-empty filter; its hint must not hide");
+    QVERIFY2(copyHint->property("visible").toBool(),
+             "Ctrl+C label must stay while the key still works");
+    QVERIFY2(!widenHint->property("visible").toBool(),
+             "the . key is dead on a non-empty filter");
+    QVERIFY2(!narrowHint->property("visible").toBool(),
+             "the , key is dead on a non-empty filter");
+    filter->setProperty("text", QString());
+
     // Tab-equivalent: focus moves to the Always checkbox. Digits, Ctrl+C
     // and comma/period are all bound to the field, so the gate and every
     // field-scoped label must drop.
@@ -144,16 +163,25 @@ void PickerHintsTest::altPReadsTargetIdFromDelegate()
     QTRY_VERIFY_WITH_TIMEOUT(
         (list = window->findChild<QObject *>(QStringLiteral("pickerList"))) != nullptr, 5000);
 
+    // Read the id through the same expression the Alt+P Shortcut uses:
+    // list.currentItem.targetId (Picker.qml). itemAtIndex(0) alone would
+    // pass even if the current row were the one dropping the property.
     QQuickItem *row = nullptr;
     QTRY_VERIFY_WITH_TIMEOUT(
         (QMetaObject::invokeMethod(list, "itemAtIndex", Q_RETURN_ARG(QQuickItem *, row), Q_ARG(int, 0)),
          row != nullptr),
         5000);
 
-    const QString fromDelegate = row->property("targetId").toString();
+    QQuickItem *current = nullptr;
+    QTRY_VERIFY_WITH_TIMEOUT(
+        (current = list->property("currentItem").value<QQuickItem *>()) != nullptr,
+        5000);
+
+    const QString fromDelegate = current->property("targetId").toString();
     QVERIFY2(!fromDelegate.isEmpty(),
              "delegate must expose targetId; Alt+P reads it off currentItem");
     QCOMPARE(fromDelegate, c.pickerModel()->targetAt(0).id);
+    QCOMPARE(current->property("targetId").toString(), row->property("targetId").toString());
 
     // Empty id must still surface the fail-closed notice (the silent path).
     c.pickPrivate(QString());

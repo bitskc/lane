@@ -599,6 +599,10 @@ void Controller::openUrl(const QString &url, bool forcePicker)
     m_pendingActivationToken = token;
 
     if (m_holdAnimation && m_holdAnimation->state() == QAbstractAnimation::Running) {
+        // Newest click wins: the in-flight hold's launch is discarded.
+        // Deliberate policy (the user just asked about a different link),
+        // but it must not be a silent drop.
+        qInfo() << "Lane: discarding hold on" << m_holdClick.openUrl << "- superseded by a newer click";
         m_holdAnimation->stop();
         hideHold();
     }
@@ -675,6 +679,10 @@ void Controller::pickId(const QString &id)
         && isSafeOpenUrl(m_click.openUrl) && !isPrivateOrLocalHost(m_click.host)) {
         m_config.remembered.insert(currentDestinationKey(), t->id);
         persist();
+        // An open Settings window lists remembered hosts off
+        // settingsChanged; without this the new entry is invisible
+        // there until some unrelated mutation emits it.
+        Q_EMIT settingsChanged();
     }
     if (t->id == QLatin1String("action:copy")) {
         hidePicker();
@@ -875,8 +883,9 @@ void Controller::clearDeadRemembered()
     // for the process lifetime (bare systemd unit missing XDG_DATA_DIRS,
     // Flatpak export dir mid-update) looks identical to an uninstall, and
     // any grace counted in reloads still deletes the user's routing
-    // decision. Dangling entries are harmless at match time (router
-    // falls through) and stay visible on the Rules page until cleared.
+    // decision. At match time the router walks past a dangling key to the
+    // next-best live remembered key, so a dead entry shadows nothing; it
+    // stays visible on the Rules page until cleared.
     const QStringList dead = danglingRememberedKeys(m_targets, m_config);
     if (dead.isEmpty()) {
         return;

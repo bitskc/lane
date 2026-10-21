@@ -85,7 +85,8 @@ QString normalizeInput(const QString &raw)
     // a URL ("example.com/login?next=https://...") skip the scheme repair
     // and then fail the strict check as a relative URL.
     const qsizetype authorityStart = trimmed.indexOf(QLatin1String("://"));
-    const qsizetype firstDelimiter = trimmed.indexOf(QRegularExpression(QStringLiteral("[/?#]")));
+    static const QRegularExpression firstDelimiterRe(QStringLiteral("[/?#]"));
+    const qsizetype firstDelimiter = trimmed.indexOf(firstDelimiterRe);
     if (authorityStart != -1 && (firstDelimiter == -1 || firstDelimiter > authorityStart)) {
         // An explicit scheme is never repaired. QUrl::fromUserInput, given
         // an authority it cannot parse ("https://example.com..",
@@ -382,6 +383,17 @@ QString displayUrl(const QString &raw)
     url.setUserName({});
     url.setPassword({});
     QString s = url.toString(QUrl::PrettyDecoded | QUrl::RemoveScheme | QUrl::RemoveUserInfo);
+    // PrettyDecoded turns %0A, %E2%80%AE and friends back into literal
+    // control/format characters. The wire side refuses raw controls, so
+    // the display side must not re-inject decoded ones into a picker
+    // label, a hold-bar subtitle, or the clipboard fallback.
+    s.removeIf([](QChar c) {
+        return (c.unicode() < 0x20) || (c.unicode() >= 0x7f && c.unicode() <= 0x9f)
+            || c == QChar(0x2028) || c == QChar(0x2029)
+            || (c.unicode() >= 0x202a && c.unicode() <= 0x202e)
+            || (c.unicode() >= 0x2066 && c.unicode() <= 0x2069)
+            || c == QChar(0x061c);
+    });
     if (s.startsWith(QLatin1String("//"))) {
         s = s.mid(2);
     }

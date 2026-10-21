@@ -156,8 +156,10 @@ private Q_SLOTS:
         QFETCH(QString, raw);
         const QString open = Lane::sanitizedOpenUrl(raw);
         QVERIFY2(!open.isEmpty(), "a safe URL must sanitize to something");
-        QVERIFY2(!open.contains(QLatin1Char(' ')), qPrintable(open));
-        QVERIFY2(Lane::isSafeOpenUrl(open), qPrintable(open));
+        // Every row is already canonical: the FullyEncoded rendering must
+        // be byte-identical, so an over-encoder that also escapes '?',
+        // '&', '#' or '/' fails here instead of just staying "safe".
+        QCOMPARE(open, raw);
         QCOMPARE(Lane::sanitizedOpenUrl(open), open);
     }
 
@@ -252,6 +254,19 @@ private Q_SLOTS:
         QVERIFY(!shown.contains(QStringLiteral("secret")));
         QVERIFY(!shown.contains(QStringLiteral("user:")));
         QVERIFY(shown.contains(QStringLiteral("example.com")));
+    }
+
+    // Percent-encoded controls decode at display time; the label must
+    // not show a literal newline, and bidi format characters must not
+    // reorder what the user thinks they are opening.
+    void displayStripsDecodedControls()
+    {
+        const QString nl = Lane::displayUrl(QStringLiteral("https://evil.example/%0AImportant%20notice"));
+        QVERIFY(!nl.contains(QLatin1Char('\n')));
+        QVERIFY(nl.contains(QStringLiteral("Important")));
+        const QString rlo = Lane::displayUrl(QStringLiteral("https://evil.example/%E2%80%AEtxt.exe"));
+        QVERIFY(!rlo.contains(QChar(0x202e)));
+        QVERIFY(rlo.contains(QStringLiteral("txt.exe")));
     }
 
     void o365RejectsUnsafeNested()

@@ -53,6 +53,10 @@ The local-socket handoff SHALL trust the same boundary as the session D-Bus path
 - **WHEN** a process running as a different user attempts to connect to the socket file
 - **THEN** the operating system's DAC on the socket path rejects the connection before Lane handles a frame
 
+#### Scenario: Wedged same-UID listener is an availability residual
+- **WHEN** a same-UID process holds Lane's socket path and accepts connections but never acknowledges a forwarded frame
+- **THEN** the invoking `lane` waits the bounded connect/write/ack timeouts (about 12.5 s) and exits nonzero rather than unlinking a live listener's socket
+
 ### Requirement: Desktop notifications with actions
 Lane SHALL deliver its notifications through the platform-native mechanism and SHALL preserve actionable buttons where the platform supports them. Notifications SHALL carry the application desktop-entry hint so the desktop attributes them to Lane.
 
