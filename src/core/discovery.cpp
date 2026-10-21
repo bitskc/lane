@@ -1526,11 +1526,15 @@ QByteArray readStdoutBounded(QProcess &proc, qsizetype maxBytes, int timeoutMs)
             proc.waitForFinished(1000);
             return {};
         }
-        const int waitMs = qMin(100, int(deadline.remainingTime()));
-        if (waitMs <= 0) {
-            continue;
+        const qint64 rem = deadline.remainingTime();
+        // remainingTime is 0 (or -1 once expired) at the edge; kill
+        // rather than busy-spin with waitForReadyRead(0).
+        if (rem <= 0) {
+            proc.kill();
+            proc.waitForFinished(1000);
+            return {};
         }
-        if (!proc.waitForReadyRead(waitMs)) {
+        if (!proc.waitForReadyRead(qMin(100, int(rem)))) {
             continue;
         }
         out.append(proc.readAllStandardOutput());
