@@ -12,11 +12,14 @@
 
 #include "../NotificationActionMap.h"
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QUrl>
 #include <QWindow>
 
 #include <atomic>
+
+#include <objc/runtime.h>
 #include <memory>
 
 namespace Lane
@@ -182,6 +185,43 @@ namespace Lane
 
 namespace
 {
+
+
+// Finder/Spotlight "open" of an already-running LSUIElement app does not
+// start a second process: LaunchServices sends applicationShouldHandleReopen.
+// Without a handler that feels like a dead click (no Dock icon, no window).
+static std::function<void()> g_reopenHandler;
+static BOOL (*g_originalReopen)(id, SEL, NSApplication *, BOOL) = nullptr;
+
+static BOOL laneApplicationShouldHandleReopen(id self, SEL _cmd, NSApplication *app, BOOL hasVisibleWindows)
+{
+    if (g_reopenHandler) {
+        g_reopenHandler();
+    }
+    if (g_originalReopen) {
+        return g_originalReopen(self, _cmd, app, hasVisibleWindows);
+    }
+    return YES;
+}
+
+static void installReopenHook(std::function<void()> handler)
+{
+    g_reopenHandler = std::move(handler);
+    id del = NSApp.delegate;
+    if (!del) {
+        qWarning("Lane: no NSApp delegate yet; reopen hook not installed");
+        return;
+    }
+    Class cls = object_getClass(del);
+    const SEL sel = @selector(applicationShouldHandleReopen:hasVisibleWindows:);
+    Method existing = class_getInstanceMethod(cls, sel);
+    if (existing) {
+        g_originalReopen = reinterpret_cast<decltype(g_originalReopen)>(
+            method_setImplementation(existing, reinterpret_cast<IMP>(laneApplicationShouldHandleReopen)));
+    } else if (!class_addMethod(cls, sel, reinterpret_cast<IMP>(laneApplicationShouldHandleReopen), "B@:@B")) {
+        qWarning("Lane: could not install applicationShouldHandleReopen hook");
+    }
+}
 
 class MacPlatform final : public Platform
 {
@@ -383,8 +423,17 @@ public:
     {
         // LaunchServices activation needs no registration: clicks arrive as
         // QFileOpenEvent (task 4.2 installs the filter). Always "registered".
-        Q_UNUSED(handleArgs);
         Q_UNUSED(openUrl);
+        // open -a / Spotlight on an already-running LSUIElement app sends
+        // applicationShouldHandleReopen instead of a second process; open
+        // Settings so that path is not a dead click. --settings goes through
+        // the same Controller path as the status-item action.
+        installReopenHook([handleArgs = std::move(handleArgs)]() {
+            if (!handleArgs) {
+                return;
+            }
+            handleArgs({QCoreApplication::applicationFilePath(), QStringLiteral("--settings")});
+        });
         return true;
     }
 
