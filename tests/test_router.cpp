@@ -153,6 +153,36 @@ private Q_SLOTS:
         QCOMPARE(d.action, Decision::Action::Pick);
     }
 
+    // A hidden target on the longer key is a deliberate choice, unlike a
+    // dead one: the walk must stop there instead of borrowing the broader
+    // key's browser. github.com/work -> hidden Work profile must not open
+    // in whatever github.com is remembered for.
+    void rememberedHiddenLongKeyDoesNotBorrowShorterKey()
+    {
+        Target work = makeBrowser(QStringLiteral("browser:zen:work"), QStringLiteral("Work"));
+        work.hidden = true;
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal")),
+                              work};
+        Config cfg;
+        cfg.pickerPolicy = PickerPolicy::NoRule;
+        cfg.remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:brave:personal"));
+        cfg.remembered.insert(QStringLiteral("github.com/work"), QStringLiteral("browser:zen:work"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/work/repo");
+        c.host = QStringLiteral("github.com");
+        const Decision d = route(c, targets, cfg);
+        QCOMPARE(d.action, Decision::Action::Pick);
+        QVERIFY(d.reason != QStringLiteral("remembered"));
+        QCOMPARE(d.memoryKey, QStringLiteral("github.com/work"));
+
+        // The forced picker agrees: nothing is suggested.
+        const auto ranked = rankForPicker(c, targets, cfg);
+        for (const auto &row : ranked) {
+            QVERIFY2(!row.suggested, qPrintable(row.id));
+        }
+    }
+
     void pickerWhenNoRule()
     {
         QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true)};

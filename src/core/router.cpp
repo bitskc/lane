@@ -58,12 +58,15 @@ QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &c
 const Target *firstLiveRemembered(const QList<Target> &targets, const Config &config, const QString &matchUrl,
                                   QString *honoredKey)
 {
-    // The longest matching key wins, but only if its target is still
-    // installed and visible. No reload path auto-prunes a dangling entry,
-    // so stopping at the longest key would let a dead browser shadow a
-    // live shorter entry (e.g. "github.com" -> Brave behind
-    // "github.com/bitskc" -> an uninstalled browser) until the user
-    // pressed Clear dead. Walk the matching keys longest-first instead.
+    // The longest matching key wins. If its target no longer exists, no
+    // reload path auto-prunes it, so stopping there would let a dead
+    // browser shadow a live shorter entry (e.g. "github.com" -> Brave
+    // behind "github.com/bitskc" -> an uninstalled browser) until the
+    // user pressed Clear dead; walk to the next matching key instead.
+    // A *hidden* target is different: hiding is a deliberate choice, so
+    // the more specific key still speaks for the user and the walk stops
+    // there with no result (the click falls through to PWA/default, as it
+    // always did) rather than borrowing a broader key's browser.
     QStringList matchingKeys;
     for (auto it = config.remembered.begin(); it != config.remembered.end(); ++it) {
         if (destinationKeyMatches(it.key(), matchUrl)) {
@@ -74,12 +77,16 @@ const Target *firstLiveRemembered(const QList<Target> &targets, const Config &co
               [](const QString &a, const QString &b) { return a.size() > b.size(); });
     for (const QString &key : std::as_const(matchingKeys)) {
         const Target *t = findTarget(targets, config.remembered.value(key));
-        if (t && !t->hidden) {
-            if (honoredKey) {
-                *honoredKey = key;
-            }
-            return t;
+        if (!t) {
+            continue;
         }
+        if (t->hidden) {
+            return nullptr;
+        }
+        if (honoredKey) {
+            *honoredKey = key;
+        }
+        return t;
     }
     return nullptr;
 }
@@ -264,10 +271,11 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
         return d;
     }
 
-    // memoryKey stays the longest matching key (what the Always row shows
-    // and --explain prints) even when that key is dangling; the launch
-    // goes to the first live key, so a dead long entry cannot shadow a
-    // working shorter one.
+    // memoryKey defaults to the longest matching key, even a dangling or
+    // hidden-target one, so a click that does not launch from memory still
+    // shows and offers that key (hold bar, --explain). When a remembered
+    // launch happens it is overwritten with the key that actually won, so
+    // a dead long entry cannot shadow a working shorter one.
     d.memoryKey = destinationKeyMatchesBest(click.matchUrl, config.remembered);
     QString honoredKey;
     if (const Target *t = firstLiveRemembered(targets, config, click.matchUrl, &honoredKey)) {

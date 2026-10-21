@@ -256,17 +256,34 @@ private Q_SLOTS:
         QVERIFY(shown.contains(QStringLiteral("example.com")));
     }
 
-    // Percent-encoded controls decode at display time; the label must
-    // not show a literal newline, and bidi format characters must not
-    // reorder what the user thinks they are opening.
-    void displayStripsDecodedControls()
+    // Percent-encoded controls decode at display time. The label must not
+    // carry a literal newline or a bidi/zero-width character; they come
+    // back out percent-encoded so the label still matches what opens.
+    void displayReencodesDecodedControls()
     {
         const QString nl = Lane::displayUrl(QStringLiteral("https://evil.example/%0AImportant%20notice"));
         QVERIFY(!nl.contains(QLatin1Char('\n')));
+        QVERIFY(nl.contains(QStringLiteral("%0A")));
         QVERIFY(nl.contains(QStringLiteral("Important")));
         const QString rlo = Lane::displayUrl(QStringLiteral("https://evil.example/%E2%80%AEtxt.exe"));
         QVERIFY(!rlo.contains(QChar(0x202e)));
+        QVERIFY(rlo.contains(QStringLiteral("%E2%80%AE")));
         QVERIFY(rlo.contains(QStringLiteral("txt.exe")));
+    }
+
+    void displayReencodesMarksZeroWidthAndBom()
+    {
+        const QChar bad[] = {QChar(0x200e), QChar(0x200f), QChar(0x200b), QChar(0x200c),
+                             QChar(0x200d), QChar(0xfeff)};
+        const QStringList enc{QStringLiteral("%E2%80%8E"), QStringLiteral("%E2%80%8F"),
+                              QStringLiteral("%E2%80%8B"), QStringLiteral("%E2%80%8C"),
+                              QStringLiteral("%E2%80%8D"), QStringLiteral("%EF%BB%BF")};
+        for (int i = 0; i < enc.size(); ++i) {
+            const QString shown = Lane::displayUrl(QStringLiteral("https://evil.example/a") + enc.at(i)
+                                                   + QStringLiteral("b"));
+            QVERIFY2(!shown.contains(bad[i]), qPrintable(enc.at(i)));
+            QVERIFY2(shown.contains(enc.at(i)), qPrintable(shown));
+        }
     }
 
     void o365RejectsUnsafeNested()
@@ -274,12 +291,34 @@ private Q_SLOTS:
         const QString wrapped = QStringLiteral(
             "https://nam.safelinks.protection.outlook.com/?url=file%3A%2F%2F%2Fetc%2Fpasswd");
         QCOMPARE(Lane::unwrapO365(wrapped), wrapped);
+        // Scheme-less values: fromUserInput would invent http:// for these
+        // and isSafeOpenUrl would then accept the fabricated URL, so only
+        // the explicit-scheme gate keeps them wrapped. (An opaque SafeLinks
+        // data= blob such as 05|01|user@contoso.com is NOT a gate test:
+        // isSafeOpenUrl rejects it on its own, so it is not listed here.)
         const QString relativeUrl = QStringLiteral(
             "https://nam.safelinks.protection.outlook.com/?url=example.com%2Fpath");
         QCOMPARE(Lane::unwrapO365(relativeUrl), relativeUrl);
+        const QString bareHostData = QStringLiteral(
+            "https://nam.safelinks.protection.outlook.com/?data=example.com");
+        QCOMPARE(Lane::unwrapO365(bareHostData), bareHostData);
+        // Not a gate test, but the wrapper must still stay wrapped for it.
         const QString opaqueData = QStringLiteral(
             "https://nam.safelinks.protection.outlook.com/?data=05%7C01%7Cuser%40contoso.com");
         QCOMPARE(Lane::unwrapO365(opaqueData), opaqueData);
+    }
+
+    // The scheme gate is case-insensitive and tolerates surrounding
+    // whitespace, since schemes are case-insensitive and wrappers pad.
+    void o365SchemeGateAcceptsCaseAndWhitespace()
+    {
+        const QString upper = QStringLiteral(
+            "https://nam.safelinks.protection.outlook.com/?url=HTTPS%3A%2F%2Fexample.com%2Fa");
+        QVERIFY2(Lane::unwrapO365(upper) != upper, qPrintable(Lane::unwrapO365(upper)));
+        QVERIFY(Lane::isSafeOpenUrl(Lane::unwrapO365(upper)));
+        const QString padded = QStringLiteral(
+            "https://nam.safelinks.protection.outlook.com/?url=%20https%3A%2F%2Fexample.com%2Fa%20");
+        QCOMPARE(Lane::unwrapO365(padded), QStringLiteral("https://example.com/a"));
     }
 
     // SafeLinks nests the real URL percent-encoded. Decoding it fully turns

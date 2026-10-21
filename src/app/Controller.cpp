@@ -589,7 +589,7 @@ void Controller::openUrl(const QString &url, bool forcePicker)
         // gate kept it, with its own activation token.
         if (!dropped.isEmpty()) {
             qWarning("Lane: dropping a queued link open past the cap of %lld: %s",
-                     static_cast<long long>(ClickGate::kMaxPending), qPrintable(dropped));
+                     static_cast<long long>(ClickGate::kMaxPending), qPrintable(hostOf(dropped)));
         }
         return;
     case ClickGate::Entry::Run:
@@ -602,7 +602,7 @@ void Controller::openUrl(const QString &url, bool forcePicker)
         // Newest click wins: the in-flight hold's launch is discarded.
         // Deliberate policy (the user just asked about a different link),
         // but it must not be a silent drop.
-        qInfo() << "Lane: discarding hold on" << m_holdClick.openUrl << "- superseded by a newer click";
+        qInfo() << "Lane: discarding hold on" << hostOf(m_holdClick.openUrl) << "- superseded by a newer click";
         m_holdAnimation->stop();
         hideHold();
     }
