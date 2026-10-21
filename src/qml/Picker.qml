@@ -576,7 +576,7 @@ Window {
 
                         Accessible.role: Accessible.Button
                         Accessible.name: "Copy link"
-                        Accessible.description: (root.mac ? "Copy the current link to the clipboard" : "Copy the current link to the clipboard") + (root.copyHintActive ? (root.mac ? ", shortcut Command C" : ", shortcut Control C") : "")
+                        Accessible.description: "Copy the current link to the clipboard" + (root.copyHintActive ? (root.mac ? ", shortcut Command C" : ", shortcut Control C") : "")
 
                         RowLayout {
                             id: copyRow

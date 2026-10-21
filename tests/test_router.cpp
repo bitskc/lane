@@ -316,6 +316,25 @@ private Q_SLOTS:
         QCOMPARE(ranked.at(0).suggested, false);
     }
 
+    // The forced picker must suggest the same target route() would have
+    // auto-opened: a dangling longer key cannot hide the live shorter one
+    // from the Suggested badge and the initial selection.
+    void pickerSuggestsLiveKeyPastDanglingLongerKey()
+    {
+        QList<Target> targets{makeBrowser(QStringLiteral("browser:zen:def"), QStringLiteral("Default"), true),
+                              makeBrowser(QStringLiteral("browser:brave:personal"), QStringLiteral("Personal"))};
+        Config cfg;
+        cfg.remembered.insert(QStringLiteral("github.com"), QStringLiteral("browser:brave:personal"));
+        cfg.remembered.insert(QStringLiteral("github.com/bitskc"), QStringLiteral("browser:gone:uninstalled"));
+        Click c;
+        c.matchUrl = QStringLiteral("https://github.com/bitskc/lane");
+        const auto ranked = rankForPicker(c, targets, cfg);
+        QCOMPARE(ranked.size(), 2);
+        QCOMPARE(ranked.at(1).id, QStringLiteral("browser:brave:personal"));
+        QCOMPARE(ranked.at(1).suggested, true);
+        QCOMPARE(ranked.at(0).suggested, false);
+    }
+
     // action:copy moved out of the picker list into a footer control
     // (Controller::copyCurrent(), bound to Ctrl+C); it must never appear
     // as a row, whether it would have been reached via the general target

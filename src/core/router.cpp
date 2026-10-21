@@ -55,6 +55,35 @@ QStringList danglingRememberedKeys(const QList<Target> &targets, const Config &c
     return out;
 }
 
+const Target *firstLiveRemembered(const QList<Target> &targets, const Config &config, const QString &matchUrl,
+                                  QString *honoredKey)
+{
+    // The longest matching key wins, but only if its target is still
+    // installed and visible. No reload path auto-prunes a dangling entry,
+    // so stopping at the longest key would let a dead browser shadow a
+    // live shorter entry (e.g. "github.com" -> Brave behind
+    // "github.com/bitskc" -> an uninstalled browser) until the user
+    // pressed Clear dead. Walk the matching keys longest-first instead.
+    QStringList matchingKeys;
+    for (auto it = config.remembered.begin(); it != config.remembered.end(); ++it) {
+        if (destinationKeyMatches(it.key(), matchUrl)) {
+            matchingKeys.append(it.key());
+        }
+    }
+    std::sort(matchingKeys.begin(), matchingKeys.end(),
+              [](const QString &a, const QString &b) { return a.size() > b.size(); });
+    for (const QString &key : std::as_const(matchingKeys)) {
+        const Target *t = findTarget(targets, config.remembered.value(key));
+        if (t && !t->hidden) {
+            if (honoredKey) {
+                *honoredKey = key;
+            }
+            return t;
+        }
+    }
+    return nullptr;
+}
+
 const Target *defaultTarget(const QList<Target> &targets, const Config &config, const QString &activityId)
 {
     // A per-Activity fallback only applies while Activity routing is in
@@ -145,7 +174,7 @@ QList<Target> rankForPicker(const Click &click, const QList<Target> &targets, co
     const auto pwas = pwaMatches(click, targets);
     if (!pwas.isEmpty()) {
         suggestedId = pwas.front()->id;
-    } else if (const Target *t = findTarget(targets, lookupRemembered(click.matchUrl, config.remembered))) {
+    } else if (const Target *t = firstLiveRemembered(targets, config, click.matchUrl)) {
         suggestedId = t->id;
     }
 
@@ -235,31 +264,18 @@ Decision route(Click click, const QList<Target> &targets, const Config &config)
         return d;
     }
 
-    // The longest matching key wins, but only if its target is still
-    // installed and visible. Since 795f8c7 no reload path auto-prunes a
-    // dangling entry, so stopping at the longest key would let a dead
-    // browser shadow a live shorter entry (e.g. "github.com" -> Brave
-    // hidden forever behind "github.com/bitskc" -> an uninstalled
-    // browser) until the user pressed Clear dead. Walk the remaining
-    // matching keys longest-first and honor the first live one.
-    QStringList matchingKeys;
-    for (auto it = config.remembered.begin(); it != config.remembered.end(); ++it) {
-        if (destinationKeyMatches(it.key(), click.matchUrl)) {
-            matchingKeys.append(it.key());
-        }
-    }
-    std::sort(matchingKeys.begin(), matchingKeys.end(),
-              [](const QString &a, const QString &b) { return a.size() > b.size(); });
-    d.memoryKey = matchingKeys.isEmpty() ? QString() : matchingKeys.first();
-    for (const QString &key : std::as_const(matchingKeys)) {
-        const Target *t = findTarget(targets, config.remembered.value(key));
-        if (t && !t->hidden) {
-            d.memoryKey = key;
-            d.action = Decision::Action::Launch;
-            d.target = *t;
-            d.reason = QStringLiteral("remembered");
-            return d;
-        }
+    // memoryKey stays the longest matching key (what the Always row shows
+    // and --explain prints) even when that key is dangling; the launch
+    // goes to the first live key, so a dead long entry cannot shadow a
+    // working shorter one.
+    d.memoryKey = destinationKeyMatchesBest(click.matchUrl, config.remembered);
+    QString honoredKey;
+    if (const Target *t = firstLiveRemembered(targets, config, click.matchUrl, &honoredKey)) {
+        d.memoryKey = honoredKey;
+        d.action = Decision::Action::Launch;
+        d.target = *t;
+        d.reason = QStringLiteral("remembered");
+        return d;
     }
 
     const auto pwas = pwaMatches(click, targets);

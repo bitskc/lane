@@ -16,8 +16,6 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QDir>
-#include <QFileInfo>
 #include <QSocketNotifier>
 #include <cerrno>
 #include <csignal>
@@ -183,17 +181,6 @@ int main(int argc, char **argv)
         QStringList args;
         for (const QJsonValue &v : payload.value(QStringLiteral("args")).toArray()) {
             args << v.toString();
-        }
-        // The secondary ran in the caller's shell; the daemon's CWD is
-        // unrelated. Resolve a forwarded relative path under the caller's
-        // workingDir before fromUserInput can guess it against ours.
-        const QString wd = payload.value(QStringLiteral("workingDir")).toString();
-        if (!wd.isEmpty()) {
-            for (QString &a : args) {
-                if (QDir::isRelativePath(a) && QFileInfo(QDir(wd).filePath(a)).exists()) {
-                    a = QDir(wd).absoluteFilePath(a);
-                }
-            }
         }
         controller.handleArgs(args);
         if (!token.isEmpty()) {
