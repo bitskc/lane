@@ -250,10 +250,23 @@ int main(int argc, char **argv)
     // systemctl restart sends SIGTERM. Without this, the process dies
     // inside the unshorten loop and never runs ~Controller. The pipe hop
     // is what makes the handler allowed to call into Qt.
-    // pipe2 sets close-on-exec atomically. A plain pipe() would leak both
-    // ends into every browser Lane launches. The write end is non-blocking
-    // so a burst of SIGTERMs can never block inside the signal handler.
-    if (::pipe2(g_sigtermPipe, O_CLOEXEC | O_NONBLOCK) != 0) {
+    // Linux: pipe2 sets CLOEXEC+NONBLOCK atomically. macOS advertises pipe2
+    // as a weak libSystem symbol that is NULL on current runtimes, so a
+    // direct call SIGSEGVs at startup (KERN_INVALID_ADDRESS at 0); use
+    // pipe+fcntl there instead. CLOEXEC is set before any browser launch.
+    bool pipeOk = false;
+#ifdef Q_OS_MACOS
+    if (::pipe(g_sigtermPipe) == 0) {
+        ::fcntl(g_sigtermPipe[0], F_SETFD, FD_CLOEXEC);
+        ::fcntl(g_sigtermPipe[1], F_SETFD, FD_CLOEXEC);
+        ::fcntl(g_sigtermPipe[0], F_SETFL, O_NONBLOCK);
+        ::fcntl(g_sigtermPipe[1], F_SETFL, O_NONBLOCK);
+        pipeOk = true;
+    }
+#else
+    pipeOk = (::pipe2(g_sigtermPipe, O_CLOEXEC | O_NONBLOCK) == 0);
+#endif
+    if (!pipeOk) {
         std::fprintf(stderr, "lane: could not set up SIGTERM handling (%s); a restart will not shut down cleanly\n",
                      std::strerror(errno));
     } else {
