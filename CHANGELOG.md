@@ -9,6 +9,13 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Added
 
+- Native macOS app (`Lane.app`) for Apple Silicon: menu-bar status item
+  (`LSUIElement`, no Dock icon), AppKit URL delivery and reopen-to-Settings,
+  `NSWorkspace` default-handler registration for http/https, User
+  Notifications, `SMAppService` login item, overlay that follows the
+  active Space, and a monochrome tray glyph separate from the color app
+  icon. Install via `packaging/mac/bundle.sh` into `/Applications`.
+
 - Lane now watches the default-browser association and notifies you when
   a browser update or another app takes it over, with a one-click
   "Restore Lane" action. It only speaks up if Lane was the default
