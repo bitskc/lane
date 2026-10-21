@@ -12,6 +12,5 @@ bool destinationKeyMatches(const QString &key, const QString &url);
 bool isAppChromeSegment(const QString &segment);
 int suggestedLadderIndex(const QString &url, const Target *target);
 bool pwaShouldAutoOpen(const Target &pwa, const QString &url);
-QString lookupRemembered(const QString &url, const QMap<QString, QString> &remembered);
 
 } // namespace Lane
