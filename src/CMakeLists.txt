@@ -190,7 +190,9 @@ elseif(LANE_MAC_DESKTOP)
     qt_add_resources(lane "icons"
         PREFIX "/icons"
         BASE "${CMAKE_SOURCE_DIR}/data/icons"
-        FILES "${CMAKE_SOURCE_DIR}/data/icons/app.lane.Lane.svg"
+        FILES
+            "${CMAKE_SOURCE_DIR}/data/icons/app.lane.Lane.svg"
+            "${CMAKE_SOURCE_DIR}/data/icons/app.lane.Lane-tray.svg"
     )
 
     target_link_libraries(lane

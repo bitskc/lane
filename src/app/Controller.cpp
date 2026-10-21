@@ -59,10 +59,10 @@ Controller::Controller(QObject *parent)
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this] { m_gate.quit(); });
     reload();
 #ifdef Q_OS_MACOS
-    // No icon theme on macOS: the bundled SVG is the source, and a mask
-    // icon lets the system draw it template-black in light menubars and
-    // template-white in dark ones instead of a fixed-color bitmap.
-    QIcon trayIcon(QStringLiteral(":/icons/app.lane.Lane.svg"));
+    // App icon stays the color highway SVG (Info.plist / .icns). The status
+    // item uses a separate monochrome road glyph so setIsMask stays readable
+    // at menubar size instead of flattening the detailed app art.
+    QIcon trayIcon(QStringLiteral(":/icons/app.lane.Lane-tray.svg"));
     trayIcon.setIsMask(true);
 #else
     QIcon trayIcon = QIcon::fromTheme(QStringLiteral("app.lane.Lane"));
