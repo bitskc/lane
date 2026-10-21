@@ -141,10 +141,12 @@ QString unwrapO365(const QString &raw)
     if (nested.isEmpty()) {
         nested = query.queryItemValue(QStringLiteral("data"), QUrl::FullyDecoded);
     }
-    if (nested.isEmpty()) {
+    const QString trimmedNested = nested.trimmed();
+    if (!trimmedNested.startsWith(QLatin1String("http://"), Qt::CaseInsensitive)
+        && !trimmedNested.startsWith(QLatin1String("https://"), Qt::CaseInsensitive)) {
         return raw;
     }
-    nested = normalizeInput(nested);
+    nested = normalizeInput(trimmedNested);
     if (!isSafeOpenUrl(nested)) {
         return raw;
     }

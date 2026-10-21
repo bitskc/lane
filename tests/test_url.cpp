@@ -259,6 +259,12 @@ private Q_SLOTS:
         const QString wrapped = QStringLiteral(
             "https://nam.safelinks.protection.outlook.com/?url=file%3A%2F%2F%2Fetc%2Fpasswd");
         QCOMPARE(Lane::unwrapO365(wrapped), wrapped);
+        const QString relativeUrl = QStringLiteral(
+            "https://nam.safelinks.protection.outlook.com/?url=example.com%2Fpath");
+        QCOMPARE(Lane::unwrapO365(relativeUrl), relativeUrl);
+        const QString opaqueData = QStringLiteral(
+            "https://nam.safelinks.protection.outlook.com/?data=05%7C01%7Cuser%40contoso.com");
+        QCOMPARE(Lane::unwrapO365(opaqueData), opaqueData);
     }
 
     // SafeLinks nests the real URL percent-encoded. Decoding it fully turns
