@@ -140,9 +140,10 @@ bool &notificationsDenied()
 
 } // namespace Lane
 
-// UNUserNotificationCenter delegate: our notification action buttons
-// carry the dynamic label Qt callers pass; the single "lane.action"
-// category is re-created with the label for each request that has one.
+// UNUserNotificationCenter delegate: action buttons keep a fixed
+// actionIdentifier ("lane-action") so this handler stays simple. Each
+// toast that has a button gets its own category id (lane.action.<key>)
+// so a later toast's label cannot rewrite an earlier toast's button.
 @interface LaneNotificationDelegate : NSObject <UNUserNotificationCenterDelegate>
 @end
 
@@ -424,22 +425,42 @@ private:
         content.title = summary.toNSString();
         content.body = body.toNSString();
 
-        NSString *identifier = @"lane";
+        // Unique request ids so consecutive plain toasts stack instead of
+        // replacing each other under the shared "lane" key.
+        static std::atomic<quint64> toastSeq{0};
+        NSString *identifier =
+            [NSString stringWithFormat:@"toast-%llu",
+                      static_cast<unsigned long long>(toastSeq.fetch_add(1))];
         if (action) {
-            // One category, re-declared per request so the button label
-            // follows the caller's actionLabel instead of being frozen.
+            identifier = notificationActions().add(std::move(action)).toNSString();
+            // Per-request category so the button label tracks this toast.
+            // Keeping a bounded set (same size as NotificationActionMap)
+            // means an older outstanding toast still has its category
+            // registered when a newer one posts.
             UNNotificationAction *btn =
                 [UNNotificationAction actionWithIdentifier:@"lane-action"
                                                      title:actionLabel.toNSString()
                                                    options:UNNotificationActionOptionForeground];
+            NSString *categoryId =
+                [NSString stringWithFormat:@"lane.action.%@", identifier];
             UNNotificationCategory *category =
-                [UNNotificationCategory categoryWithIdentifier:@"lane.action"
+                [UNNotificationCategory categoryWithIdentifier:categoryId
                                                        actions:@[ btn ]
                                              intentIdentifiers:@[]
                                                        options:0];
-            [center setNotificationCategories:[NSSet setWithObject:category]];
-            content.categoryIdentifier = @"lane.action";
-            identifier = notificationActions().add(std::move(action)).toNSString();
+            static NSMutableDictionary *categories = [NSMutableDictionary new];
+            static NSMutableArray *categoryOrder = [NSMutableArray new];
+            [categories setObject:category forKey:categoryId];
+            [categoryOrder addObject:categoryId];
+            while (static_cast<int>(categoryOrder.count)
+                   > NotificationActionMap::kMaxEntries) {
+                NSString *oldest = categoryOrder.firstObject;
+                [categoryOrder removeObjectAtIndex:0];
+                [categories removeObjectForKey:oldest];
+            }
+            [center setNotificationCategories:
+                [NSSet setWithArray:categories.allValues]];
+            content.categoryIdentifier = categoryId;
         }
 
         UNNotificationRequest *request =

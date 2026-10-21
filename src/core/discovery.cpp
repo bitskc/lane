@@ -11,6 +11,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDeadlineTimer>
 #include <QProcess>
 #include <QSettings>
 #include <QHash>
@@ -1316,6 +1317,8 @@ QVariantMap parseXmlPlist(const QByteArray &data)
     return {};
 }
 
+constexpr qsizetype kPlistMaxBytes = 8 * 1024 * 1024;
+
 // Loads an Info.plist as a QVariantMap. XML plists are parsed directly;
 // a binary plist ("bplist" magic) needs conversion through
 // /usr/bin/plutil, which exists only on macOS, so elsewhere a binary
@@ -1326,20 +1329,22 @@ QVariantMap readInfoPlist(const QString &path)
     if (!f.open(QIODevice::ReadOnly)) {
         return {};
     }
-    QByteArray data = f.read(8 * 1024 * 1024);
+    QByteArray data = f.read(kPlistMaxBytes);
     if (data.startsWith(QByteArrayLiteral("bplist"))) {
 #ifdef Q_OS_MACOS
         QProcess plutil;
+        plutil.setProcessChannelMode(QProcess::SeparateChannels);
         plutil.start(QStringLiteral("/usr/bin/plutil"),
                      {QStringLiteral("-convert"), QStringLiteral("xml1"), QStringLiteral("-o"), QStringLiteral("-"),
                       QStringLiteral("--"), path});
-        if (!plutil.waitForFinished(10000) || plutil.exitCode() != 0) {
-            qDebug() << "Lane: skipping" << path << "- plutil could not convert its binary plist";
+        if (!plutil.waitForStarted(2000)) {
+            qDebug() << "Lane: skipping" << path << "- plutil could not start";
             return {};
         }
-        data = plutil.readAllStandardOutput();
-        if (data.size() > 8 * 1024 * 1024) {
-            qDebug() << "Lane: skipping" << path << "- converted plist exceeds 8 MiB";
+        data = readStdoutBounded(plutil, kPlistMaxBytes, 10000);
+        if (data.isEmpty()) {
+            qDebug() << "Lane: skipping" << path
+                     << "- plutil conversion failed, timed out, or exceeded 8 MiB";
             return {};
         }
 #else
@@ -1504,6 +1509,50 @@ QList<Target> actionTargets()
 }
 
 } // namespace
+
+// Drain stdout while the converter runs. Waiting for exit and then
+// calling readAllStandardOutput() would buffer the whole expansion in
+// QProcess before the size check, so a hostile binary plist that
+// expands past kPlistMaxBytes could still spike RSS. Kill once the
+// bound is crossed; the scan then drops the bundle.
+QByteArray readStdoutBounded(QProcess &proc, qsizetype maxBytes, int timeoutMs)
+{
+    QByteArray out;
+    out.reserve(qMin(maxBytes, qsizetype(256 * 1024)));
+    QDeadlineTimer deadline(timeoutMs);
+    while (proc.state() != QProcess::NotRunning) {
+        if (deadline.hasExpired()) {
+            proc.kill();
+            proc.waitForFinished(1000);
+            return {};
+        }
+        const qint64 rem = deadline.remainingTime();
+        // remainingTime is 0 (or -1 once expired) at the edge; kill
+        // rather than busy-spin with waitForReadyRead(0).
+        if (rem <= 0) {
+            proc.kill();
+            proc.waitForFinished(1000);
+            return {};
+        }
+        if (!proc.waitForReadyRead(qMin(100, int(rem)))) {
+            continue;
+        }
+        out.append(proc.readAllStandardOutput());
+        if (out.size() > maxBytes) {
+            proc.kill();
+            proc.waitForFinished(1000);
+            return {};
+        }
+    }
+    out.append(proc.readAllStandardOutput());
+    if (out.size() > maxBytes) {
+        return {};
+    }
+    if (proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
+        return {};
+    }
+    return out;
+}
 
 QString macBundlePathForId(const QString &bundleId)
 {
