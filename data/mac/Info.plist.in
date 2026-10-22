@@ -70,6 +70,10 @@
             <array>
                 <string>http</string>
                 <string>https</string>
+                <!-- lane://open?url=<encoded> unwraps inside Controller; it is
+                     the Shortcuts/Services entry point and never matches a real
+                     web scheme, so it cannot claim anything a user clicks. -->
+                <string>lane</string>
             </array>
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>

@@ -19,6 +19,11 @@
 #endif
 
 #include <QClipboard>
+#ifndef Q_OS_MACOS
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusReply>
+#endif
 #include <QCursor>
 #include <QDateTime>
 #include <QDebug>
@@ -73,7 +78,17 @@ Controller::Controller(QObject *parent)
     // (Qt docs), and Controller is not a widget, so the menu is deleted
     // in the destructor instead.
     auto *menu = new QMenu();
+    // Clipboard open is the first entry so the hot path stays at the top.
+    auto *clipAction = menu->addAction(QStringLiteral("Open clipboard URL"),
+                                       this, [this]() { openClipboardUrl(); });
     menu->addAction(QStringLiteral("Settings"), this, &Controller::openSettings);
+    clipAction->setEnabled(!clipboardUrlCandidate().isEmpty());
+    if (auto *clip = QGuiApplication::clipboard()) {
+        connect(clip, &QClipboard::dataChanged, this, [this, clipAction]() {
+            clipAction->setEnabled(!clipboardUrlCandidate().isEmpty());
+        });
+    }
+    menu->addSeparator();
     menu->addAction(QStringLiteral("Rediscover browsers"), this, &Controller::rediscover);
     m_tray->setContextMenu(menu);
     connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
@@ -531,11 +546,14 @@ void Controller::handleArgs(const QStringList &args)
     bool daemon = false;
     bool forcePicker = false;
     QString url;
+    bool useClipboard = false;
     for (const QString &a : rest) {
         if (a == QLatin1String("--daemon")) {
             daemon = true;
         } else if (a == QLatin1String("--pick") || a == QLatin1String("-p")) {
             forcePicker = true;
+        } else if (a == QLatin1String("--clipboard")) {
+            useClipboard = true;
         } else if (a == QLatin1String("--settings") || a == QLatin1String("--configure")) {
             openSettings();
         } else if (a == QLatin1String("--rediscover")) {
@@ -543,6 +561,10 @@ void Controller::handleArgs(const QStringList &args)
         } else if (!a.startsWith(QLatin1Char('-'))) {
             url = a;
         }
+    }
+    if (useClipboard) {
+        openClipboardUrl(forcePicker);
+        return;
     }
     if (!url.isEmpty()) {
         openUrl(url, forcePicker);
@@ -561,8 +583,61 @@ void Controller::handleArgs(const QStringList &args)
 #endif
 }
 
+void Controller::openClipboardUrl(bool forcePicker)
+{
+    const QString text = clipboardUrlCandidate();
+    if (text.isEmpty()) {
+        qInfo("Lane: --clipboard ignored; clipboard does not hold an http(s) URL");
+        if (m_tray) {
+            m_tray->showMessage(QStringLiteral("Lane"),
+                                QStringLiteral("No URL on the clipboard"),
+                                QSystemTrayIcon::Information, 3000);
+        }
+        return;
+    }
+    openUrl(text, forcePicker);
+}
+
+QString Controller::clipboardUrlCandidate() const
+{
+    QString text;
+    if (auto *clip = QGuiApplication::clipboard()) {
+        text = clip->text().trimmed();
+    }
+#ifndef Q_OS_MACOS
+    // On Plasma Wayland an unfocused process cannot read the selection via
+    // Qt (the compositor only offers it to the focused client). Klipper
+    // keeps a copy and exposes it over D-Bus, so fall back there when Qt
+    // returns empty. macOS pasteboard does not have this restriction.
+    if (text.isEmpty()) {
+        QDBusInterface klipper(QStringLiteral("org.kde.klipper"),
+                               QStringLiteral("/klipper"),
+                               QStringLiteral("org.kde.klipper.klipper"),
+                               QDBusConnection::sessionBus());
+        if (klipper.isValid()) {
+            const QDBusReply<QString> reply = klipper.call(QStringLiteral("getClipboardContents"));
+            if (reply.isValid()) {
+                text = reply.value().trimmed();
+            }
+        }
+    }
+#endif
+    // Same safety gate a routed URL must pass.
+    return isSafeOpenUrl(text) ? text : QString();
+}
+
 void Controller::openUrl(const QString &url, bool forcePicker)
 {
+    // lane:open?url=<encoded> arrives through the registered lane://
+    // scheme (desktop Action on Linux, LaunchServices on macOS). Unwrap
+    // before the ClickGate so the gate never holds a lane:// wrapper as
+    // a "click". unwrapLaneUrl already ran the inner URL through
+    // isSafeOpenUrl; a wrapped value that fails is a silent drop.
+    const QString unwrapped = unwrapLaneUrl(url);
+    if (!unwrapped.isEmpty()) {
+        return openUrl(unwrapped, forcePicker);
+    }
+
     // KDBusService sets XDG_ACTIVATION_TOKEN in Lane's own environment for
     // the duration of the activateRequested/openRequested signal when the
     // click that invoked Lane carried one, and unsets it again right after

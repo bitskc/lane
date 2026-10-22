@@ -40,5 +40,11 @@ QString sanitizedOpenUrl(const QString &raw);
 // The string form of a redirect Location, for the safety check and the
 // click. Lives here so the unshortener and the tests share one rendering.
 QString redirectCandidate(const QUrl &location);
+// Extracts the real URL out of a registered lane://open?url=<encoded>
+// wrapper (opaque "lane:open?url=..." also accepted). Returns empty for
+// a non-lane string, an unrecognized lane path, or an inner URL that
+// fails isSafeOpenUrl — so file:/javascript:/nested wrappers never reach
+// the pipeline.
+QString unwrapLaneUrl(const QString &raw);
 
 } // namespace Lane

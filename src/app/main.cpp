@@ -119,6 +119,7 @@ int main(int argc, char **argv)
     QCommandLineOption settingsOpt(QStringList{QStringLiteral("settings"), QStringLiteral("configure")}, QStringLiteral("Open settings"));
     QCommandLineOption rediscoverOpt(QStringLiteral("rediscover"), QStringLiteral("Reload config and rescan browser targets in the running daemon"));
     QCommandLineOption configPathOpt(QStringLiteral("config-path"), QStringLiteral("Print the config file path and exit"));
+    QCommandLineOption clipboardOpt(QStringLiteral("clipboard"), QStringLiteral("Route the URL currently on the clipboard"));
     parser.addOption(daemonOpt);
     parser.addOption(pickOpt);
     parser.addOption(listOpt);
@@ -126,6 +127,7 @@ int main(int argc, char **argv)
     parser.addOption(settingsOpt);
     parser.addOption(rediscoverOpt);
     parser.addOption(configPathOpt);
+    parser.addOption(clipboardOpt);
     parser.addPositionalArgument(QStringLiteral("url"), QStringLiteral("URL to open"), QStringLiteral("[url]"));
     parser.process(app);
 

@@ -191,6 +191,11 @@ public:
 
     Q_INVOKABLE void handleArgs(const QStringList &args);
     Q_INVOKABLE void openUrl(const QString &url, bool forcePicker = false);
+    // Reads the system clipboard (trimmed) and routes it when it parses
+    // as an http(s) URL; otherwise does nothing (tray notice on Linux,
+    // log line on macOS). Wired to --clipboard, the tray menu entry, and
+    // the Linux desktop Action.
+    Q_INVOKABLE void openClipboardUrl(bool forcePicker = false);
     Q_INVOKABLE void pick(int row);
     Q_INVOKABLE void pickId(const QString &id);
     // Alt+P from the picker: launches the highlighted target's private
@@ -246,6 +251,10 @@ private:
     void reload();
     void persist();
     void applyDecision(const Decision &d);
+    // Returns the trimmed clipboard text when it parses as an http(s)
+    // URL, empty otherwise. Drives the tray action's enabled state and
+    // openClipboardUrl().
+    QString clipboardUrlCandidate() const;
     void showPicker();
     void hidePicker();
     void launch(const Target &target, const QString &reason, const QString &activationToken, const Click &click);
