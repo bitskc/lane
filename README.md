@@ -171,7 +171,13 @@ lane --list                       # print discovered targets
 lane --settings                   # open settings
 lane --configure                  # alias for --settings
 lane --rediscover                 # reload config/rescan via running daemon (starts full process if none)
+lane --clipboard                  # route the URL on the clipboard
 ```
+
+The tray menu's "Open clipboard URL" does the same thing, greyed out when
+the clipboard holds no URL. On KDE the desktop entry exposes it as a
+right-click action too. On macOS you can route from Shortcuts or a script
+with `open "lane://open?url=<encoded-url>"`.
 
 ## Build (CachyOS / Arch)
 

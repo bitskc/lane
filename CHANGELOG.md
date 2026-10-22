@@ -9,6 +9,15 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Added
 
+- Clipboard-to-Lane: "Open clipboard URL" in the tray/status-item menu
+  (greyed when the clipboard holds no URL), `lane --clipboard`, and a
+  Linux desktop Action (right-click Lane in the KDE menu). The clipboard
+  text goes through the same rules/remembered/picker pipeline as a click.
+  On Plasma Wayland, Lane reads via Klipper when the unfocused process
+  cannot see the selection. On macOS, `lane://open?url=<encoded>` is a
+  registered scheme, so a Shortcuts "Get clipboard -> Open URL" flow or
+  `open "lane://open?url=..."` routes through Lane too.
+
 - Lane now watches the default-browser association and notifies you when
   a browser update or another app takes it over, with a one-click
   "Restore Lane" action. It only speaks up if Lane was the default

@@ -10,6 +10,11 @@ Terminal=false
 StartupNotify=true
 DBusActivatable=true
 Categories=Network;WebBrowser;Qt;KDE;
-MimeType=x-scheme-handler/http;x-scheme-handler/https;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/lane;
 Keywords=browser;chooser;profile;pwa;opener;
 X-KDE-Shortcuts=Ctrl+Alt+O
+Actions=Clipboard;
+
+[Desktop Action Clipboard]
+Name=Open clipboard URL
+Exec=@LANE_BIN@ --clipboard

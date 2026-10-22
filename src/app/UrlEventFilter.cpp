@@ -115,7 +115,8 @@ void UrlEventFilter::enqueue(const QUrl &url)
         scheme = inner.scheme().toLower();
         routed = embedded;
     }
-    if (scheme != QLatin1String("http") && scheme != QLatin1String("https")) {
+    if (scheme != QLatin1String("http") && scheme != QLatin1String("https")
+        && scheme != QLatin1String("lane")) {
         qWarning("Lane: ignoring non-web URL from LaunchServices: %s", qPrintable(scheme));
         return;
     }

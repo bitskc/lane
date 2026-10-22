@@ -335,6 +335,29 @@ private Q_SLOTS:
         QCOMPARE(unwrapped, QStringLiteral("https://example.com/a%20b"));
         QVERIFY(Lane::isSafeOpenUrl(unwrapped));
     }
+
+    // lane://open?url=<encoded> (and opaque lane:open?url=...) unwrap to the
+    // real URL. file:, javascript:, nested lane:, and non-open commands are
+    // rejected before the pipeline sees them.
+    void laneSchemeUnwrap()
+    {
+        QCOMPARE(Lane::unwrapLaneUrl(QStringLiteral("lane://open?url=https%3A%2F%2Fgithub.com%2Fbitskc")),
+                 QStringLiteral("https://github.com/bitskc"));
+        QCOMPARE(Lane::unwrapLaneUrl(QStringLiteral("lane:open?url=https%3A%2F%2Fgithub.com%2Fx")),
+                 QStringLiteral("https://github.com/x"));
+        // Nested lane:// inside lane:// is not double-unwrapped: the inner
+        // URL is still lane: scheme, which is not http(s).
+        QVERIFY(Lane::unwrapLaneUrl(QStringLiteral("lane://open?url=lane%3Aopen%3Furl%3Dx")).isEmpty());
+        // file:// and javascript: inner values fail isSafeOpenUrl.
+        QVERIFY(Lane::unwrapLaneUrl(QStringLiteral("lane://open?url=file%3A%2F%2F%2Fetc%2Fpasswd")).isEmpty());
+        QVERIFY(Lane::unwrapLaneUrl(QStringLiteral("lane://open?url=javascript%3Aalert(1)")).isEmpty());
+        // A non-lane string is untouched (returns empty, caller ignores).
+        QVERIFY(Lane::unwrapLaneUrl(QStringLiteral("https://github.com")).isEmpty());
+        // An unknown lane command is not an open call.
+        QVERIFY(Lane::unwrapLaneUrl(QStringLiteral("lane://settings?x=1")).isEmpty());
+        // Bare "lane:" with no url= item yields nothing.
+        QVERIFY(Lane::unwrapLaneUrl(QStringLiteral("lane://open")).isEmpty());
+    }
 };
 
 QTEST_MAIN(UrlTest)

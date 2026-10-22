@@ -371,6 +371,31 @@ QString sanitizedOpenUrl(const QString &raw)
     return url.toString(QUrl::FullyEncoded);
 }
 
+QString unwrapLaneUrl(const QString &raw)
+{
+    // lane:open?url=<encoded> and lane://open?url=<encoded> both reach here:
+    // QUrl parses "lane:" with no slashes as an opaque scheme (path holds
+    // "open?url=..."), and with "//" as authority "open" (host holds
+    // "open"). Either spelling is accepted because Shortcuts.app and
+    // browsers differ on which form they emit.
+    const QUrl url(raw.trimmed(), QUrl::StrictMode);
+    if (!url.isValid() || url.scheme().toLower() != QLatin1String("lane")) {
+        return {};
+    }
+    // Opaque form: "lane:open?url=..." -> scheme set, no authority, path
+    // "open". Authority form: "lane://open?url=..." -> authority "open".
+    // Splitting on authority() matters: the opaque form still has a
+    // scheme, so isRelative() is false for both spellings.
+    const QString command = url.authority().isEmpty() ? url.path() : url.host();
+    if (command.toLower() != QLatin1String("open")) {
+        return {};
+    }
+    const QString inner = QUrlQuery(url).queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
+    // The safety check runs here so a lane:open?url=file:///etc/passwd or
+    // javascript: never reaches the pipeline as a queued click.
+    return isSafeOpenUrl(inner) ? inner : QString();
+}
+
 QString redirectCandidate(const QUrl &location)
 {
     // Encoded for the same reason as sanitizedOpenUrl. PrettyDecoded turned
