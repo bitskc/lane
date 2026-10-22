@@ -4,10 +4,13 @@
 #include "app/DBusActivation.h"
 
 #include <LayerShellQt/Window>
+#include <QClipboard>
 #include <QGuiApplication>
 #include <QProcess>
 
 #include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusReply>
 #include <QDBusMessage>
 #include <QDBusPendingCall>
 #include <QDBusPendingCallWatcher>
@@ -247,6 +250,29 @@ public:
         // to poll across desktops; the animations it would gate are the
         // macOS-cheap ones, so false is the honest answer here.
         return false;
+    }
+
+    QString clipboardText() const override
+    {
+        QString text;
+        if (auto *clip = QGuiApplication::clipboard()) {
+            text = clip->text().trimmed();
+        }
+        // Plasma Wayland: unfocused clients cannot read the selection.
+        // Klipper keeps a copy and exposes it over D-Bus.
+        if (text.isEmpty()) {
+            QDBusInterface klipper(QStringLiteral("org.kde.klipper"),
+                                   QStringLiteral("/klipper"),
+                                   QStringLiteral("org.kde.klipper.klipper"),
+                                   QDBusConnection::sessionBus());
+            if (klipper.isValid()) {
+                const QDBusReply<QString> reply = klipper.call(QStringLiteral("getClipboardContents"));
+                if (reply.isValid()) {
+                    text = reply.value().trimmed();
+                }
+            }
+        }
+        return text;
     }
 };
 

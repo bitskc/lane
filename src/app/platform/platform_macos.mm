@@ -457,6 +457,14 @@ public:
         return false;
     }
 
+    QString clipboardText() const override
+    {
+        // NSPasteboard works for an LSUIElement agent; QClipboard often
+        // returns empty while Lane is not the key app.
+        NSString *s = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
+        return s ? QString::fromNSString(s).trimmed() : QString();
+    }
+
 private:
     static void logSMError(NSError *error)
     {

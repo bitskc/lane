@@ -80,6 +80,13 @@ struct Platform {
     // animations. Linux returns false (no system-wide equivalent to poll).
     virtual bool prefersReducedMotion() const = 0;
 
+    // Raw clipboard/pasteboard text (trimmed). Empty when unavailable.
+    // Linux: Qt clipboard, then Klipper D-Bus (Plasma Wayland unfocused
+    // clients cannot read the selection). macOS: NSPasteboard — Qt's
+    // QClipboard is often empty for an LSUIElement app that is not the
+    // active key app.
+    virtual QString clipboardText() const = 0;
+
     // True after a notification post was refused (macOS "denied" in
     // System Settings). Drives the denied banner in Overview. Default
     // false: Linux toast backends cannot distinguish denied from quiet.

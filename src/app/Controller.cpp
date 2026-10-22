@@ -19,11 +19,6 @@
 #endif
 
 #include <QClipboard>
-#ifndef Q_OS_MACOS
-#include <QDBusConnection>
-#include <QDBusInterface>
-#include <QDBusReply>
-#endif
 #include <QCursor>
 #include <QDateTime>
 #include <QDebug>
@@ -600,29 +595,9 @@ void Controller::openClipboardUrl(bool forcePicker)
 
 QString Controller::clipboardUrlCandidate() const
 {
-    QString text;
-    if (auto *clip = QGuiApplication::clipboard()) {
-        text = clip->text().trimmed();
-    }
-#ifndef Q_OS_MACOS
-    // On Plasma Wayland an unfocused process cannot read the selection via
-    // Qt (the compositor only offers it to the focused client). Klipper
-    // keeps a copy and exposes it over D-Bus, so fall back there when Qt
-    // returns empty. macOS pasteboard does not have this restriction.
-    if (text.isEmpty()) {
-        QDBusInterface klipper(QStringLiteral("org.kde.klipper"),
-                               QStringLiteral("/klipper"),
-                               QStringLiteral("org.kde.klipper.klipper"),
-                               QDBusConnection::sessionBus());
-        if (klipper.isValid()) {
-            const QDBusReply<QString> reply = klipper.call(QStringLiteral("getClipboardContents"));
-            if (reply.isValid()) {
-                text = reply.value().trimmed();
-            }
-        }
-    }
-#endif
-    // Same safety gate a routed URL must pass.
+    // Platform owns the OS read (Klipper on Plasma Wayland, NSPasteboard
+    // on macOS). Same safety gate a routed URL must pass.
+    const QString text = platform()->clipboardText();
     return isSafeOpenUrl(text) ? text : QString();
 }
 
