@@ -375,10 +375,11 @@ QString clipboardUrlCandidate(const QString &raw)
     if (schemeRe.match(trimmed).hasMatch()) {
         return {};
     }
-    const QString firstSegment = trimmed.section(QLatin1Char('/'), 0, 0);
-    const QString host = firstSegment.section(QLatin1Char(':'), 0, 0);
+    static const QRegularExpression hostHeadRe(QStringLiteral("[/?#]"));
+    const QString head = trimmed.section(hostHeadRe, 0, 0);
+    const QString host = head.section(QLatin1Char(':'), 0, 0);
     static const QRegularExpression hostRe(QStringLiteral("^[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+$"));
-    if (!hostRe.match(host).hasMatch()) {
+    if (!hostRe.match(host).hasMatch() || isPrivateOrLocalHost(host)) {
         return {};
     }
     const QString candidate = QStringLiteral("https://") + trimmed;

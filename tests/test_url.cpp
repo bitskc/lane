@@ -84,6 +84,13 @@ private Q_SLOTS:
         QTest::newRow("localhost refused") << QStringLiteral("localhost:8080/x") << QString();
         QTest::newRow("empty") << QString() << QString();
         QTest::newRow("userinfo refused") << QStringLiteral("user@example.com/x") << QString();
+        QTest::newRow("host+query") << QStringLiteral("youtu.be?v=dQw4w9WgXcQ")
+                                    << QStringLiteral("https://youtu.be?v=dQw4w9WgXcQ");
+        QTest::newRow("host+fragment") << QStringLiteral("example.com#section")
+                                       << QStringLiteral("https://example.com#section");
+        QTest::newRow("private IP refused") << QStringLiteral("192.168.1.1/x") << QString();
+        QTest::newRow("loopback refused") << QStringLiteral("127.1/admin") << QString();
+        QTest::newRow("mDNS refused") << QStringLiteral("foo.local") << QString();
     }
     void clipboardCandidate()
     {
