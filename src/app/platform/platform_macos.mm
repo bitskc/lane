@@ -238,16 +238,20 @@ public:
         static LaneNotificationDelegate *delegate = [LaneNotificationDelegate new];
         center.delegate = delegate;
 
-        // All UNUserNotificationCenter completion handlers run on an
-        // Apple-managed queue; the denied flag is read on the GUI thread
-        // and postNotification touches Qt objects, so every piece lands
-        // on the main queue.
+        // The const QString & parameters alias caller temporaries that die
+        // when this function returns; the blocks below run after that, so
+        // the captures must own copies. (Crash: use-after-free inside
+        // QString::toNSString on the completion queue.)
+        const QString summaryCopy = summary;
+        const QString bodyCopy = body;
+        const QString actionLabelCopy = actionLabel;
+        auto actionCopy = std::make_shared<std::function<void()>>(std::move(action));
         [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (settings.authorizationStatus == UNAuthorizationStatusAuthorized
                     || settings.authorizationStatus == UNAuthorizationStatusProvisional) {
                     Lane::notificationsDenied() = false;
-                    postNotification(center, summary, body, actionLabel, action);
+                    postNotification(center, summaryCopy, bodyCopy, actionLabelCopy, *actionCopy);
                     return;
                 }
                 if (settings.authorizationStatus == UNAuthorizationStatusDenied) {
@@ -265,7 +269,7 @@ public:
                         }
                         Lane::notificationsDenied() = !granted;
                         if (granted) {
-                            postNotification(center, summary, body, actionLabel, action);
+                            postNotification(center, summaryCopy, bodyCopy, actionLabelCopy, *actionCopy);
                         }
                     });
                 }];
