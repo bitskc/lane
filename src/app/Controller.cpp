@@ -78,11 +78,15 @@ Controller::Controller(QObject *parent)
                                        this, [this]() { openClipboardUrl(); });
     menu->addAction(QStringLiteral("Settings"), this, &Controller::openSettings);
     clipAction->setEnabled(!clipboardUrlCandidate().isEmpty());
+    const auto refreshClipAction = [this, clipAction]() {
+        clipAction->setEnabled(!clipboardUrlCandidate().isEmpty());
+    };
     if (auto *clip = QGuiApplication::clipboard()) {
-        connect(clip, &QClipboard::dataChanged, this, [this, clipAction]() {
-            clipAction->setEnabled(!clipboardUrlCandidate().isEmpty());
-        });
+        connect(clip, &QClipboard::dataChanged, this, refreshClipAction);
     }
+    // QClipboard::dataChanged does not fire for an LSUIElement agent on
+    // macOS, so the menu item also refreshes when the menu is opened.
+    connect(menu, &QMenu::aboutToShow, this, refreshClipAction);
     menu->addSeparator();
     menu->addAction(QStringLiteral("Rediscover browsers"), this, &Controller::rediscover);
     m_tray->setContextMenu(menu);
