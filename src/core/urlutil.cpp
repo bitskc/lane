@@ -358,6 +358,33 @@ bool isSafeOpenUrl(const QString &raw)
     return true;
 }
 
+QString clipboardUrlCandidate(const QString &raw)
+{
+    const QString trimmed = raw.trimmed();
+    if (trimmed.isEmpty() || trimmed.size() > 8192) {
+        return {};
+    }
+    if (isSafeOpenUrl(trimmed)) {
+        return trimmed;
+    }
+    // An explicit non-http scheme stays refused (file:, javascript:,
+    // data:). Promote only a bare host[/path][?q][#f]: the first segment
+    // must look like a dotted hostname, optionally with a port, so plain
+    // prose and localhost names do not enable the tray action.
+    static const QRegularExpression schemeRe(QStringLiteral("^[A-Za-z][A-Za-z0-9+.-]*:(//|[A-Za-z])"));
+    if (schemeRe.match(trimmed).hasMatch()) {
+        return {};
+    }
+    const QString firstSegment = trimmed.section(QLatin1Char('/'), 0, 0);
+    const QString host = firstSegment.section(QLatin1Char(':'), 0, 0);
+    static const QRegularExpression hostRe(QStringLiteral("^[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+$"));
+    if (!hostRe.match(host).hasMatch()) {
+        return {};
+    }
+    const QString candidate = QStringLiteral("https://") + trimmed;
+    return isSafeOpenUrl(candidate) ? candidate : QString();
+}
+
 QString sanitizedOpenUrl(const QString &raw)
 {
     if (!isSafeOpenUrl(raw)) {

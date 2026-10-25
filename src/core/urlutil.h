@@ -34,6 +34,11 @@ bool urlInScope(const QString &url, const QString &scope);
 bool pathWithinPrefix(const QString &urlPath, const QString &prefixPath,
                        Qt::CaseSensitivity cs = Qt::CaseSensitive);
 bool isSafeOpenUrl(const QString &raw);
+// The openable URL a clipboard/pasteboard string represents: the string
+// itself when it already passes isSafeOpenUrl, or https:// + string when
+// it is an unmistakable bare host[/path] (dotted hostname). Anything else
+// returns empty. Shared by the tray/status-item action and --clipboard.
+QString clipboardUrlCandidate(const QString &raw);
 bool isPrivateOrLocalHost(const QString &host);
 QString displayUrl(const QString &raw);
 QString sanitizedOpenUrl(const QString &raw);

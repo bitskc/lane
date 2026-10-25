@@ -57,6 +57,41 @@ private Q_SLOTS:
         QVERIFY(!Lane::isSafeOpenUrl(QStringLiteral("https://github.com/x\nhttps://evil.test")));
     }
 
+    // The clipboard feature promotes a bare host/path to an https URL;
+    // schemed input must survive unchanged and non-URL text must stay
+    // refused. Exercises the gate the tray action and --clipboard share.
+    void clipboardCandidate_data()
+    {
+        QTest::addColumn<QString>("raw");
+        QTest::addColumn<QString>("expected");
+
+        QTest::newRow("bare host/path") << QStringLiteral("developer.apple.com/enroll")
+                                        << QStringLiteral("https://developer.apple.com/enroll");
+        QTest::newRow("bare host") << QStringLiteral("github.com") << QStringLiteral("https://github.com");
+        QTest::newRow("https passthrough") << QStringLiteral("https://github.com/bitskc/lane")
+                                           << QStringLiteral("https://github.com/bitskc/lane");
+        QTest::newRow("http passthrough") << QStringLiteral("http://example.com/x?y=1")
+                                          << QStringLiteral("http://example.com/x?y=1");
+        QTest::newRow("host:port") << QStringLiteral("example.com:8443/x")
+                                   << QStringLiteral("https://example.com:8443/x");
+        QTest::newRow("trimmed") << QStringLiteral("  gitlab.com/a  ")
+                                 << QStringLiteral("https://gitlab.com/a");
+        QTest::newRow("file scheme refused") << QStringLiteral("file:///etc/passwd") << QString();
+        QTest::newRow("javascript refused") << QStringLiteral("javascript:alert(1)") << QString();
+        QTest::newRow("data refused") << QStringLiteral("data:text/html,hi") << QString();
+        QTest::newRow("plain prose refused") << QStringLiteral("pick this up later") << QString();
+        QTest::newRow("bare word refused") << QStringLiteral("shopping") << QString();
+        QTest::newRow("localhost refused") << QStringLiteral("localhost:8080/x") << QString();
+        QTest::newRow("empty") << QString() << QString();
+        QTest::newRow("userinfo refused") << QStringLiteral("user@example.com/x") << QString();
+    }
+    void clipboardCandidate()
+    {
+        QFETCH(QString, raw);
+        QFETCH(QString, expected);
+        QCOMPARE(Lane::clipboardUrlCandidate(raw), expected);
+    }
+
     // The real entry path is normalizeInput then isSafeOpenUrl (pipeline.cpp
     // normalizes the raw click, router.cpp gates the result). Testing
     // isSafeOpenUrl alone passed while normalizeInput repaired the attack

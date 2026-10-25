@@ -600,9 +600,10 @@ void Controller::openClipboardUrl(bool forcePicker)
 QString Controller::clipboardUrlCandidate() const
 {
     // Platform owns the OS read (Klipper on Plasma Wayland, NSPasteboard
-    // on macOS). Same safety gate a routed URL must pass.
-    const QString text = platform()->clipboardText();
-    return isSafeOpenUrl(text) ? text : QString();
+    // on macOS). Scheme-less host/path strings are promoted here so
+    // "developer.apple.com/enroll" on the pasteboard behaves like the
+    // same text routed through normalizeInput on the click path.
+    return Lane::clipboardUrlCandidate(platform()->clipboardText());
 }
 
 void Controller::openUrl(const QString &url, bool forcePicker)
