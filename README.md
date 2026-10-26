@@ -175,9 +175,18 @@ lane --clipboard                  # route the URL on the clipboard
 ```
 
 The tray menu's "Open clipboard URL" does the same thing, greyed out when
-the clipboard holds no URL. On KDE the desktop entry exposes it as a
-right-click action too. On macOS you can route from Shortcuts or a script
-with `open "lane://open?url=<encoded-url>"`.
+the clipboard holds no URL.
+
+### KDE Plasma Actions & Shortcuts
+
+On KDE Plasma, Lane exposes desktop actions (accessible via right-click in
+Kickoff / Task Manager, searchable in KRunner, and customizable in System
+Settings → Shortcuts → Applications → Lane):
+
+- **Open Clipboard URL** (`Ctrl+Alt+V`): routes the URL on the clipboard
+- **Open Clipboard URL in Picker** (`Ctrl+Alt+Shift+V`): forces the picker open for the clipboard URL
+- **Open Lane Settings** (`Ctrl+Alt+,`): opens the Settings window
+- **Rescan Browser Targets**: reloads config and re-scans browser profiles
 
 ### Raycast (macOS)
 

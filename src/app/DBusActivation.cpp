@@ -71,11 +71,9 @@ public Q_SLOTS:
 
     void ActivateAction(const QString &action_name, const QVariantList &parameter, const QVariantMap &platform_data)
     {
-        Q_UNUSED(action_name);
         Q_UNUSED(parameter);
-        // Lane exposes no custom actions today; treat it as a plain
-        // activation, same as Activate.
-        withActivationToken(platform_data, [this]() { m_handleArgs({}); });
+        const QStringList args = argsForAction(action_name);
+        withActivationToken(platform_data, [this, &args]() { m_handleArgs(args); });
     }
 
 private:
@@ -153,6 +151,23 @@ bool registerActivation(std::function<void(const QStringList &)> handleArgs,
     return true;
 }
 
+QStringList argsForAction(const QString &actionName)
+{
+    if (actionName == QLatin1String("Clipboard")) {
+        return {QStringLiteral("lane"), QStringLiteral("--clipboard")};
+    }
+    if (actionName == QLatin1String("ClipboardPicker")) {
+        return {QStringLiteral("lane"), QStringLiteral("--clipboard"), QStringLiteral("-p")};
+    }
+    if (actionName == QLatin1String("Settings")) {
+        return {QStringLiteral("lane"), QStringLiteral("--settings")};
+    }
+    if (actionName == QLatin1String("Rescan")) {
+        return {QStringLiteral("lane"), QStringLiteral("--rediscover")};
+    }
+    return {QStringLiteral("lane")};
+}
 } // namespace Lane
+
 
 #include "DBusActivation.moc"

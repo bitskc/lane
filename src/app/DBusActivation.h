@@ -32,4 +32,8 @@ namespace Lane
 bool registerActivation(std::function<void(const QStringList &args)> handleArgs,
                         std::function<void(const QString &url)> openUrl);
 
+// Maps a freedesktop / KDE desktop action name (from .desktop Actions) to
+// the corresponding command-line argument list.
+QStringList argsForAction(const QString &actionName);
+
 } // namespace Lane
