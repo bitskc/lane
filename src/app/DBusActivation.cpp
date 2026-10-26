@@ -180,12 +180,11 @@ QStringList argsForAction(const QString &actionName)
     } else {
         // Unknown action: degrade to a plain Activate, but leave a trace so
         // a typo'd .desktop file or unmapped new action is diagnosable.
+        // The name is caller-controlled; bound it before logging.
         qWarning("Lane: unknown D-Bus action '%s'; treating as plain activation",
-                 qUtf8Printable(actionName));
+                 qUtf8Printable(actionName.left(64)));
     }
     return args;
 }
 } // namespace Lane
-
-
 #include "DBusActivation.moc"

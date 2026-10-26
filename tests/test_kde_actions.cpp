@@ -2,13 +2,77 @@
 #include <QDBusMessage>
 #include <QFile>
 #include <QKeySequence>
-#include <QProcess>
 #include <QStringList>
 #include <QTest>
+
+#include <cstdio>
+#include <cstdlib>
+#include <csignal>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "../src/app/DBusActivation.h"
 
 using namespace Lane;
+
+namespace
+{
+
+// The D-Bus test needs a session bus whose address is in the environment
+// BEFORE QCoreApplication/QApplication exists: QDBusConnection::sessionBus()
+// caches its connection, so touching it before qputenv would attach every
+// later call (including registerActivation's name claim) to the real user
+// bus. Spawn a private dbus-daemon in a global constructor — it runs before
+// main — and kill it in the destructor.
+struct PrivateBus {
+    PrivateBus()
+    {
+        // --print-pid emits "<pid>"; read it from a temp file alongside
+        // stdout which carries the address.
+        FILE *fp = popen("dbus-daemon --session --fork --print-address --print-pid", "r");
+        if (!fp) {
+            return;
+        }
+        char buf[512];
+        if (!fgets(buf, sizeof(buf), fp)) {
+            pclose(fp);
+            return;
+        }
+        address = QString::fromLatin1(buf).trimmed();
+        if (!fgets(buf, sizeof(buf), fp)) {
+            pclose(fp);
+            return;
+        }
+        pid = QString::fromLatin1(buf).trimmed().toLong();
+        pclose(fp);
+        if (!address.isEmpty()) {
+            qputenv("DBUS_SESSION_BUS_ADDRESS", address.toUtf8());
+        }
+    }
+    ~PrivateBus()
+    {
+        if (pid > 0) {
+            kill(static_cast<pid_t>(pid), SIGTERM);
+        }
+    }
+    QString address;
+    long pid = -1;
+};
+
+PrivateBus g_bus;
+
+void callAction(const QString &name)
+{
+    QDBusMessage m = QDBusMessage::createMethodCall(
+        QStringLiteral("app.lane.Lane"), QStringLiteral("/app/lane/Lane"),
+        QStringLiteral("org.freedesktop.Application"),
+        QStringLiteral("ActivateAction"));
+    m << name << QVariantList() << QVariantMap();
+    QDBusConnection::sessionBus().call(m);
+    qApp->processEvents();
+}
+
+} // namespace
 
 class KdeActionsTest : public QObject
 {
@@ -40,39 +104,17 @@ private Q_SLOTS:
 
     void activateActionRoutesMappedArgvOverDBus()
     {
-        // End-to-end: a real ActivateAction call on a private session bus
+        // End-to-end: a real ActivateAction call on the private session bus
         // must deliver the mapped argv to handleArgs. Without this, a
         // revert of ActivateAction to m_handleArgs({}) leaves every
-        // other test green.
-        QProcess daemon;
-        daemon.start(QStringLiteral("dbus-daemon"),
-                     {QStringLiteral("--session"), QStringLiteral("--print-address"), QStringLiteral("--nofork")});
-        if (!daemon.waitForStarted()) {
-            QSKIP("dbus-daemon not available; cannot run D-Bus round-trip test");
-        }
-        QVERIFY(daemon.waitForReadyRead(5000));
-        const QString address = QString::fromLatin1(daemon.readLine()).trimmed();
-        QVERIFY(!address.isEmpty());
-
-        QDBusConnection bus = QDBusConnection::connectToBus(address, QStringLiteral("kdetest"));
-        QVERIFY(bus.isConnected());
-        qputenv("DBUS_SESSION_BUS_ADDRESS", address.toUtf8());
-        QDBusConnection::disconnectFromBus(QStringLiteral("kdetest"));
+        // other test green. The bus was spawned before QApplication, so
+        // sessionBus() can only ever mean our private daemon.
+        QVERIFY2(!g_bus.address.isEmpty(), "dbus-daemon not available; cannot run D-Bus round-trip test");
 
         QStringList seen;
         QVERIFY(registerActivation(
             [&seen](const QStringList &a) { seen << a.join(QLatin1Char(' ')); },
             [](const QString &) {}));
-
-        auto callAction = [&seen](const QString &name) {
-            QDBusMessage m = QDBusMessage::createMethodCall(
-                QStringLiteral("app.lane.Lane"), QStringLiteral("/app/lane/Lane"),
-                QStringLiteral("org.freedesktop.Application"),
-                QStringLiteral("ActivateAction"));
-            m << name << QVariantList() << QVariantMap();
-            QDBusConnection::sessionBus().call(m);
-            qApp->processEvents();
-        };
 
         callAction(QStringLiteral("Clipboard"));
         callAction(QStringLiteral("Settings"));
@@ -84,9 +126,6 @@ private Q_SLOTS:
         QCOMPARE(seen, QStringList({QStringLiteral("lane --clipboard"),
                                     QStringLiteral("lane --settings"),
                                     QStringLiteral("lane")}));
-
-        daemon.terminate();
-        daemon.waitForFinished(2000);
     }
 
     void desktopFileDeclaresAllActionsAndShortcuts()
@@ -131,6 +170,50 @@ private Q_SLOTS:
         const QHash<QString, QString> rescan = groups.value(QStringLiteral("Desktop Action Rescan"));
         QCOMPARE(rescan.value(QStringLiteral("Exec")), QStringLiteral("@LANE_BIN@ --rediscover"));
         QVERIFY(!rescan.contains(QStringLiteral("X-KDE-Shortcuts")));
+    }
+
+    void desktopExecArgsMatchActivateActionMapping()
+    {
+        // The .desktop Exec path and the D-Bus ActivateAction path must
+        // deliver the same argv for every declared action. argsForAction's
+        // comment claims this test enforces the sync; only a real
+        // cross-check does that. For each action group, strip the
+        // @LANE_BIN@ prefix from Exec and compare with argsForAction
+        // minus its argv[0].
+        QFile file(QStringLiteral(LANE_SOURCE_ROOT) + QStringLiteral("/data/app.lane.Lane.desktop.in"));
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString text = QString::fromUtf8(file.readAll());
+
+        const QStringList actionNames = {
+            QStringLiteral("Clipboard"),
+            QStringLiteral("ClipboardPicker"),
+            QStringLiteral("Settings"),
+            QStringLiteral("Rescan"),
+        };
+
+        for (const QString &name : actionNames) {
+            const QString group = QStringLiteral("[Desktop Action ") + name + QLatin1Char(']');
+            const int gstart = text.indexOf(group);
+            QVERIFY2(gstart >= 0, qPrintable(QStringLiteral("missing group %1").arg(group)));
+            const int gend = text.indexOf(QLatin1Char('['), gstart + group.size());
+            const QString body = (gend < 0) ? text.mid(gstart) : text.mid(gstart, gend - gstart);
+            QString exec;
+            for (const QString &line : body.split(QLatin1Char('\n'))) {
+                if (line.startsWith(QLatin1String("Exec="))) {
+                    exec = line.mid(5).trimmed();
+                    break;
+                }
+            }
+            QVERIFY2(!exec.isEmpty(), qPrintable(QStringLiteral("no Exec in %1").arg(group)));
+            QVERIFY2(exec.startsWith(QLatin1String("@LANE_BIN@")),
+                     qPrintable(QStringLiteral("Exec does not start with @LANE_BIN@ in %1").arg(group)));
+            const QStringList execArgs = exec.mid(QLatin1String("@LANE_BIN@").size()).trimmed().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+
+            QStringList mapped = argsForAction(name);
+            QVERIFY(!mapped.isEmpty());
+            mapped.removeFirst(); // drop argv[0]
+            QCOMPARE(mapped, execArgs);
+        }
     }
 
     void shortcutsParseCleanlyInKGlobalAccel()

@@ -10,8 +10,8 @@
 #include "platform/platform.h"
 #include "core/pipeline.h"
 
-#include <QHash>
 #include <QElapsedTimer>
+#include <QHash>
 #include <QObject>
 #include <QPointer>
 #include <QQmlApplicationEngine>
@@ -364,9 +364,10 @@ private:
 
     // Rate-limit for rediscover(): every caller (tray, --rediscover argv,
     // D-Bus Rescan action, second-instance CommandLine) funnels here, and
-    // any session-bus client can spam it; collapse bursts to one rescan
-    // per window (see rediscover() in Controller.cpp).
+    // any session-bus client can spam it; bursts coalesce into one trailing
+    // rescan per window (see rediscover() in Controller.cpp).
     QElapsedTimer m_rediscoverTimer;
+    bool m_rediscoverPending = false;
 
     // True until the first interaction completes (pick, launch, or a
     // first launch with no link): opens Settings once, per decision D2's

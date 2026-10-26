@@ -853,18 +853,34 @@ void Controller::openSettings()
 void Controller::rediscover()
 {
     // Remote callers (D-Bus Rescan action, CommandLine argv from a second
-    // instance) can spam this. Collapse bursts: one rescan per 2s window.
-    // The first call always runs (timer starts invalid).
+    // instance) can spam this. Bursts coalesce: a call inside the window
+    // schedules one trailing rescan at the window's end rather than being
+    // dropped, so "edit config; lane --rediscover" never silently no-ops.
     constexpr qint64 kRediscoverMinIntervalMs = 2000;
     if (m_rediscoverTimer.isValid() && m_rediscoverTimer.elapsed() < kRediscoverMinIntervalMs) {
-        qInfo("Lane: rediscover request ignored (rate-limited)");
+        if (!m_rediscoverPending) {
+            m_rediscoverPending = true;
+            const qint64 remaining = kRediscoverMinIntervalMs - m_rediscoverTimer.elapsed();
+            QTimer::singleShot(remaining, this, [self = QPointer<Controller>(this)]() {
+                if (!self) {
+                    return;
+                }
+                self->m_rediscoverPending = false;
+                // The timer is past the window now; this recursive call
+                // takes the immediate path below.
+                self->rediscover();
+            });
+            qInfo("Lane: rediscover request queued (rate-limited)");
+        }
         return;
     }
-    m_rediscoverTimer.start();
-    // Deferred while a click is being resolved, refused at quit.
+    // Deferred while a click is being resolved, refused at quit. Only a
+    // rescan the gate accepts consumes the window; a deferred or refused
+    // request does not, so the deferred replay isn't dropped by it.
     if (!m_gate.requestRediscover()) {
         return;
     }
+    m_rediscoverTimer.start();
     reload();
 }
 
