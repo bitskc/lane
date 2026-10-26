@@ -365,7 +365,7 @@ private:
     // Rate-limit for rediscover(): every caller (tray, --rediscover argv,
     // D-Bus Rescan action, second-instance CommandLine) funnels here, and
     // any session-bus client can spam it; collapse bursts to one rescan
-    // per kRediscoverMinInterval.
+    // per window (see rediscover() in Controller.cpp).
     QElapsedTimer m_rediscoverTimer;
 
     // True until the first interaction completes (pick, launch, or a
