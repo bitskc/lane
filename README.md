@@ -185,7 +185,7 @@ Settings → Shortcuts → Applications → Lane):
 
 - **Open Clipboard URL** (`Ctrl+Alt+V`): routes the URL on the clipboard
 - **Open Clipboard URL in Picker** (`Ctrl+Alt+Shift+V`): forces the picker open for the clipboard URL
-- **Open Lane Settings** (`Ctrl+Alt+,`): opens the Settings window
+- **Open Lane Settings** (`Ctrl+Alt+S`): opens the Settings window
 - **Rescan Browser Targets**: reloads config and re-scans browser profiles
 
 ### Raycast (macOS)

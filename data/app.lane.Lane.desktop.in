@@ -31,7 +31,7 @@ X-KDE-Shortcuts=Ctrl+Alt+Shift+V
 Name=Open Lane Settings
 Exec=@LANE_BIN@ --settings
 Icon=configure
-X-KDE-Shortcuts=Ctrl+Alt+,
+X-KDE-Shortcuts=Ctrl+Alt+S
 
 [Desktop Action Rescan]
 Name=Rescan Browser Targets

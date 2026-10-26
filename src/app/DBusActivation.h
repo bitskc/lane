@@ -14,11 +14,11 @@ namespace Lane
 // /MainApplication (parity with KDBusService's own export, verified via
 // qdbus6 introspection of the previous build).
 //
-// `handleArgs` is invoked for CommandLine's argv, and for Activate/
-// ActivateAction (which carry no argv of their own, so it is called with
-// an empty list - the same "no args" shape Controller::handleArgs already
-// handles for a plain daemon start). `openUrl` is invoked once per URI for
-// Open.
+// `handleArgs` is invoked for CommandLine's argv, for Activate (called
+// with an empty list - the same "no args" shape Controller::handleArgs
+// already handles for a plain daemon start), and for ActivateAction (called
+// with the argv mapped from the desktop action name by argsForAction).
+// `openUrl` is invoked once per URI for Open.
 //
 // Each handler sets XDG_ACTIVATION_TOKEN from platform_data
 // ["activation-token"] (falling back to ["desktop-startup-id"]) for the
