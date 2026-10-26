@@ -179,6 +179,23 @@ the clipboard holds no URL. On KDE the desktop entry exposes it as a
 right-click action too. On macOS you can route from Shortcuts or a script
 with `open "lane://open?url=<encoded-url>"`.
 
+### Raycast (macOS)
+
+Ready-made script commands live in `packaging/mac/raycast/`. Add that
+directory in Raycast → Extensions → "Add Script Directory" and you get:
+
+| Command | What it does |
+|---|---|
+| **Open Clipboard URL in Lane** | `lane --clipboard`: route the URL on the clipboard |
+| **Open URL in Lane** | `lane <url>`: takes a URL argument; bare `host/path` is promoted to `https://` |
+| **Open Lane Settings** | `lane --settings` |
+| **Rescan Lane Targets** | `lane --rediscover`: reload config and re-scan browsers |
+
+Each script calls `/Applications/Lane.app/Contents/MacOS/lane` directly,
+so the command forwards to the already-running instance (no cold start).
+They also replace the status-item menu if your menu bar is crowded
+enough that macOS hides Lane's icon.
+
 ## Build (CachyOS / Arch)
 
 For a system-wide install, use the PKGBUILD in `packaging/`:
