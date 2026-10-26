@@ -11,6 +11,7 @@
 #include "core/pipeline.h"
 
 #include <QHash>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QPointer>
 #include <QQmlApplicationEngine>
@@ -360,6 +361,12 @@ private:
     // which another link, --rediscover, --settings or a quit can arrive;
     // ClickGate decides what each does and Controller performs it.
     ClickGate m_gate;
+
+    // Rate-limit for rediscover(): every caller (tray, --rediscover argv,
+    // D-Bus Rescan action, second-instance CommandLine) funnels here, and
+    // any session-bus client can spam it; collapse bursts to one rescan
+    // per kRediscoverMinInterval.
+    QElapsedTimer m_rediscoverTimer;
 
     // True until the first interaction completes (pick, launch, or a
     // first launch with no link): opens Settings once, per decision D2's

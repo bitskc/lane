@@ -852,6 +852,15 @@ void Controller::openSettings()
 
 void Controller::rediscover()
 {
+    // Remote callers (D-Bus Rescan action, CommandLine argv from a second
+    // instance) can spam this. Collapse bursts: one rescan per 2s window.
+    // The first call always runs (timer starts invalid).
+    constexpr qint64 kRediscoverMinIntervalMs = 2000;
+    if (m_rediscoverTimer.isValid() && m_rediscoverTimer.elapsed() < kRediscoverMinIntervalMs) {
+        qInfo("Lane: rediscover request ignored (rate-limited)");
+        return;
+    }
+    m_rediscoverTimer.start();
     // Deferred while a click is being resolved, refused at quit.
     if (!m_gate.requestRediscover()) {
         return;

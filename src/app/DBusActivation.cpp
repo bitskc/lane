@@ -19,15 +19,25 @@ namespace
 // Controller::openUrl's own env-token read depends on.
 void withActivationToken(const QVariantMap &platformData, const std::function<void()> &fn)
 {
+    // fn() must run synchronously inside this call: the env var is only set
+    // for its duration.
     QString token = platformData.value(QStringLiteral("activation-token")).toString();
     if (token.isEmpty()) {
         token = platformData.value(QStringLiteral("desktop-startup-id")).toString();
     }
-    if (!token.isEmpty()) {
-        qputenv("XDG_ACTIVATION_TOKEN", token.toUtf8());
+    if (token.isEmpty()) {
+        fn();
+        return;
     }
+    const QByteArray previous = qgetenv("XDG_ACTIVATION_TOKEN");
+    const bool hadPrevious = qEnvironmentVariableIsSet("XDG_ACTIVATION_TOKEN");
+    qputenv("XDG_ACTIVATION_TOKEN", token.toUtf8());
     fn();
-    if (!token.isEmpty()) {
+    // Restore any pre-existing value; a nested activation (e.g. a modal
+    // Settings event loop) must not clobber the outer call's token.
+    if (hadPrevious) {
+        qputenv("XDG_ACTIVATION_TOKEN", previous);
+    } else {
         qunsetenv("XDG_ACTIVATION_TOKEN");
     }
 }
@@ -73,7 +83,7 @@ public Q_SLOTS:
     {
         Q_UNUSED(parameter);
         const QStringList args = argsForAction(action_name);
-        withActivationToken(platform_data, [this, &args]() { m_handleArgs(args); });
+        withActivationToken(platform_data, [this, args]() { m_handleArgs(args); });
     }
 
 private:
@@ -151,21 +161,29 @@ bool registerActivation(std::function<void(const QStringList &)> handleArgs,
     return true;
 }
 
+// Maps a .desktop [Desktop Action X] group key to the argv the action's
+// Exec= line passes. Action names must stay in sync with Actions= and the
+// group names in data/app.lane.Lane.desktop.in; test_kde_actions enforces it.
+// argv[0] is always "lane": Controller::handleArgs strips index 0
+// unconditionally, so it only ever sees the real arguments.
 QStringList argsForAction(const QString &actionName)
 {
+    QStringList args{QStringLiteral("lane")};
     if (actionName == QLatin1String("Clipboard")) {
-        return {QStringLiteral("lane"), QStringLiteral("--clipboard")};
+        args << QStringLiteral("--clipboard");
+    } else if (actionName == QLatin1String("ClipboardPicker")) {
+        args << QStringLiteral("--clipboard") << QStringLiteral("-p");
+    } else if (actionName == QLatin1String("Settings")) {
+        args << QStringLiteral("--settings");
+    } else if (actionName == QLatin1String("Rescan")) {
+        args << QStringLiteral("--rediscover");
+    } else {
+        // Unknown action: degrade to a plain Activate, but leave a trace so
+        // a typo'd .desktop file or unmapped new action is diagnosable.
+        qWarning("Lane: unknown D-Bus action '%s'; treating as plain activation",
+                 qUtf8Printable(actionName));
     }
-    if (actionName == QLatin1String("ClipboardPicker")) {
-        return {QStringLiteral("lane"), QStringLiteral("--clipboard"), QStringLiteral("-p")};
-    }
-    if (actionName == QLatin1String("Settings")) {
-        return {QStringLiteral("lane"), QStringLiteral("--settings")};
-    }
-    if (actionName == QLatin1String("Rescan")) {
-        return {QStringLiteral("lane"), QStringLiteral("--rediscover")};
-    }
-    return {QStringLiteral("lane")};
+    return args;
 }
 } // namespace Lane
 

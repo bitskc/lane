@@ -175,7 +175,8 @@ lane --clipboard                  # route the URL on the clipboard
 ```
 
 The tray menu's "Open clipboard URL" does the same thing, greyed out when
-the clipboard holds no URL.
+the clipboard holds no URL. On macOS you can route from Shortcuts or a
+script with `open "lane://open?url=<encoded-url>"`.
 
 ### KDE Plasma Actions & Shortcuts
 
