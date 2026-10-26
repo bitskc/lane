@@ -181,21 +181,34 @@ with `open "lane://open?url=<encoded-url>"`.
 
 ### Raycast (macOS)
 
-Ready-made script commands live in `packaging/mac/raycast/`. Add that
-directory in Raycast → Extensions → "Add Script Directory" and you get:
+Two ways to control Lane from Raycast (especially helpful when a crowded
+menu bar hides the status item):
 
-| Command | What it does |
-|---|---|
-| **Open Clipboard URL in Lane** | `lane --clipboard`: route the URL on the clipboard |
-| **Open URL in Lane** | `lane <url>`: takes a URL argument; bare `host/path` is promoted to `https://` |
-| **Open Lane Settings** | `lane --settings` |
-| **Rescan Lane Targets** | `lane --rediscover`: reload config and re-scan browsers |
+#### 1. Native Raycast Extension (recommended)
 
-Each script calls `/Applications/Lane.app/Contents/MacOS/lane` directly,
-so the command forwards to the already-running instance (no cold start).
-They also replace the status-item menu if your menu bar is crowded
-enough that macOS hides Lane's icon.
+A full TypeScript extension lives in `packaging/mac/raycast-extension/`.
+To install it in one command:
 
+```bash
+packaging/mac/raycast-extension/install.sh
+```
+
+Raycast registers it immediately under Developer Extensions. The extension
+stays installed in Raycast permanently.
+
+Or manually: `cd packaging/mac/raycast-extension && npm install && npm run dev`.
+
+Commands:
+- **Open Clipboard URL in Lane**: routes the clipboard URL through Lane
+- **Open URL in Lane**: native Raycast prompt with argument field (bare hosts auto-promote to `https://`)
+- **Open Lane Settings**: brings up the Lane Settings window
+- **Rescan Lane Targets**: reload config and re-scan browser profiles with HUD confirmation
+
+#### 2. Standalone Script Commands (zero dependencies)
+
+If you don't want Node/npm: ready-made bash scripts live in
+`packaging/mac/raycast/`. Add that directory in Raycast → Settings →
+Extensions → "Add Script Directory".
 ## Build (CachyOS / Arch)
 
 For a system-wide install, use the PKGBUILD in `packaging/`:

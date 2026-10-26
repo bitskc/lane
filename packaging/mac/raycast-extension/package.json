@@ -1,0 +1,58 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "lane",
+  "title": "Lane",
+  "description": "Link router for macOS and Linux",
+  "icon": "icon.png",
+  "author": "bitskc",
+  "categories": [
+    "Productivity",
+    "Developer Tools"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "commands": [
+    {
+      "name": "open-clipboard",
+      "title": "Open Clipboard URL in Lane",
+      "description": "Routes the clipboard URL through Lane",
+      "mode": "no-view"
+    },
+    {
+      "name": "open-url",
+      "title": "Open URL in Lane",
+      "description": "Prompt for a URL to route through Lane",
+      "mode": "no-view",
+      "arguments": [
+        {
+          "name": "url",
+          "placeholder": "URL or bare host (e.g. developer.apple.com/enroll)",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "open-settings",
+      "title": "Open Lane Settings",
+      "description": "Open Lane Settings window",
+      "mode": "no-view"
+    },
+    {
+      "name": "rescan-targets",
+      "title": "Rescan Lane Targets",
+      "description": "Reload config and rescan browser targets in Lane",
+      "mode": "no-view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.80.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.10",
+    "typescript": "^5.4.5"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop"
+  }
+}
