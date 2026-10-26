@@ -91,6 +91,9 @@ void applyMacOverlayChrome(QWindow *window)
     // Move to the Space where the user triggered the pick instead of
     // pinning to the Space the window was created on.
     nsw.collectionBehavior = NSWindowCollectionBehaviorMoveToActiveSpace;
+    [nsw makeKeyAndOrderFront:nil];
+    [nsw orderFrontRegardless];
+
     // An accessory app (LSUIElement) does not become active on its own;
     // without this the overlay shows but keystrokes go to the previous app.
     if (@available(macOS 14.0, *)) {
@@ -100,6 +103,19 @@ void applyMacOverlayChrome(QWindow *window)
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         [NSApp activateIgnoringOtherApps:YES];
 #pragma clang diagnostic pop
+    }
+
+    // On macOS 14+, [NSApp activate] is cooperative and has no effect when
+    // invoked from a background daemon without an activation token.
+    // If Lane is not yet active, activate via AppleScript so the picker
+    // takes keyboard focus from whatever application invoked it.
+    if (![NSRunningApplication currentApplication].isActive) {
+        NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
+        if (bid.length > 0) {
+            NSString *source = [NSString stringWithFormat:@"tell application id \"%@\" to activate", bid];
+            NSAppleScript *as = [[NSAppleScript alloc] initWithSource:source];
+            [as executeAndReturnError:nil];
+        }
     }
     window->requestActivate();
 }
