@@ -1,5 +1,8 @@
 import { showHUD, LaunchProps } from "@raycast/api";
 import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 interface Arguments {
   url: string;
@@ -12,9 +15,9 @@ export default async function Command(props: LaunchProps<{ arguments: Arguments 
     url = `https://${url}`;
   }
   const lane = "/Applications/Lane.app/Contents/MacOS/lane";
-  execFile(lane, [url], (error) => {
-    if (error) {
-      showHUD("❌ Could not reach Lane.app");
-    }
-  });
+  try {
+    await execFileAsync(lane, [url]);
+  } catch (error) {
+    await showHUD("❌ Could not reach Lane.app");
+  }
 }

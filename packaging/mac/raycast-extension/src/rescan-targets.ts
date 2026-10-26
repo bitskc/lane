@@ -1,13 +1,15 @@
 import { showHUD } from "@raycast/api";
 import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 export default async function Command() {
   const lane = "/Applications/Lane.app/Contents/MacOS/lane";
-  execFile(lane, ["--rediscover"], async (error) => {
-    if (error) {
-      await showHUD("❌ Could not reach Lane.app");
-    } else {
-      await showHUD("🔄 Lane targets rescanned");
-    }
-  });
+  try {
+    await execFileAsync(lane, ["--rediscover"]);
+    await showHUD("🔄 Lane targets rescanned");
+  } catch (error) {
+    await showHUD("❌ Could not reach Lane.app");
+  }
 }
