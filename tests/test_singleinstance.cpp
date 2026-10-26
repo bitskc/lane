@@ -18,6 +18,7 @@
 #include <unistd.h>
 #endif
 
+#include "../src/app/ForwardedInvocation.h"
 #include "../src/app/SingleInstance.h"
 
 using namespace Lane;
@@ -143,6 +144,20 @@ private Q_SLOTS:
         // forwarding instance that unlinks and rebinds leaves the real
         // daemon listening on an orphaned inode.
         QCOMPARE(inodeOf(socketPath()), bound);
+    }
+
+    // A secondary LSUIElement relaunch has only argv[0]. A forwarded command
+    // must not be treated as that relaunch: --clipboard owns the picker and
+    // Settings would otherwise steal its keyboard focus.
+    void bareForwardedInvocationRequiresNoCommand()
+    {
+        QVERIFY(isBareForwardedInvocation({}));
+        QVERIFY(isBareForwardedInvocation({QStringLiteral("lane")}));
+        QVERIFY(!isBareForwardedInvocation({QStringLiteral("lane"), QStringLiteral("--clipboard")}));
+        QVERIFY(!isBareForwardedInvocation({QStringLiteral("lane"), QStringLiteral("--settings")}));
+        QVERIFY(!isBareForwardedInvocation({QStringLiteral("lane"), QStringLiteral("--rediscover")}));
+        QVERIFY(!isBareForwardedInvocation({QStringLiteral("lane"), QStringLiteral("--pick")}));
+        QVERIFY(!isBareForwardedInvocation({QStringLiteral("lane"), QStringLiteral("https://example.com")}));
     }
 
     void concurrentClaimsYieldExactlyOnePrimary()
