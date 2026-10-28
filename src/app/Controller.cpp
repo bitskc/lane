@@ -862,8 +862,9 @@ void Controller::rediscover()
         reload();
         return;
     case ClickGate::Rediscover::Deferred:
-        // A click is in flight (or quitting); the gate's follow-up runs
-        // or refuses the rescan itself.
+    case ClickGate::Rediscover::Refused:
+        // In flight: the gate's follow-up runs the rescan itself.
+        // Quitting: refused outright. Neither schedules a trailing timer.
         return;
     case ClickGate::Rediscover::QueueTrailing:
         break;

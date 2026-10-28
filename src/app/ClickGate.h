@@ -2,6 +2,7 @@
 
 #include <QElapsedTimer>
 #include <QList>
+#include <QString>
 
 namespace Lane
 {
@@ -44,25 +45,31 @@ public:
     // Returns true when the caller must run the command now.
     bool requestSettings();
 
+    // Rate-limit window for rediscover(): shared by requestRediscover and
+    // trailingDelayMs so the two can't drift apart. Tests inject a
+    // smaller window via the windowMs parameter.
+    static constexpr qint64 kRediscoverWindowMs = 2000;
+
     enum class Rediscover {
         RunNow,       // run the rescan now; consumes the rate-limit window
-        Deferred,     // a click is in flight (or quitting); the gate's own
-                      // follow-up handles it, no trailing timer needed
+        Deferred,     // a click is in flight; the gate's own follow-up
+                      // handles the rescan, no trailing timer needed
+        Refused,      // quitting; do not run or schedule anything
         QueueTrailing,// inside the window: caller should schedule one
                       // trailing rescan at window end (trailingDelayMs)
     };
 
     // --rediscover: callers include tray, argv, D-Bus actions and any
     // session-bus client, so bursts are coalesced to one rescan per
-    // `windowMs` (default 2s; tests inject a shorter window). A call inside
-    // the window reports QueueTrailing every time; the caller dedupes the
-    // actual trailing timer with its own pending flag, so a rescan can
-    // never be silently dropped.
-    Rediscover requestRediscover(qint64 windowMs = 2000);
+    // window (kRediscoverWindowMs; tests inject a shorter one). A call
+    // inside the window reports QueueTrailing every time; the caller
+    // dedupes the actual trailing timer with its own pending flag, so a
+    // rescan can never be silently dropped.
+    Rediscover requestRediscover(qint64 windowMs = kRediscoverWindowMs);
 
     // Milliseconds until the current window ends, for scheduling the
     // trailing rescan. Only meaningful after QueueTrailing.
-    qint64 trailingDelayMs(qint64 windowMs = 2000) const;
+    qint64 trailingDelayMs(qint64 windowMs = kRediscoverWindowMs) const;
 
 
     // What to run once the in-flight click is done, in order. Settings

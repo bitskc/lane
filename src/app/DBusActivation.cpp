@@ -19,12 +19,13 @@ namespace
 // Controller::openUrl's own env-token read depends on.
 void withActivationToken(const QVariantMap &platformData, const std::function<void()> &fn)
 {
-    // fn() must run synchronously inside this call: the env var is only set
-    // for its duration. The token is consumed once: after fn() the variable
-    // is cleared unconditionally, so a startup-inherited or earlier token
-    // cannot leak into a later tokenless activation. A URI list inside one
-    // Open re-establishes the same token itself, so intra-call reuse is
-    // unaffected.
+ // fn() must run synchronously inside this call: the env var is only set
+ // for its duration. The token is consumed once: a call that carries a
+ // token clears the variable after fn() returns, so that token cannot
+ // leak into a later tokenless activation. (A call with no token leaves
+ // any inherited value untouched; openUrl consumes it itself.) A URI
+ // list inside one Open re-establishes the same token, so intra-call
+ // reuse is unaffected.
     QString token = platformData.value(QStringLiteral("activation-token")).toString();
     if (token.isEmpty()) {
         token = platformData.value(QStringLiteral("desktop-startup-id")).toString();

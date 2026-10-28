@@ -150,7 +150,7 @@ private Q_SLOTS:
         ClickGate gate;
         gate.quit();
         QVERIFY2(!gate.requestSettings(), "Settings must not open while quitting");
-        QCOMPARE(gate.requestRediscover(), ClickGate::Rediscover::Deferred);
+        QCOMPARE(gate.requestRediscover(), ClickGate::Rediscover::Refused);
         const auto f = gate.takeFollowup();
         QVERIFY(!f.settings && !f.rediscover);
     }
@@ -161,19 +161,21 @@ private Q_SLOTS:
         // calls (bus spam, script, tray) must coalesce into one trailing
         // run instead of dropping requests outright.
         ClickGate gate;
-        QCOMPARE(gate.requestRediscover(50), ClickGate::Rediscover::RunNow);
+        constexpr qint64 kWindow = 500; // wide enough that a stalled CI
+                                        // runner cannot flake the asserts
+        QCOMPARE(gate.requestRediscover(kWindow), ClickGate::Rediscover::RunNow);
 
         // Calls inside the window get a trailing slot, every time; the
         // caller dedupes the actual timer with its own flag.
-        QCOMPARE(gate.requestRediscover(50), ClickGate::Rediscover::QueueTrailing);
-        QCOMPARE(gate.requestRediscover(50), ClickGate::Rediscover::QueueTrailing);
+        QCOMPARE(gate.requestRediscover(kWindow), ClickGate::Rediscover::QueueTrailing);
+        QCOMPARE(gate.requestRediscover(kWindow), ClickGate::Rediscover::QueueTrailing);
 
-        const qint64 delay = gate.trailingDelayMs(50);
+        const qint64 delay = gate.trailingDelayMs(kWindow);
         QVERIFY(delay >= 0);
-        QVERIFY(delay <= 50);
+        QVERIFY(delay <= kWindow);
 
-        QTest::qWait(60); // let the 50ms window expire
-        QCOMPARE(gate.requestRediscover(50), ClickGate::Rediscover::RunNow);
+        QTest::qWait(kWindow + 60); // let the window expire
+        QCOMPARE(gate.requestRediscover(kWindow), ClickGate::Rediscover::RunNow);
     }
 
     void deferredRediscoverDoesNotConsumeTheWindow()
@@ -182,18 +184,18 @@ private Q_SLOTS:
         // rate-limit timer; otherwise its own follow-up replay would land
         // inside the window it created and be (needlessly) delayed.
         ClickGate gate;
-        QCOMPARE(gate.requestRediscover(50), ClickGate::Rediscover::RunNow); // open a window
-        QTest::qWait(60);
+        QCOMPARE(gate.requestRediscover(500), ClickGate::Rediscover::RunNow); // open a window
+        QTest::qWait(560);
 
         gate.enter(click(QStringLiteral("https://a.example/")));
-        QCOMPARE(gate.requestRediscover(50), ClickGate::Rediscover::Deferred);
+        QCOMPARE(gate.requestRediscover(500), ClickGate::Rediscover::Deferred);
         gate.finish();
         const auto f = gate.takeFollowup();
         QVERIFY(f.rediscover);
 
         // The deferred request did not consume a fresh window: another
         // rediscover right now still runs immediately.
-        QCOMPARE(gate.requestRediscover(50), ClickGate::Rediscover::RunNow);
+        QCOMPARE(gate.requestRediscover(500), ClickGate::Rediscover::RunNow);
     }
 
 };

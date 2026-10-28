@@ -47,12 +47,13 @@ bool ClickGate::requestSettings()
 
 ClickGate::Rediscover ClickGate::requestRediscover(qint64 windowMs)
 {
-    if (m_quitting || m_inFlight) {
-        if (m_inFlight) {
-            m_rediscover = true;
-        }
-        // The gate's own follow-up runs the rescan (or refuses it at quit);
-        // neither path consumes or schedules inside the rate-limit window.
+    if (m_quitting) {
+        return Rediscover::Refused;
+    }
+    if (m_inFlight) {
+        // The gate's own follow-up runs the rescan after the click; no
+        // window is consumed and no trailing timer is needed.
+        m_rediscover = true;
         return Rediscover::Deferred;
     }
     if (m_rediscoverTimer.isValid() && m_rediscoverTimer.elapsed() < windowMs) {
