@@ -71,7 +71,6 @@ public:
     // trailing rescan. Only meaningful after QueueTrailing.
     qint64 trailingDelayMs(qint64 windowMs = kRediscoverWindowMs) const;
 
-
     // What to run once the in-flight click is done, in order. Settings
     // implies a rediscover, so asking for both runs only Settings.
     struct Followup {
