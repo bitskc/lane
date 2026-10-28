@@ -27,8 +27,8 @@ namespace
 struct PrivateBus {
     PrivateBus()
     {
-        // --print-pid emits "<pid>"; read it from a temp file alongside
-        // stdout which carries the address.
+        // --print-pid emits "<pid>" on the line after the address; both
+        // come from the daemon's stdout before it detaches.
         FILE *fp = popen("dbus-daemon --session --fork --print-address --print-pid", "r");
         if (!fp) {
             return;
@@ -39,15 +39,19 @@ struct PrivateBus {
             return;
         }
         address = QString::fromLatin1(buf).trimmed();
+        // Set the env var as soon as the address parses. The guard in the
+        // test checks `address` is non-empty; without an immediate qputenv
+        // a partial read below would still run registerActivation on the
+        // real user session bus and claim its well-known name.
+        if (!address.isEmpty()) {
+            qputenv("DBUS_SESSION_BUS_ADDRESS", address.toUtf8());
+        }
         if (!fgets(buf, sizeof(buf), fp)) {
             pclose(fp);
             return;
         }
         pid = QString::fromLatin1(buf).trimmed().toLong();
         pclose(fp);
-        if (!address.isEmpty()) {
-            qputenv("DBUS_SESSION_BUS_ADDRESS", address.toUtf8());
-        }
     }
     ~PrivateBus()
     {
@@ -151,9 +155,11 @@ private Q_SLOTS:
             }
         }
 
-        QVERIFY(groups.value(QStringLiteral("Desktop Entry"))
-                    .value(QStringLiteral("Actions"))
-                    .contains(QStringLiteral("Clipboard;ClipboardPicker;Settings;Rescan;")));
+        // Exact list, not a substring check: a fifth action appended to
+        // Actions= must fail here until the test is updated.
+        QCOMPARE(groups.value(QStringLiteral("Desktop Entry"))
+                     .value(QStringLiteral("Actions")),
+                 QStringLiteral("Clipboard;ClipboardPicker;Settings;Rescan;"));
 
         const QHash<QString, QString> clipboard = groups.value(QStringLiteral("Desktop Action Clipboard"));
         QCOMPARE(clipboard.value(QStringLiteral("Exec")), QStringLiteral("@LANE_BIN@ --clipboard"));
@@ -184,12 +190,22 @@ private Q_SLOTS:
         QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
         const QString text = QString::fromUtf8(file.readAll());
 
-        const QStringList actionNames = {
-            QStringLiteral("Clipboard"),
-            QStringLiteral("ClipboardPicker"),
-            QStringLiteral("Settings"),
-            QStringLiteral("Rescan"),
-        };
+        // The name list comes from Actions= itself, not a copy of it:
+        // adding an action to the .desktop without an argsForAction
+        // mapping must fail here (see issue #120).
+        const QString actionsLine = [&text]() {
+            for (const QString &line : text.split(QLatin1Char('\n'))) {
+                if (line.startsWith(QLatin1String("Actions="))) {
+                    return line.mid(8);
+                }
+            }
+            return QString();
+        }();
+        const QStringList actionNames = actionsLine.split(QLatin1Char(';'), Qt::SkipEmptyParts);
+        QCOMPARE(actionNames, QStringList({QStringLiteral("Clipboard"),
+                                           QStringLiteral("ClipboardPicker"),
+                                           QStringLiteral("Settings"),
+                                           QStringLiteral("Rescan")}));
 
         for (const QString &name : actionNames) {
             const QString group = QStringLiteral("[Desktop Action ") + name + QLatin1Char(']');

@@ -20,24 +20,20 @@ namespace
 void withActivationToken(const QVariantMap &platformData, const std::function<void()> &fn)
 {
     // fn() must run synchronously inside this call: the env var is only set
-    // for its duration.
+    // for its duration. The token is consumed once: after fn() the variable
+    // is cleared unconditionally, so a startup-inherited or earlier token
+    // cannot leak into a later tokenless activation. A URI list inside one
+    // Open re-establishes the same token itself, so intra-call reuse is
+    // unaffected.
     QString token = platformData.value(QStringLiteral("activation-token")).toString();
     if (token.isEmpty()) {
         token = platformData.value(QStringLiteral("desktop-startup-id")).toString();
     }
-    if (token.isEmpty()) {
-        fn();
-        return;
+    if (!token.isEmpty()) {
+        qputenv("XDG_ACTIVATION_TOKEN", token.toUtf8());
     }
-    const QByteArray previous = qgetenv("XDG_ACTIVATION_TOKEN");
-    const bool hadPrevious = qEnvironmentVariableIsSet("XDG_ACTIVATION_TOKEN");
-    qputenv("XDG_ACTIVATION_TOKEN", token.toUtf8());
     fn();
-    // Restore any pre-existing value; a nested activation (e.g. a modal
-    // Settings event loop) must not clobber the outer call's token.
-    if (hadPrevious) {
-        qputenv("XDG_ACTIVATION_TOKEN", previous);
-    } else {
+    if (!token.isEmpty()) {
         qunsetenv("XDG_ACTIVATION_TOKEN");
     }
 }
