@@ -10,7 +10,6 @@
 #include "platform/platform.h"
 #include "core/pipeline.h"
 
-#include <QElapsedTimer>
 #include <QHash>
 #include <QObject>
 #include <QPointer>
@@ -362,11 +361,9 @@ private:
     // ClickGate decides what each does and Controller performs it.
     ClickGate m_gate;
 
-    // Rate-limit for rediscover(): every caller (tray, --rediscover argv,
-    // D-Bus Rescan action, second-instance CommandLine) funnels here, and
-    // any session-bus client can spam it; bursts coalesce into one trailing
-    // rescan per window (see rediscover() in Controller.cpp).
-    QElapsedTimer m_rediscoverTimer;
+    // Pending trailing rescan for rediscover(): the gate decides when a
+    // burst sits inside the rate-limit window; this flag dedupes the
+    // single trailing QTimer per burst. See rediscover() in Controller.cpp.
     bool m_rediscoverPending = false;
 
     // True until the first interaction completes (pick, launch, or a

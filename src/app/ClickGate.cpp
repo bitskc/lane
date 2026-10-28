@@ -45,16 +45,32 @@ bool ClickGate::requestSettings()
     return true;
 }
 
-bool ClickGate::requestRediscover()
+ClickGate::Rediscover ClickGate::requestRediscover(qint64 windowMs)
 {
-    if (m_quitting) {
-        return false;
+    if (m_quitting || m_inFlight) {
+        if (m_inFlight) {
+            m_rediscover = true;
+        }
+        // The gate's own follow-up runs the rescan (or refuses it at quit);
+        // neither path consumes or schedules inside the rate-limit window.
+        return Rediscover::Deferred;
     }
-    if (m_inFlight) {
-        m_rediscover = true;
-        return false;
+    if (m_rediscoverTimer.isValid() && m_rediscoverTimer.elapsed() < windowMs) {
+        // Inside the window: the caller schedules one trailing rescan and
+        // dedupes repeats with its own flag, so nothing is dropped.
+        return Rediscover::QueueTrailing;
     }
-    return true;
+    m_rediscoverTimer.start();
+    return Rediscover::RunNow;
+}
+
+qint64 ClickGate::trailingDelayMs(qint64 windowMs) const
+{
+    if (!m_rediscoverTimer.isValid()) {
+        return 0;
+    }
+    const qint64 remaining = windowMs - m_rediscoverTimer.elapsed();
+    return remaining > 0 ? remaining : 0;
 }
 
 ClickGate::Followup ClickGate::takeFollowup()

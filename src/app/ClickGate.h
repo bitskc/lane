@@ -1,7 +1,7 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QList>
-#include <QString>
 
 namespace Lane
 {
@@ -40,10 +40,30 @@ public:
     // The in-flight click finished (applied or abandoned).
     void finish();
 
-    // --settings and --rediscover while a click is in flight wait for it.
+    // --settings while a click is in flight waits for it.
     // Returns true when the caller must run the command now.
     bool requestSettings();
-    bool requestRediscover();
+
+    enum class Rediscover {
+        RunNow,       // run the rescan now; consumes the rate-limit window
+        Deferred,     // a click is in flight (or quitting); the gate's own
+                      // follow-up handles it, no trailing timer needed
+        QueueTrailing,// inside the window: caller should schedule one
+                      // trailing rescan at window end (trailingDelayMs)
+    };
+
+    // --rediscover: callers include tray, argv, D-Bus actions and any
+    // session-bus client, so bursts are coalesced to one rescan per
+    // `windowMs` (default 2s; tests inject a shorter window). A call inside
+    // the window reports QueueTrailing every time; the caller dedupes the
+    // actual trailing timer with its own pending flag, so a rescan can
+    // never be silently dropped.
+    Rediscover requestRediscover(qint64 windowMs = 2000);
+
+    // Milliseconds until the current window ends, for scheduling the
+    // trailing rescan. Only meaningful after QueueTrailing.
+    qint64 trailingDelayMs(qint64 windowMs = 2000) const;
+
 
     // What to run once the in-flight click is done, in order. Settings
     // implies a rediscover, so asking for both runs only Settings.
@@ -69,6 +89,8 @@ private:
     bool m_quitting = false;
     bool m_settings = false;
     bool m_rediscover = false;
+    // Rate-limit window state for requestRediscover.
+    QElapsedTimer m_rediscoverTimer;
 };
 
 } // namespace Lane
