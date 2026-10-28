@@ -361,6 +361,11 @@ private:
     // ClickGate decides what each does and Controller performs it.
     ClickGate m_gate;
 
+    // Pending trailing rescan for rediscover(): the gate decides when a
+    // burst sits inside the rate-limit window; this flag dedupes the
+    // single trailing QTimer per burst. See rediscover() in Controller.cpp.
+    bool m_rediscoverPending = false;
+
     // True until the first interaction completes (pick, launch, or a
     // first launch with no link): opens Settings once, per decision D2's
     // onboarding rule. Set in the ctor from "no config file on disk".
