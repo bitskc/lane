@@ -7,10 +7,50 @@ on:
 permissions:
   contents: write
 jobs:
+  package:
+    # Builds and tests Lane on each Linux architecture and packs the install
+    # tree (packaging/linux/build-tarball.sh). Fedora is the build base because
+    # its Qt 6 and KDE Frameworks meet the CMake minimums on both x86_64 and
+    # aarch64, which Ubuntu's runner images do not. aarch64 builds natively on
+    # GitHub's Arm runner. The release job waits for every entry, so a failed
+    # build or test never publishes a partial release.
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: fedora:latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Install git
+        run: dnf install -y git
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: dnf install -y $(cat packaging/linux/fedora-build-deps.txt)
+      - name: Build, test, and package
+        env:
+          LANE_ARCH: ${{ matrix.arch }}
+        run: |
+          LANE_VERSION="${GITHUB_REF_NAME#v}" packaging/linux/build-tarball.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lane-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
   release:
+    needs: package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lane-linux-*
+          merge-multiple: true
+          path: dist
       - name: Extract changelog section
         id: notes
         run: |
@@ -48,6 +88,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          files: dist/*
           body: ${{ steps.notes.outputs.use_changelog == 'true' && steps.notes.outputs.body || '' }}
           generate_release_notes: ${{ steps.notes.outputs.use_changelog != 'true' }}
           draft: false

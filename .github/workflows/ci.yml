@@ -101,6 +101,33 @@ jobs:
             -DCMAKE_DISABLE_FIND_PACKAGE_PlasmaActivities=ON
           cmake --build build-minimal
 
+  package-linux:
+    # Same packaging the release workflow runs (packaging/linux/build-tarball.sh),
+    # on both architectures, so a break in the x86_64 or aarch64 package shows
+    # up on the pull request instead of when a tag is pushed. Fedora supplies
+    # Qt 6 and KDE Frameworks new enough for the CMake minimums on both.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: fedora:latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      LANE_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Install git
+        run: dnf install -y git
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: dnf install -y $(cat packaging/linux/fedora-build-deps.txt)
+      - name: Build, test, and package
+        run: packaging/linux/build-tarball.sh dist
+
   macos:
     # Runs on the self-hosted MacBook runner (actions.runner.bitskc-lane
     # .macbook-lane) instead of macos-latest so the job does not burn

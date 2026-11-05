@@ -209,6 +209,24 @@ Commands:
 If you don't want Node/npm: ready-made bash scripts live in
 `packaging/mac/raycast/`. Add that directory in Raycast → Settings →
 Extensions → "Add Script Directory".
+
+## Prebuilt Linux packages (x86_64, aarch64)
+
+Each [GitHub Release](https://github.com/bitskc/lane/releases) carries
+`lane-<version>-linux-x86_64.tar.gz` and `lane-<version>-linux-aarch64.tar.gz`
+(with `.sha256` files), built on Fedora against its Qt 6 and KDE Frameworks.
+Install the matching runtime packages (`qt6-qtbase`, `qt6-qtdeclarative`,
+`qt6-qtsvg`, `layer-shell-qt`, `kf6-kwindowsystem`, `kf6-kglobalaccel`,
+`plasma-activities`), then extract at `/`:
+
+```bash
+sha256sum -c lane-<version>-linux-aarch64.tar.gz.sha256
+sudo tar -C / -xzf lane-<version>-linux-aarch64.tar.gz
+update-desktop-database
+```
+
+To build the same tarball yourself, run `packaging/linux/build-tarball.sh`.
+
 ## Build (CachyOS / Arch)
 
 For a system-wide install, use the PKGBUILD in `packaging/`:

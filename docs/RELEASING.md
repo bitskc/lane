@@ -129,16 +129,44 @@ Release from the `main` branch after the changes you want are merged.
    ```
 
 10. **GitHub Release.** Pushing a `v*` tag triggers
-    `.github/workflows/release.yml`. That workflow does not build
-    anything; it just creates the GitHub Release for the tag and
-    fills the release notes from the matching `## [x.y.z]` section of
-    `CHANGELOG.md`. GitHub attaches the source `.zip` and `.tar.gz`
-    to the release automatically. There is no separate binary,
-    AppImage, AUR, or Flathub artifact to build or upload.
+    `.github/workflows/release.yml`. It has two jobs:
 
-    Building and testing happen separately, in
-    `.github/workflows/ci.yml`, on every push and pull request to
-    `main`.
+    - `package` builds, tests, and packs Lane on every Linux
+      architecture in its matrix: `x86_64` (`ubuntu-latest`) and
+      `aarch64` (`ubuntu-24.04-arm`, GitHub's native Arm runner). Each
+      entry runs `packaging/linux/build-tarball.sh` inside a
+      `fedora:latest` container, because Fedora's Qt 6 and KDE
+      Frameworks meet the CMake minimums on both architectures and
+      Ubuntu's runner images do not. The build dependencies are listed
+      in `packaging/linux/fedora-build-deps.txt`.
+    - `release` waits for every `package` entry, then creates the
+      GitHub Release for the tag, fills the release notes from the
+      matching `## [x.y.z]` section of `CHANGELOG.md`, and attaches
+      `lane-<version>-linux-x86_64.tar.gz`,
+      `lane-<version>-linux-aarch64.tar.gz`, and a `.sha256` file for
+      each. GitHub attaches the source `.zip` and `.tar.gz` itself.
+
+    A failed build or test on either architecture stops the release
+    before anything is published. The same packaging also runs as the
+    `package-linux` job in `ci.yml` on every push and pull request to
+    `main`, so a break shows up before a tag is pushed.
+
+    The Linux tarballs hold an install tree built with prefix `/usr`
+    (binary, `.desktop` file, D-Bus service, systemd user unit, icon,
+    metainfo). Extract one at `/` as root, for example
+    `sudo tar -C / -xzf lane-0.3.0-linux-aarch64.tar.gz`. The binary
+    links the distribution's Qt 6 and KDE Frameworks, so install the
+    matching runtime packages (the `-devel` names in
+    `fedora-build-deps.txt` without the suffix: `qt6-qtbase`,
+    `qt6-qtdeclarative`, `qt6-qtsvg`, `layer-shell-qt`,
+    `kf6-kwindowsystem`, `kf6-kglobalaccel`, `plasma-activities`). To
+    build one by hand, run `packaging/linux/build-tarball.sh` on the
+    target architecture; it writes to `dist/`.
+
+    There is no AppImage, AUR, or Flathub artifact to build or upload.
+    The macOS bundle is built locally with `packaging/mac/bundle.sh`
+    and is not part of the release workflow. Arch users build from
+    `packaging/PKGBUILD`, which lists both `x86_64` and `aarch64`.
 
     If the release workflow is ever missing or broken, create the
     release by hand instead of skipping it:
