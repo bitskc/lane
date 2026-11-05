@@ -7,8 +7,9 @@
 #              (default: dist/ under the repo root)
 #
 # Environment:
-#   LANE_VERSION  version string for the file name (default: the version in
-#                 CMakeLists.txt; the release workflow passes the tag)
+#   LANE_VERSION  expected version; the release workflow passes the tag. The
+#                 script fails if it differs from CMakeLists.txt, which names
+#                 the files (default: the CMakeLists.txt version)
 #   LANE_ARCH     architecture label (default: uname -m, so x86_64 or aarch64)
 #   BUILD_DIR     CMake build tree (default: <repo>/build-package)
 #
@@ -24,10 +25,16 @@ SRC_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT_DIR="${1:-$SRC_ROOT/dist}"
 BUILD_DIR="${BUILD_DIR:-$SRC_ROOT/build-package}"
 ARCH="${LANE_ARCH:-$(uname -m)}"
-VERSION="${LANE_VERSION:-$(sed -n 's/^project(lane VERSION \([0-9][0-9.]*\).*/\1/p' "$SRC_ROOT/CMakeLists.txt")}"
+CMAKE_VERSION="$(sed -n 's/^project(lane VERSION \([0-9][0-9.]*\).*/\1/p' "$SRC_ROOT/CMakeLists.txt")"
+VERSION="${LANE_VERSION:-$CMAKE_VERSION}"
 
 die() { echo "build-tarball: $*" >&2; exit 1; }
-[ -n "$VERSION" ] || die "could not determine the version from CMakeLists.txt"
+[ -n "$CMAKE_VERSION" ] || die "could not determine the version from CMakeLists.txt"
+# The binary reports the CMake version (docs/RELEASING.md: CMakeLists.txt, the
+# changelog and the tag move together), so an asset named for any other
+# version would mislabel what is inside it.
+[ "$VERSION" = "$CMAKE_VERSION" ] \
+    || die "LANE_VERSION $VERSION does not match CMakeLists.txt version $CMAKE_VERSION"
 case "$ARCH" in
     x86_64|aarch64) ;;
     *) die "unsupported architecture: $ARCH" ;;
@@ -54,6 +61,10 @@ rm -rf "$STAGE"
 DESTDIR="$STAGE" cmake --install "$BUILD_DIR"
 [ -x "$STAGE/usr/bin/lane" ] || die "$STAGE/usr/bin/lane missing after install"
 
-tar -C "$STAGE" --owner=0 --group=0 --numeric-owner -czf "$OUT_DIR/$NAME.tar.gz" usr
+# List files and symlinks only, so extracting at / as root never rewrites the
+# mode or owner of an existing directory such as /usr or /usr/share.
+tar -C "$STAGE" --owner=0 --group=0 --numeric-owner --null \
+    -T <(cd "$STAGE" && find usr \( -type f -o -type l \) -print0 | sort -z) \
+    -czf "$OUT_DIR/$NAME.tar.gz"
 (cd "$OUT_DIR" && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
 echo "built $OUT_DIR/$NAME.tar.gz"

@@ -147,14 +147,17 @@ Release from the `main` branch after the changes you want are merged.
       each. GitHub attaches the source `.zip` and `.tar.gz` itself.
 
     A failed build or test on either architecture stops the release
-    before anything is published. The same packaging also runs as the
+    before anything is published. The build also fails if the tag's
+    version differs from the one in `CMakeLists.txt`, so a tag pushed
+    before the version bump never publishes mislabeled files. The same packaging also runs as the
     `package-linux` job in `ci.yml` on every push and pull request to
     `main`, so a break shows up before a tag is pushed.
 
     The Linux tarballs hold an install tree built with prefix `/usr`
     (binary, `.desktop` file, D-Bus service, systemd user unit, icon,
     metainfo). Extract one at `/` as root, for example
-    `sudo tar -C / -xzf lane-0.3.0-linux-aarch64.tar.gz`. The binary
+    `sudo tar -C / -xzf lane-0.3.0-linux-aarch64.tar.gz` (the archive
+    lists files only, so existing directories keep their modes). The binary
     links the distribution's Qt 6 and KDE Frameworks, so install the
     matching runtime packages (the `-devel` names in
     `fedora-build-deps.txt` without the suffix: `qt6-qtbase`,
