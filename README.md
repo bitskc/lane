@@ -214,10 +214,12 @@ Extensions → "Add Script Directory".
 
 Each [GitHub Release](https://github.com/bitskc/lane/releases) carries
 `lane-<version>-linux-x86_64.tar.gz` and `lane-<version>-linux-aarch64.tar.gz`
-(with `.sha256` files), built on Fedora against its Qt 6 and KDE Frameworks.
-Install the matching runtime packages (`qt6-qtbase`, `qt6-qtdeclarative`,
-`qt6-qtsvg`, `layer-shell-qt`, `kf6-kwindowsystem`, `kf6-kglobalaccel`,
-`plasma-activities`), then extract at `/`:
+(with `.sha256` files), built on Fedora against its Qt 6, KDE Frameworks and
+glibc. They suit current Fedora, or any distro whose Qt 6, KDE Frameworks and
+glibc are at least as new. Install the matching runtime packages (Fedora names:
+`qt6-qtbase`, `qt6-qtdeclarative`, `qt6-qtsvg`, `layer-shell-qt`,
+`kf6-kwindowsystem`, `plasma-activities`), then extract at `/`. On Arch, build
+from `packaging/PKGBUILD` instead.
 
 ```bash
 sha256sum -c lane-<version>-linux-aarch64.tar.gz.sha256

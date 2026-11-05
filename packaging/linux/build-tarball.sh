@@ -25,7 +25,7 @@ SRC_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT_DIR="${1:-$SRC_ROOT/dist}"
 BUILD_DIR="${BUILD_DIR:-$SRC_ROOT/build-package}"
 ARCH="${LANE_ARCH:-$(uname -m)}"
-CMAKE_VERSION="$(sed -n 's/^project(lane VERSION \([0-9][0-9.]*\).*/\1/p' "$SRC_ROOT/CMakeLists.txt")"
+CMAKE_VERSION="$(sed -n 's/^project(lane VERSION \([0-9][0-9.]*[0-9]\).*/\1/p' "$SRC_ROOT/CMakeLists.txt")"
 VERSION="${LANE_VERSION:-$CMAKE_VERSION}"
 
 die() { echo "build-tarball: $*" >&2; exit 1; }
@@ -61,10 +61,19 @@ rm -rf "$STAGE"
 DESTDIR="$STAGE" cmake --install "$BUILD_DIR"
 [ -x "$STAGE/usr/bin/lane" ] || die "$STAGE/usr/bin/lane missing after install"
 
+# The archive only lists usr/, so an install rule that lands elsewhere would
+# be dropped without a word; refuse to ship that.
+stray="$(find "$STAGE" -mindepth 1 -maxdepth 1 ! -name usr)"
+[ -z "$stray" ] || die "install tree has files outside usr/: $stray"
+
 # List files and symlinks only, so extracting at / as root never rewrites the
-# mode or owner of an existing directory such as /usr or /usr/share.
-tar -C "$STAGE" --owner=0 --group=0 --numeric-owner --null \
-    -T <(cd "$STAGE" && find usr \( -type f -o -type l \) -print0 | sort -z) \
+# mode or owner of an existing directory such as /usr or /usr/share. The list
+# goes through a file so a failing find aborts the script (a process
+# substitution would not).
+FILES="$BUILD_DIR/files.list"
+(cd "$STAGE" && find usr \( -type f -o -type l \) -print0 | sort -z) > "$FILES"
+[ -s "$FILES" ] || die "no files to archive under $STAGE/usr"
+tar -C "$STAGE" --owner=0 --group=0 --numeric-owner --null -T "$FILES" \
     -czf "$OUT_DIR/$NAME.tar.gz"
 (cd "$OUT_DIR" && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
 echo "built $OUT_DIR/$NAME.tar.gz"

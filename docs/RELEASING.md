@@ -135,9 +135,12 @@ Release from the `main` branch after the changes you want are merged.
       architecture in its matrix: `x86_64` (`ubuntu-latest`) and
       `aarch64` (`ubuntu-24.04-arm`, GitHub's native Arm runner). Each
       entry runs `packaging/linux/build-tarball.sh` inside a
-      `fedora:latest` container, because Fedora's Qt 6 and KDE
+      `fedora:44` container, because Fedora's Qt 6 and KDE
       Frameworks meet the CMake minimums on both architectures and
-      Ubuntu's runner images do not. The build dependencies are listed
+      Ubuntu's runner images do not. The image tag is pinned so a new
+      Fedora release cannot change what the tarball links against
+      between a green PR and the tag; bump it deliberately, in
+      `ci.yml` and `release.yml` together. The build dependencies are listed
       in `packaging/linux/fedora-build-deps.txt`.
     - `release` waits for every `package` entry, then creates the
       GitHub Release for the tag, fills the release notes from the
@@ -149,8 +152,8 @@ Release from the `main` branch after the changes you want are merged.
     A failed build or test on either architecture stops the release
     before anything is published. The build also fails if the tag's
     version differs from the one in `CMakeLists.txt`, so a tag pushed
-    before the version bump never publishes mislabeled files. The same packaging also runs as the
-    `package-linux` job in `ci.yml` on every push and pull request to
+    before the version bump never publishes mislabeled files. The same
+    packaging also runs as the `package-linux` job in `ci.yml` on every push and pull request to
     `main`, so a break shows up before a tag is pushed.
 
     The Linux tarballs hold an install tree built with prefix `/usr`
@@ -158,13 +161,13 @@ Release from the `main` branch after the changes you want are merged.
     metainfo). Extract one at `/` as root, for example
     `sudo tar -C / -xzf lane-0.3.0-linux-aarch64.tar.gz` (the archive
     lists files only, so existing directories keep their modes). The binary
-    links the distribution's Qt 6 and KDE Frameworks, so install the
-    matching runtime packages (the `-devel` names in
-    `fedora-build-deps.txt` without the suffix: `qt6-qtbase`,
-    `qt6-qtdeclarative`, `qt6-qtsvg`, `layer-shell-qt`,
-    `kf6-kwindowsystem`, `kf6-kglobalaccel`, `plasma-activities`). To
-    build one by hand, run `packaging/linux/build-tarball.sh` on the
-    target architecture; it writes to `dist/`.
+    links the build distro's Qt 6, KDE Frameworks and glibc, so it suits
+    current Fedora or a distro at least as new, with the matching runtime
+    packages installed (the `-devel` names in `fedora-build-deps.txt`
+    without the suffix: `qt6-qtbase`, `qt6-qtdeclarative`, `qt6-qtsvg`,
+    `layer-shell-qt`, `kf6-kwindowsystem`, `plasma-activities`). To build
+    one by hand, run `packaging/linux/build-tarball.sh` on the target
+    architecture; it writes to `dist/`.
 
     There is no AppImage, AUR, or Flathub artifact to build or upload.
     The macOS bundle is built locally with `packaging/mac/bundle.sh`

@@ -115,7 +115,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    container: fedora:latest
+    container: fedora:44
     env:
       QT_QPA_PLATFORM: offscreen
       LANE_ARCH: ${{ matrix.arch }}

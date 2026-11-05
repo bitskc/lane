@@ -4,7 +4,6 @@ extra-cmake-modules
 gcc-c++
 git
 gzip
-kf6-kglobalaccel-devel
 kf6-kwindowsystem-devel
 layer-shell-qt-devel
 ninja-build
