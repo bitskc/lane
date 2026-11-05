@@ -852,11 +852,37 @@ void Controller::openSettings()
 
 void Controller::rediscover()
 {
-    // Deferred while a click is being resolved, refused at quit.
-    if (!m_gate.requestRediscover()) {
+    // Remote callers (D-Bus Rescan action, CommandLine argv from a second
+    // instance) can spam this. The gate owns the rate-limit window; inside
+    // it we schedule one trailing rescan at window end (deduped by
+    // m_rediscoverPending) instead of dropping the request, so
+    // "edit config; lane --rediscover" always lands.
+    switch (m_gate.requestRediscover()) {
+    case ClickGate::Rediscover::RunNow:
+        reload();
         return;
+    case ClickGate::Rediscover::Deferred:
+    case ClickGate::Rediscover::Refused:
+        // In flight: the gate's follow-up runs the rescan itself.
+        // Quitting: refused outright. Neither schedules a trailing timer.
+        return;
+    case ClickGate::Rediscover::QueueTrailing:
+        break;
     }
-    reload();
+    if (m_rediscoverPending) {
+        return; // a trailing rescan for this burst is already scheduled
+    }
+    m_rediscoverPending = true;
+    QTimer::singleShot(m_gate.trailingDelayMs(), this, [self = QPointer<Controller>(this)]() {
+        if (!self) {
+            return;
+        }
+        self->m_rediscoverPending = false;
+        // The window is over by the time this fires; the recursive call
+        // takes RunNow or defers to the gate again.
+        self->rediscover();
+    });
+    qInfo("Lane: rediscover request queued (rate-limited)");
 }
 
 void Controller::makeDefaultBrowser()

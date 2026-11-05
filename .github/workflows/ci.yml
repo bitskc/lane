@@ -71,7 +71,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -S --noconfirm --needed \
-            base-devel cmake extra-cmake-modules ninja \
+            base-devel cmake dbus extra-cmake-modules ninja \
             qt6-base qt6-declarative qt6-svg \
             kwindowsystem \
             layer-shell-qt \
