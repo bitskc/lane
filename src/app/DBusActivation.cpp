@@ -160,7 +160,8 @@ bool registerActivation(std::function<void(const QStringList &)> handleArgs,
 
 // Maps a .desktop [Desktop Action X] group key to the argv the action's
 // Exec= line passes. Action names must stay in sync with Actions= and the
-// group names in data/app.lane.Lane.desktop.in; test_kde_actions enforces it.
+// group names in data/app.lane.Lane.desktop.in; test_kde_actions derives
+// its list from Actions= and cross-checks Exec against this map.
 // argv[0] is always "lane": Controller::handleArgs strips index 0
 // unconditionally, so it only ever sees the real arguments.
 QStringList argsForAction(const QString &actionName)
