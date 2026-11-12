@@ -91,6 +91,21 @@ int main(int argc, char **argv)
     // that do not run a KDE platformtheme plugin.
     qputenv("QT_QUICK_CONTROLS_STYLE", "Fusion");
 
+#ifdef Q_OS_MACOS
+    // With Qt Quick's threaded render loop, the picker and hold overlays
+    // often stop getting frames a few frames after a re-show: the render
+    // thread sits idle, the fade-in freezes at a partial opacity and the
+    // card stays mostly transparent until it is hidden. The threaded loop
+    // waits on QWindow::requestUpdate(), which the cocoa plugin delivers
+    // from a CVDisplayLink. The basic loop renders on the GUI thread
+    // without that wait and never stalled, and these overlays are cheap
+    // enough for it. An explicit QSG_RENDER_LOOP in the environment
+    // still wins.
+    if (!qEnvironmentVariableIsSet("QSG_RENDER_LOOP")) {
+        qputenv("QSG_RENDER_LOOP", "basic");
+    }
+#endif
+
     QApplication app(argc, argv);
     app.setQuitOnLastWindowClosed(false);
     Lane::migrateLegacyConfig();
