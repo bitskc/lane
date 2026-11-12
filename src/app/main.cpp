@@ -96,12 +96,11 @@ int main(int argc, char **argv)
     // re-show, the picker window gets about 3 frames and then none. The
     // render thread is idle, the fade-in freezes at a partial opacity
     // and the card stays mostly transparent until the window is hidden.
-    // With QSG_RENDER_LOOP=basic the stall did not occur in testing.
-    // The likely cause is the threaded loop's wait on a
-    // QWindow::requestUpdate() delivered by the cocoa plugin's
-    // CVDisplayLink; that is not proven. An explicit QSG_RENDER_LOOP in
-    // the environment still wins.
-    if (!qEnvironmentVariableIsSet("QSG_RENDER_LOOP")) {
+    // With QSG_RENDER_LOOP=basic the stall did not occur in testing. The
+    // cause inside the threaded loop is not identified. A non-empty
+    // QSG_RENDER_LOOP in the environment still wins; Qt ignores an empty
+    // one, so that case gets the basic loop too.
+    if (qEnvironmentVariableIsEmpty("QSG_RENDER_LOOP")) {
         qputenv("QSG_RENDER_LOOP", "basic");
     }
 #endif
