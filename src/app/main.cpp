@@ -201,7 +201,6 @@ int main(int argc, char **argv)
     // children Lane spawns do not inherit it. Only done when Lane set it.
     if (laneSetRenderLoop) {
         QQuickWindow loopPrimer;
-        Q_UNUSED(loopPrimer);
         qunsetenv("QSG_RENDER_LOOP");
     }
 #endif
