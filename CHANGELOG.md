@@ -64,6 +64,11 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Fixed
 
+- macOS: with Qt Quick's threaded render loop the picker and hold
+  overlays could come up mostly transparent because the fade-in froze
+  partway. Lane now uses the basic render loop on macOS. Set
+  `QSG_RENDER_LOOP` to override.
+
 - The Settings section list is reachable from the keyboard. Tab lands on
   it, Up and Down move, and Enter or Space opens the section. Each
   entry exposes its name and whether it is selected.
