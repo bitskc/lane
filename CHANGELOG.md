@@ -64,6 +64,17 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Fixed
 
+- Plasma Wayland: the browser Lane launches from the picker (or the hold
+  bar) came up behind the window you were using instead of in front of
+  it. Lane never asked the compositor for an
+  activation token: the build flags that enable the request were set on
+  the `lane` executable instead of on the library holding the code, so
+  the request was compiled out and every launch went out with no
+  `XDG_ACTIVATION_TOKEN`. The flags now apply to the code that uses them,
+  and the launched browser receives the token and is raised. The same
+  change turns on the optional per-Activity integration wherever Plasma
+  Activities is installed, which was likewise compiled out.
+
 - macOS: with Qt Quick's threaded render loop the picker and hold
   overlays could come up mostly transparent because the fade-in froze
   partway. Lane now uses the basic render loop on macOS. Set
