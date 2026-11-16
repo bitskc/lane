@@ -74,6 +74,23 @@ if(LANE_KDE_DESKTOP)
         target_link_libraries(lane-app PUBLIC Plasma::Activities)
         target_compile_definitions(lane-app PUBLIC HAVE_PLASMA_ACTIVITIES)
     endif()
+    # Regression guard: the defines above gate code that lives in this
+    # library, so they must land on lane-app itself. A CMake-time check,
+    # not a #if in source, because a missing define otherwise just
+    # silently compiles the stub back in (that was the original bug).
+    get_target_property(_lane_app_defs lane-app COMPILE_DEFINITIONS)
+    if(KF6WindowSystem_FOUND AND NOT "HAVE_KWAYLANDEXTRAS" IN_LIST _lane_app_defs)
+        message(FATAL_ERROR
+            "lane-app is missing HAVE_KWAYLANDEXTRAS though KF6WindowSystem was "
+            "found. The define must be set on lane-app (which holds "
+            "platform_linux.cpp), not on the lane executable.")
+    endif()
+    if(PlasmaActivities_FOUND AND NOT "HAVE_PLASMA_ACTIVITIES" IN_LIST _lane_app_defs)
+        message(FATAL_ERROR
+            "lane-app is missing HAVE_PLASMA_ACTIVITIES though PlasmaActivities "
+            "was found. The define must be set on lane-app (which holds "
+            "Controller.cpp/Controller.h), not on the lane executable.")
+    endif()
 endif()
 
 if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
