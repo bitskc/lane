@@ -1,0 +1,15 @@
+cmake
+dbus-daemon
+extra-cmake-modules
+gcc-c++
+git
+gzip
+kf6-kwindowsystem-devel
+layer-shell-qt-devel
+ninja-build
+plasma-activities-devel
+qt6-qtbase-devel
+qt6-qtdeclarative-devel
+qt6-qtsvg-devel
+tar
+appstream

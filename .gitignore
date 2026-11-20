@@ -16,3 +16,7 @@ compile_commands.json
 /tests/fixtures/config/zen/
 /tests/fixtures/config/mozilla/
 /build-asan/
+
+# packaging/linux/build-tarball.sh output and build tree.
+/build-package/
+/dist/
