@@ -265,3 +265,7 @@ run `lane --rediscover` to reload the file and refresh targets. That
 contacts the running daemon over D-Bus when one is already up; if none
 is running, it starts the full background process and stays resident.
 Restart the daemon if you prefer a full process reset.
+
+## gstack
+
+Use the /browse skill from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
