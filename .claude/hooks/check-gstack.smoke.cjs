@@ -20,7 +20,9 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'check-gstack-'));
 const mk = (...p) => { const d = path.join(tmp, ...p); fs.mkdirSync(d, { recursive: true }); return d; };
 
 function run(env) {
-  const base = { PATH: process.env.PATH, HOME: path.join(tmp, 'home'), CLAUDE_PROJECT_DIR: repo };
+  // Real node first on PATH: version-manager shims can resolve node through HOME.
+  const nodePath = path.dirname(process.execPath) + path.delimiter + process.env.PATH;
+  const base = { PATH: nodePath, HOME: path.join(tmp, 'home'), CLAUDE_PROJECT_DIR: repo };
   return spawnSync('/bin/sh', ['-c', handler.command], { env: { ...base, ...env }, encoding: 'utf8' });
 }
 
