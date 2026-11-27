@@ -1,0 +1,56 @@
+'use strict';
+// Smoke test for the gstack gate. Runs the exact command registered in
+// .claude/settings.json (through sh, like Claude Code) against throwaway HOME
+// and GSTACK_ROOT directories. Not part of CI: `node .claude/hooks/check-gstack.smoke.cjs`.
+// POSIX only (uses sh).
+const assert = require('assert');
+const { spawnSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const repo = path.resolve(__dirname, '..', '..');
+const settings = JSON.parse(fs.readFileSync(path.join(repo, '.claude', 'settings.json'), 'utf8'));
+const [entry] = settings.hooks.PreToolUse;
+const [handler] = entry.hooks;
+assert.strictEqual(entry.matcher, 'Skill|skill');
+assert.strictEqual(handler.onFailure, 'block');
+
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'check-gstack-'));
+const mk = (...p) => { const d = path.join(tmp, ...p); fs.mkdirSync(d, { recursive: true }); return d; };
+const emptyHome = mk('home');
+const installed = mk('installed', 'bin');
+const binIsFile = mk('binfile');
+fs.writeFileSync(path.join(binIsFile, 'bin'), '');
+
+function run(env) {
+  const base = { PATH: process.env.PATH, HOME: emptyHome, CLAUDE_PROJECT_DIR: repo };
+  return spawnSync('/bin/sh', ['-c', handler.command], { env: { ...base, ...env }, encoding: 'utf8' });
+}
+
+try {
+  let r = run({ GSTACK_ROOT: path.dirname(installed) });
+  assert.strictEqual(r.status, 0, 'installed root allows');
+  assert.strictEqual(r.stdout.trim(), '{}');
+
+  for (const [name, env] of [
+    ['no install anywhere', {}],
+    ['empty GSTACK_ROOT', { GSTACK_ROOT: '' }],
+    ['bin is a file', { GSTACK_ROOT: binIsFile }],
+  ]) {
+    r = run(env);
+    assert.strictEqual(r.status, 2, `${name} denies`);
+    assert.strictEqual(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, 'deny');
+    assert.match(r.stderr, /BLOCKED: gstack is not installed globally/);
+  }
+
+  // The launcher failing to run must not look like allow (0) or deny (2):
+  // onFailure "block" turns these into a block on Claude Code 2.1.295+.
+  r = run({ CLAUDE_PROJECT_DIR: path.join(tmp, 'missing') });
+  assert.ok(r.status > 0 && r.status !== 2, 'missing hook file exits neither 0 nor 2');
+  r = run({ PATH: '/nonexistent' });
+  assert.ok(r.status > 0 && r.status !== 2, 'node off PATH exits neither 0 nor 2');
+  console.log('check-gstack smoke: ok');
+} finally {
+  fs.rmSync(tmp, { recursive: true, force: true });
+}

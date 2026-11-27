@@ -1,10 +1,10 @@
 'use strict';
 // Block skill usage when gstack is not installed globally.
 //
-// Resolve the install root the way gstack skill preambles do: the GSTACK_ROOT
-// env var first, then every host's global install location, then the migrated
-// repo location. Block only when NONE exist (#2500 — hardcoding
-// ~/.claude/skills/gstack false-blocked Codex-host and migrated-repo installs).
+// Vendored from gstack's team-init (required mode). Resolve the install root
+// the way gstack skill preambles do: the GSTACK_ROOT env var first, then every
+// host's global install location, then the migrated repo location. Block only
+// when NONE exist, so Codex-host and migrated-repo installs are not blocked.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -26,14 +26,14 @@ if (gstackRoot) {
 
 gstack is required for AI-assisted work in this repo.
 
-Install it:
+Stop and ask the user to install it (do not install it yourself):
   git clone --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
   cd ~/.claude/skills/gstack && ./setup --team
 
 Then restart your AI coding tool.
 `);
-  // Exit 2 denies on Claude Code (#2413) and on Copilot CLI, which treats a
-  // preToolUse exit 2 as deny (#2229).
+  // Exit 2 denies on Claude Code and on Copilot CLI (preToolUse). The stdout
+  // JSON is the structured form of the same deny.
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
     permissionDecisionReason: 'gstack is required but not installed. See stderr for install instructions.' } }) + '\n');
   process.exitCode = 2;

@@ -268,4 +268,8 @@ Restart the daemon if you prefer a full process reset.
 
 ## gstack
 
-Use the /browse skill from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
+gstack is required for AI-assisted work in this repo. The `## gstack` section of
+`CLAUDE.md` has the install steps and describes the Claude Code skill gate.
+
+Use gstack's browse tool (the /browse skill in Claude Code) for all web browsing
+when it is available. Never use mcp__claude-in-chrome__* tools.
