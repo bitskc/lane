@@ -18,20 +18,28 @@ assert.strictEqual(handler.onFailure, 'block');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'check-gstack-'));
 const mk = (...p) => { const d = path.join(tmp, ...p); fs.mkdirSync(d, { recursive: true }); return d; };
-const emptyHome = mk('home');
-const installed = mk('installed', 'bin');
-const binIsFile = mk('binfile');
-fs.writeFileSync(path.join(binIsFile, 'bin'), '');
 
 function run(env) {
-  const base = { PATH: process.env.PATH, HOME: emptyHome, CLAUDE_PROJECT_DIR: repo };
+  const base = { PATH: process.env.PATH, HOME: path.join(tmp, 'home'), CLAUDE_PROJECT_DIR: repo };
   return spawnSync('/bin/sh', ['-c', handler.command], { env: { ...base, ...env }, encoding: 'utf8' });
 }
 
 try {
-  let r = run({ GSTACK_ROOT: path.dirname(installed) });
-  assert.strictEqual(r.status, 0, 'installed root allows');
+  mk('home');
+  const binIsFile = mk('binfile');
+  fs.writeFileSync(path.join(binIsFile, 'bin'), '');
+
+  let r = run({ GSTACK_ROOT: path.dirname(mk('installed', 'bin')) });
+  assert.strictEqual(r.status, 0, 'GSTACK_ROOT install allows');
   assert.strictEqual(r.stdout.trim(), '{}');
+
+  // Installs found through HOME, with no GSTACK_ROOT.
+  for (const rel of ['.claude/skills/gstack', '.codex/skills/gstack', '.gstack/repos/gstack']) {
+    const home = mk('home-' + rel.replace(/\W/g, '_'));
+    mk('home-' + rel.replace(/\W/g, '_'), rel, 'bin');
+    r = run({ HOME: home });
+    assert.strictEqual(r.status, 0, `${rel} under HOME allows`);
+  }
 
   for (const [name, env] of [
     ['no install anywhere', {}],

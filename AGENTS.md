@@ -268,8 +268,10 @@ Restart the daemon if you prefer a full process reset.
 
 ## gstack
 
-gstack is required for AI-assisted work in this repo. The `## gstack` section of
-`CLAUDE.md` has the install steps and describes the Claude Code skill gate.
+gstack is the team toolchain for AI-assisted work in this repo. Claude Code is
+gated on it by a hook; the `## gstack` section of `CLAUDE.md` has the install
+steps and the gate details. Other agents are not gated: install gstack for your
+host with `./setup --host <name>` (or `--host auto`) from a gstack checkout.
 
 Use gstack's browse tool (the /browse skill in Claude Code) for all web browsing
-when it is available. Never use mcp__claude-in-chrome__* tools.
+when it is installed. Never use mcp__claude-in-chrome__* tools.
