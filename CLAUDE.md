@@ -32,3 +32,31 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=$HO
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+## gstack
+
+gstack is required for AI-assisted work in this repo. A PreToolUse hook
+(`.claude/hooks/check-gstack.cjs`, registered in `.claude/settings.json`)
+blocks every Skill call until gstack is installed globally. The hook needs
+Node.js on PATH and Claude Code 2.1.295 or later: older versions ignore
+`onFailure` and let a hook that fails to run through. Start Claude Code from
+the repo root: a session started in a subdirectory, or moved with `/cd`, does
+not load this `.claude/settings.json`, so skills are not gated there.
+
+If a skill is blocked, stop and tell the user to install gstack:
+
+```bash
+git clone --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
+cd ~/.claude/skills/gstack && ./setup --team
+```
+
+`--team` also turns on gstack auto-update at the start of each Claude Code
+session. Restart the AI coding tool after installing. Do not run the install
+yourself, skip skills, or work around the block.
+
+If the block says node was not found (`node: not found` or
+`node: command not found`), the user needs Node.js. If it says
+`Cannot find module ... check-gstack.cjs`, the hook file is missing from this
+checkout.
+
+Use the /browse skill from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.

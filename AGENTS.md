@@ -265,3 +265,14 @@ run `lane --rediscover` to reload the file and refresh targets. That
 contacts the running daemon over D-Bus when one is already up; if none
 is running, it starts the full background process and stays resident.
 Restart the daemon if you prefer a full process reset.
+
+## gstack
+
+When developing in this repo, gstack is the team toolchain for AI-assisted
+work. Claude Code is gated on it by a hook; the `## gstack` section of
+`CLAUDE.md` has the install steps and the gate details. Other agents are not
+gated: install gstack for your host with `./setup --host <name>` (or
+`--host auto`) from a gstack checkout.
+
+For web browsing in that work, use gstack's browse tool (the /browse skill in
+Claude Code) when it is installed. Never use mcp__claude-in-chrome__* tools.
