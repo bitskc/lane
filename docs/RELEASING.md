@@ -140,8 +140,9 @@ Release from the `main` branch after the changes you want are merged.
       Ubuntu's runner images do not. The image tag is pinned so a new
       Fedora release cannot change what the tarball links against
       between a green PR and the tag; bump it deliberately, in
-      `ci.yml` and `release.yml` together. The build dependencies are listed
-      in `packaging/linux/fedora-build-deps.txt`.
+      `ci.yml` and `release.yml` together, and update every
+      `Fedora 44` or `fedora:44` in `README.md` and in this file. The build
+      dependencies are listed in `packaging/linux/fedora-build-deps.txt`.
     - `release` waits for every `package` entry, then creates the
       GitHub Release for the tag as a draft, fills the release notes
       from the matching `## [x.y.z]` section of `CHANGELOG.md`, and
@@ -150,8 +151,13 @@ Release from the `main` branch after the changes you want are merged.
       each. Only after the assets are attached and counted does it
       publish the draft, so a failed upload never leaves a public
       release with missing files. If a run fails after the draft
-      exists, re-run it: the same draft is reused for the tag. GitHub
-      attaches the source `.zip` and `.tar.gz` itself.
+      exists, re-run it: the same draft is reused for the tag. Do not
+      re-run the whole workflow or re-push the tag after the release is
+      published: the action then replaces the assets on the public
+      release, and the rebuilt tarballs are not byte-for-byte
+      reproducible, so the published `.sha256` values change. Cut a new
+      patch release instead.
+      GitHub attaches the source `.zip` and `.tar.gz` itself.
 
     A failed build or test on either architecture stops the release
     before anything is published. The build also fails if the tag's
@@ -164,7 +170,7 @@ Release from the `main` branch after the changes you want are merged.
     The Linux tarballs hold an install tree built with prefix `/usr`
     (binary, `.desktop` file, D-Bus service, systemd user unit, icon,
     metainfo, license). Extract one at `/` as root, for example
-    `sudo tar -C / -xzf lane-0.3.0-linux-aarch64.tar.gz` (the archive
+    `sudo tar -C / -xzf lane-<version>-linux-aarch64.tar.gz` (the archive
     lists files only, so existing directories keep their modes). The
     `.sha256` files are published next to the tarballs, so they detect
     a corrupted download only; they do not prove who built the file.
@@ -176,8 +182,8 @@ Release from the `main` branch after the changes you want are merged.
     in `fedora-build-deps.txt` without the suffix: `qt6-qtbase`,
     `qt6-qtdeclarative`, `qt6-qtsvg`, `layer-shell-qt`,
     `kf6-kwindowsystem`, `plasma-activities`). To build one by hand,
-    run `packaging/linux/build-tarball.sh` on the target
-    architecture; it writes to `dist/`.
+    run `packaging/linux/build-tarball.sh [out-dir]` on the target
+    architecture; it writes to `dist/` unless you name another directory.
 
     There is no AppImage, AUR, or Flathub artifact to build or upload.
     The macOS bundle is built locally with `packaging/mac/bundle.sh`
@@ -185,11 +191,20 @@ Release from the `main` branch after the changes you want are merged.
     `packaging/PKGBUILD`, which lists both `x86_64` and `aarch64`.
 
     If the release workflow is ever missing or broken, create the
-    release by hand instead of skipping it:
+    release by hand instead of skipping it. On an x86_64 host and on an
+    aarch64 host (Fedora 44, as in the workflow), check out the tag and run
+    `LANE_VERSION=<version> packaging/linux/build-tarball.sh <fresh-dir>`;
+    the script then fails if the checkout is not that version, and the
+    default `dist/` may hold older builds. Copy both outputs into one
+    empty directory named `release-dist` and attach its files as shown
+    below; without them the release has no Linux tarballs. Delete any
+    draft a failed workflow run left for the tag, never re-run that run
+    afterwards (it would replace your assets), then run:
 
     ```bash
     gh release create v0.2.0 --title "Lane 0.2.0" \
-      --notes-file <(sed -n '/## \[0.2.0\]/,/## \[/p' CHANGELOG.md | sed '$d')
+      --notes-file <(sed -n '/## \[0.2.0\]/,/## \[/p' CHANGELOG.md | sed '$d') \
+      release-dist/*
     ```
 
     (That `sed` pulls just the new version's section out of the
