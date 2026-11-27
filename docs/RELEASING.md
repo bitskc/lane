@@ -198,7 +198,8 @@ Release from the `main` branch after the changes you want are merged.
     default `dist/` may hold older builds. Copy both outputs into one
     empty directory named `release-dist` and attach its files as shown
     below; without them the release has no Linux tarballs. Delete any
-    draft a failed workflow run left for the tag, then run:
+    draft a failed workflow run left for the tag, never re-run that run
+    afterwards (it would replace your assets), then run:
 
     ```bash
     gh release create v0.2.0 --title "Lane 0.2.0" \
