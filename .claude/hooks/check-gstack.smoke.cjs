@@ -82,8 +82,9 @@ try {
       assert.strictEqual(permissionDecision, 'deny');
       assert.strictEqual(permissionDecisionReason, r.stderr, `${label}: reason equals stderr`);
       assert.match(permissionDecisionReason, /do not install it yourself/);
-      assert.match(permissionDecisionReason, /git clone --depth 1 https:\/\/github\.com\/garrytan\/gstack\.git/);
-      assert.match(permissionDecisionReason, /\.\/setup --team/);
+      // The steps must install where the hook looks (~/.claude/skills/gstack).
+      assert.match(permissionDecisionReason, /git clone --depth 1 https:\/\/github\.com\/garrytan\/gstack\.git ~\/\.claude\/skills\/gstack\n/);
+      assert.match(permissionDecisionReason, /cd ~\/\.claude\/skills\/gstack && \.\/setup --team\n/);
     }
   }
 
