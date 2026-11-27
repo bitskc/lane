@@ -6,11 +6,57 @@ on:
       - v*
 permissions:
   contents: write
+# One release run per tag at a time, so a re-pushed tag or a manual re-run
+# cannot upload stale assets over a newer run's.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
+  package:
+    # Builds and tests Lane on each Linux architecture and packs the install
+    # tree (packaging/linux/build-tarball.sh). Fedora is the build base because
+    # its Qt 6 and KDE Frameworks meet the CMake minimums on both x86_64 and
+    # aarch64, which Ubuntu's runner images do not. aarch64 builds natively on
+    # GitHub's Arm runner. The release job waits for every entry, so a failed
+    # build or test never publishes a partial release.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    runs-on: ${{ matrix.runner }}
+    container: fedora:44
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Install git
+        run: dnf install -y git
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: dnf install -y $(cat packaging/linux/fedora-build-deps.txt)
+      - name: Build, test, and package
+        run: |
+          LANE_VERSION="${GITHUB_REF_NAME#v}" packaging/linux/build-tarball.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lane-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
   release:
+    needs: package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lane-linux-*
+          merge-multiple: true
+          path: dist
       - name: Extract changelog section
         id: notes
         run: |
@@ -43,12 +89,30 @@ jobs:
           else
             echo "use_changelog=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Create GitHub Release
+      # Created as a draft so nothing is public until every asset is attached;
+      # the next step publishes it. A failed upload leaves an unpublished
+      # draft, and a re-run reuses that draft for the same tag.
+      - name: Create draft GitHub Release
+        id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          files: dist/*
+          fail_on_unmatched_files: true
           body: ${{ steps.notes.outputs.use_changelog == 'true' && steps.notes.outputs.body || '' }}
           generate_release_notes: ${{ steps.notes.outputs.use_changelog != 'true' }}
-          draft: false
+          draft: true
           prerelease: false
+      - name: Publish release once all assets are attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+        run: |
+          want=$(find dist -maxdepth 1 -type f | wc -l)
+          have=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets | length')
+          if [ "$have" -ne "$want" ]; then
+            echo "release $RELEASE_ID has $have assets, expected $want; leaving it as a draft" >&2
+            exit 1
+          fi
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false

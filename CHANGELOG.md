@@ -9,6 +9,13 @@ version is 0, minor releases may still contain breaking changes.
 
 ### Added
 
+- Release builds for Linux on x86_64 and aarch64. Pushing a `v*` tag now
+  builds and tests Lane on GitHub's x86_64 and native Arm runners (inside
+  a Fedora container) and attaches `lane-<version>-linux-x86_64.tar.gz`
+  and `lane-<version>-linux-aarch64.tar.gz`, each with a `.sha256` file, to
+  the GitHub Release. The same build runs on every pull request as the
+  `package-linux` CI job, and `packaging/PKGBUILD` now lists `aarch64`.
+
 - Native macOS app (`Lane.app`) for Apple Silicon: menu-bar status item
   (`LSUIElement`, no Dock icon), AppKit URL delivery and reopen-to-Settings,
   `NSWorkspace` default-handler registration for http/https, User
