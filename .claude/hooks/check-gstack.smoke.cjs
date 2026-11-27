@@ -63,20 +63,28 @@ try {
     assert.strictEqual(r.stdout.trim(), '{}');
   }
 
+  // Each deny case runs from a plain cwd and from one that holds a bin/: a
+  // relative 'bin' must never count as an install.
   for (const [name, env] of [
     ['no install anywhere', {}],
     ['empty GSTACK_ROOT', { GSTACK_ROOT: '' }],
     ['bin is a file', { GSTACK_ROOT: binIsFile }],
   ]) {
-    r = run(env);
-    assert.strictEqual(r.status, 2, `${name} denies`);
-    assert.match(r.stderr, /BLOCKED: gstack is not installed globally/);
-    // Claude Code shows the JSON reason to the model instead of stderr, so it
-    // must carry the install instructions and the do-not-install-yourself rule.
-    const { permissionDecision, permissionDecisionReason } = JSON.parse(r.stdout).hookSpecificOutput;
-    assert.strictEqual(permissionDecision, 'deny');
-    assert.match(permissionDecisionReason, /do not install it yourself/);
-    assert.match(permissionDecisionReason, /\.\/setup --team/);
+    for (const cwd of [undefined, cwdWithBin]) {
+      const label = cwd ? `${name}, cwd holds bin/` : name;
+      r = run(env, cwd);
+      assert.strictEqual(r.status, 2, `${label} denies`);
+      assert.match(r.stderr, /BLOCKED: gstack is not installed globally/);
+      // Claude Code shows the JSON reason to the model instead of stderr, so the
+      // reason must be the same full message: install steps and the
+      // do-not-install-yourself rule included.
+      const { permissionDecision, permissionDecisionReason } = JSON.parse(r.stdout).hookSpecificOutput;
+      assert.strictEqual(permissionDecision, 'deny');
+      assert.strictEqual(permissionDecisionReason, r.stderr, `${label}: reason equals stderr`);
+      assert.match(permissionDecisionReason, /do not install it yourself/);
+      assert.match(permissionDecisionReason, /git clone --depth 1 https:\/\/github\.com\/garrytan\/gstack\.git/);
+      assert.match(permissionDecisionReason, /\.\/setup --team/);
+    }
   }
 
   // The launcher failing to run must not look like allow (0) or deny (2):

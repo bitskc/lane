@@ -6,7 +6,8 @@
 // first, then every host's global install location, then the migrated repo
 // location. Block only when NONE exist, so Codex-host and migrated-repo installs
 // are not blocked. Re-running gstack-team-init overwrites this file (the deny
-// wording is local), so check-gstack.smoke.cjs asserts the wording kept here.
+// wording is local): run check-gstack.smoke.cjs by hand afterwards, it asserts
+// the wording kept here.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
