@@ -1,10 +1,13 @@
 'use strict';
 // Block skill usage when gstack is not installed globally.
 //
-// Vendored from gstack's team-init (required mode). Resolve the install root
-// the way gstack skill preambles do: the GSTACK_ROOT env var first, then every
-// host's global install location, then the migrated repo location. Block only
-// when NONE exist, so Codex-host and migrated-repo installs are not blocked.
+// Vendored from gstack's team-init (required mode, gstack 1.104.0.0). Resolve
+// the install root the way gstack skill preambles do: the GSTACK_ROOT env var
+// first, then every host's global install location, then the migrated repo
+// location. Block only when NONE exist, so Codex-host and migrated-repo installs
+// are not blocked. Re-running gstack-team-init overwrites this file (the deny
+// wording is local): run check-gstack.smoke.cjs by hand afterwards, it asserts
+// the wording kept here.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -22,7 +25,7 @@ const gstackRoot = roots.find((root) => {
 if (gstackRoot) {
   process.stdout.write('{}\n');
 } else {
-  process.stderr.write(`BLOCKED: gstack is not installed globally.
+  const message = `BLOCKED: gstack is not installed globally.
 
 gstack is required for AI-assisted work in this repo.
 
@@ -31,10 +34,12 @@ Stop and ask the user to install it (do not install it yourself):
   cd ~/.claude/skills/gstack && ./setup --team
 
 Then restart your AI coding tool.
-`);
-  // Exit 2 denies on Claude Code. The stdout JSON is the structured form of
-  // the same deny.
+`;
+  process.stderr.write(message);
+  // Exit 2 denies on Claude Code. When the hook also prints a deny JSON, Claude
+  // Code shows its permissionDecisionReason to the model instead of stderr, so
+  // the reason carries the full message.
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
-    permissionDecisionReason: 'gstack is required but not installed. See stderr for install instructions.' } }) + '\n');
+    permissionDecisionReason: message } }) + '\n');
   process.exitCode = 2;
 }

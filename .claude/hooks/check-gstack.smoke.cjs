@@ -19,11 +19,11 @@ assert.strictEqual(handler.onFailure, 'block');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'check-gstack-'));
 const mk = (...p) => { const d = path.join(tmp, ...p); fs.mkdirSync(d, { recursive: true }); return d; };
 
-function run(env) {
+function run(env, cwd) {
   // Real node first on PATH: version-manager shims can resolve node through HOME.
   const nodePath = path.dirname(process.execPath) + path.delimiter + process.env.PATH;
   const base = { PATH: nodePath, HOME: path.join(tmp, 'home'), CLAUDE_PROJECT_DIR: repo };
-  return spawnSync('/bin/sh', ['-c', handler.command], { env: { ...base, ...env }, encoding: 'utf8' });
+  return spawnSync('/bin/sh', ['-c', handler.command], { env: { ...base, ...env }, cwd, encoding: 'utf8' });
 }
 
 try {
@@ -50,15 +50,42 @@ try {
   assert.strictEqual(r.status, 0, 'stale GSTACK_ROOT falls through to HOME install');
   assert.strictEqual(r.stdout.trim(), '{}');
 
+  // path.join('', 'bin') is the relative path 'bin'. Without the empty-root
+  // guard, an unset or empty GSTACK_ROOT would match a cwd that holds a bin/,
+  // end the search with '' (falsy) and block despite a real install under HOME.
+  const cwdWithBin = path.dirname(mk('cwd-with-bin', 'bin'));
+  for (const [name, env] of [
+    ['unset GSTACK_ROOT', { HOME: installedHome }],
+    ['empty GSTACK_ROOT', { HOME: installedHome, GSTACK_ROOT: '' }],
+  ]) {
+    r = run(env, cwdWithBin);
+    assert.strictEqual(r.status, 0, `${name} with a bin/ in cwd still finds the HOME install`);
+    assert.strictEqual(r.stdout.trim(), '{}');
+  }
+
+  // Each deny case runs from a plain cwd and from one that holds a bin/: a
+  // relative 'bin' must never count as an install.
   for (const [name, env] of [
     ['no install anywhere', {}],
     ['empty GSTACK_ROOT', { GSTACK_ROOT: '' }],
     ['bin is a file', { GSTACK_ROOT: binIsFile }],
   ]) {
-    r = run(env);
-    assert.strictEqual(r.status, 2, `${name} denies`);
-    assert.strictEqual(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, 'deny');
-    assert.match(r.stderr, /BLOCKED: gstack is not installed globally/);
+    for (const cwd of [undefined, cwdWithBin]) {
+      const label = cwd ? `${name}, cwd holds bin/` : name;
+      r = run(env, cwd);
+      assert.strictEqual(r.status, 2, `${label} denies`);
+      assert.match(r.stderr, /BLOCKED: gstack is not installed globally/);
+      // Claude Code shows the JSON reason to the model instead of stderr, so the
+      // reason must be the same full message: install steps and the
+      // do-not-install-yourself rule included.
+      const { permissionDecision, permissionDecisionReason } = JSON.parse(r.stdout).hookSpecificOutput;
+      assert.strictEqual(permissionDecision, 'deny');
+      assert.strictEqual(permissionDecisionReason, r.stderr, `${label}: reason equals stderr`);
+      assert.match(permissionDecisionReason, /do not install it yourself/);
+      // The steps must install where the hook looks (~/.claude/skills/gstack).
+      assert.match(permissionDecisionReason, /git clone --depth 1 https:\/\/github\.com\/garrytan\/gstack\.git ~\/\.claude\/skills\/gstack\n/);
+      assert.match(permissionDecisionReason, /cd ~\/\.claude\/skills\/gstack && \.\/setup --team\n/);
+    }
   }
 
   // The launcher failing to run must not look like allow (0) or deny (2):
