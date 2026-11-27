@@ -32,8 +32,8 @@ Stop and ask the user to install it (do not install it yourself):
 
 Then restart your AI coding tool.
 `);
-  // Exit 2 denies on Claude Code and on Copilot CLI (preToolUse). The stdout
-  // JSON is the structured form of the same deny.
+  // Exit 2 denies on Claude Code. The stdout JSON is the structured form of
+  // the same deny.
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
     permissionDecisionReason: 'gstack is required but not installed. See stderr for install instructions.' } }) + '\n');
   process.exitCode = 2;

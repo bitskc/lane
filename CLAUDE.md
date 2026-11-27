@@ -40,7 +40,8 @@ gstack is required for AI-assisted work in this repo. A PreToolUse hook
 blocks every Skill call until gstack is installed globally. The hook needs
 Node.js on PATH and Claude Code 2.1.295 or later: older versions ignore
 `onFailure` and let a hook that fails to run through. Start Claude Code from
-the repo root or a subdirectory of it so the hook can be found.
+the repo root: a session started in a subdirectory, or moved with `/cd`, does
+not load this `.claude/settings.json`, so skills are not gated there.
 
 If a skill is blocked, stop and tell the user to install gstack:
 
@@ -56,6 +57,6 @@ yourself, skip skills, or work around the block.
 If the block says node was not found (`node: not found` or
 `node: command not found`), the user needs Node.js. If it says
 `Cannot find module ... check-gstack.cjs`, the hook file is missing from this
-checkout or Claude Code was not started inside the repo.
+checkout.
 
 Use the /browse skill from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
