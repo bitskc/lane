@@ -140,8 +140,8 @@ Release from the `main` branch after the changes you want are merged.
       Ubuntu's runner images do not. The image tag is pinned so a new
       Fedora release cannot change what the tarball links against
       between a green PR and the tag; bump it deliberately, in
-      `ci.yml` and `release.yml` together, and update the Fedora
-      release named in `README.md` and in this section. The build
+      `ci.yml` and `release.yml` together, and update every
+      `Fedora 44` or `fedora:44` in `README.md` and in this file. The build
       dependencies are listed in `packaging/linux/fedora-build-deps.txt`.
     - `release` waits for every `package` entry, then creates the
       GitHub Release for the tag as a draft, fills the release notes
@@ -152,10 +152,11 @@ Release from the `main` branch after the changes you want are merged.
       publish the draft, so a failed upload never leaves a public
       release with missing files. If a run fails after the draft
       exists, re-run it: the same draft is reused for the tag. Do not
-      re-run the workflow after the release is published: the action
-      then replaces the assets on the public release, and the
-      tarballs are not byte-for-byte reproducible, so the published
-      `.sha256` values change. Cut a new patch release instead.
+      re-run the workflow or re-push the tag after the release is
+      published: the action then replaces the assets on the public
+      release, and the tarballs are not byte-for-byte reproducible, so
+      the published `.sha256` values change. Cut a new patch release
+      instead.
       GitHub attaches the source `.zip` and `.tar.gz` itself.
 
     A failed build or test on either architecture stops the release
@@ -190,16 +191,17 @@ Release from the `main` branch after the changes you want are merged.
     `packaging/PKGBUILD`, which lists both `x86_64` and `aarch64`.
 
     If the release workflow is ever missing or broken, create the
-    release by hand instead of skipping it. Run
-    `packaging/linux/build-tarball.sh` on an x86_64 host and on an
-    aarch64 host (Fedora 44, as in the workflow), copy both outputs
-    into one `dist/` directory, and attach its files as shown below;
+    release by hand instead of skipping it. On an x86_64 host and on an
+    aarch64 host (Fedora 44, as in the workflow), run
+    `packaging/linux/build-tarball.sh <fresh-dir>`, since the default
+    `dist/` may hold older builds. Copy both outputs into one empty
+    directory named `release-dist` and attach its files as shown below;
     without them the release has no Linux tarballs:
 
     ```bash
     gh release create v0.2.0 --title "Lane 0.2.0" \
       --notes-file <(sed -n '/## \[0.2.0\]/,/## \[/p' CHANGELOG.md | sed '$d') \
-      dist/*
+      release-dist/*
     ```
 
     (That `sed` pulls just the new version's section out of the
