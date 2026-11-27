@@ -17,6 +17,9 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#ifdef Q_OS_MACOS
+#include <QQuickWindow>
+#endif
 #include <QSocketNotifier>
 #include <cerrno>
 #include <csignal>
@@ -90,6 +93,21 @@ int main(int argc, char **argv)
     // platform theme. The qtquickcontrols2.conf resource covers hosts
     // that do not run a KDE platformtheme plugin.
     qputenv("QT_QUICK_CONTROLS_STYLE", "Fusion");
+
+#ifdef Q_OS_MACOS
+    // Observed on a MacBook with Qt Quick's threaded render loop: after a
+    // re-show, the picker window gets about 3 frames and then none. The
+    // render thread is idle, the fade-in freezes at a partial opacity
+    // and the card stays mostly transparent until the window is hidden.
+    // With QSG_RENDER_LOOP=basic the stall did not occur in testing. The
+    // cause inside the threaded loop is not identified. A non-empty
+    // QSG_RENDER_LOOP in the environment still wins; Qt ignores an empty
+    // one, so that case gets the basic loop too.
+    const bool laneSetRenderLoop = qEnvironmentVariableIsEmpty("QSG_RENDER_LOOP");
+    if (laneSetRenderLoop) {
+        qputenv("QSG_RENDER_LOOP", "basic");
+    }
+#endif
 
     QApplication app(argc, argv);
     app.setQuitOnLastWindowClosed(false);
@@ -173,6 +191,19 @@ int main(int argc, char **argv)
     if (!instance.claim()) {
         return 0;
     }
+
+#ifdef Q_OS_MACOS
+    // QSGRenderLoop::instance() reads QSG_RENDER_LOOP once, when the first
+    // QQuickWindow is constructed (the software adaptation also caches it
+    // in a static), and every later window reuses that loop. Constructing
+    // one throwaway window here, before Controller can create the real
+    // ones, pins the loop; the variable then goes so browsers and other
+    // children Lane spawns do not inherit it. Only done when Lane set it.
+    if (laneSetRenderLoop) {
+        QQuickWindow loopPrimer;
+        qunsetenv("QSG_RENDER_LOOP");
+    }
+#endif
 
     Lane::Controller controller;
 
