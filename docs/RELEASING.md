@@ -140,8 +140,9 @@ Release from the `main` branch after the changes you want are merged.
       Ubuntu's runner images do not. The image tag is pinned so a new
       Fedora release cannot change what the tarball links against
       between a green PR and the tag; bump it deliberately, in
-      `ci.yml` and `release.yml` together. The build dependencies are listed
-      in `packaging/linux/fedora-build-deps.txt`.
+      `ci.yml` and `release.yml` together, and update the Fedora
+      release named in `README.md` and in this section. The build
+      dependencies are listed in `packaging/linux/fedora-build-deps.txt`.
     - `release` waits for every `package` entry, then creates the
       GitHub Release for the tag as a draft, fills the release notes
       from the matching `## [x.y.z]` section of `CHANGELOG.md`, and
@@ -150,8 +151,12 @@ Release from the `main` branch after the changes you want are merged.
       each. Only after the assets are attached and counted does it
       publish the draft, so a failed upload never leaves a public
       release with missing files. If a run fails after the draft
-      exists, re-run it: the same draft is reused for the tag. GitHub
-      attaches the source `.zip` and `.tar.gz` itself.
+      exists, re-run it: the same draft is reused for the tag. Do not
+      re-run the workflow after the release is published: the action
+      then replaces the assets on the public release, and the
+      tarballs are not byte-for-byte reproducible, so the published
+      `.sha256` values change. Cut a new patch release instead.
+      GitHub attaches the source `.zip` and `.tar.gz` itself.
 
     A failed build or test on either architecture stops the release
     before anything is published. The build also fails if the tag's
@@ -164,7 +169,7 @@ Release from the `main` branch after the changes you want are merged.
     The Linux tarballs hold an install tree built with prefix `/usr`
     (binary, `.desktop` file, D-Bus service, systemd user unit, icon,
     metainfo, license). Extract one at `/` as root, for example
-    `sudo tar -C / -xzf lane-0.3.0-linux-aarch64.tar.gz` (the archive
+    `sudo tar -C / -xzf lane-<version>-linux-aarch64.tar.gz` (the archive
     lists files only, so existing directories keep their modes). The
     `.sha256` files are published next to the tarballs, so they detect
     a corrupted download only; they do not prove who built the file.
@@ -185,11 +190,16 @@ Release from the `main` branch after the changes you want are merged.
     `packaging/PKGBUILD`, which lists both `x86_64` and `aarch64`.
 
     If the release workflow is ever missing or broken, create the
-    release by hand instead of skipping it:
+    release by hand instead of skipping it. Run
+    `packaging/linux/build-tarball.sh` on an x86_64 host and on an
+    aarch64 host (Fedora 44, as in the workflow), copy both outputs
+    into one `dist/` directory, and attach its files as shown below;
+    without them the release has no Linux tarballs:
 
     ```bash
     gh release create v0.2.0 --title "Lane 0.2.0" \
-      --notes-file <(sed -n '/## \[0.2.0\]/,/## \[/p' CHANGELOG.md | sed '$d')
+      --notes-file <(sed -n '/## \[0.2.0\]/,/## \[/p' CHANGELOG.md | sed '$d') \
+      dist/*
     ```
 
     (That `sed` pulls just the new version's section out of the
