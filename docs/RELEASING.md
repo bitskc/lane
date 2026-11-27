@@ -182,8 +182,8 @@ Release from the `main` branch after the changes you want are merged.
     in `fedora-build-deps.txt` without the suffix: `qt6-qtbase`,
     `qt6-qtdeclarative`, `qt6-qtsvg`, `layer-shell-qt`,
     `kf6-kwindowsystem`, `plasma-activities`). To build one by hand,
-    run `packaging/linux/build-tarball.sh` on the target
-    architecture; it writes to `dist/`.
+    run `packaging/linux/build-tarball.sh [out-dir]` on the target
+    architecture; it writes to `dist/` unless you name another directory.
 
     There is no AppImage, AUR, or Flathub artifact to build or upload.
     The macOS bundle is built locally with `packaging/mac/bundle.sh`
@@ -192,11 +192,13 @@ Release from the `main` branch after the changes you want are merged.
 
     If the release workflow is ever missing or broken, create the
     release by hand instead of skipping it. On an x86_64 host and on an
-    aarch64 host (Fedora 44, as in the workflow), run
-    `packaging/linux/build-tarball.sh <fresh-dir>`, since the default
-    `dist/` may hold older builds. Copy both outputs into one empty
-    directory named `release-dist` and attach its files as shown below;
-    without them the release has no Linux tarballs:
+    aarch64 host (Fedora 44, as in the workflow), check out the tag and run
+    `LANE_VERSION=<version> packaging/linux/build-tarball.sh <fresh-dir>`;
+    the script then fails if the checkout is not that version, and the
+    default `dist/` may hold older builds. Copy both outputs into one
+    empty directory named `release-dist` and attach its files as shown
+    below; without them the release has no Linux tarballs. Delete any
+    draft a failed workflow run left for the tag, then run:
 
     ```bash
     gh release create v0.2.0 --title "Lane 0.2.0" \

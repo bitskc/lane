@@ -240,7 +240,8 @@ sudo tar -C / -xzf lane-<version>-linux-aarch64.tar.gz
 sudo update-desktop-database
 ```
 
-To build the same tarball yourself, run `packaging/linux/build-tarball.sh`.
+To build an equivalent tarball yourself (its checksum differs from the
+published one), run `packaging/linux/build-tarball.sh`.
 
 ## Build (CachyOS / Arch)
 
