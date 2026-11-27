@@ -36,12 +36,19 @@ try {
   assert.strictEqual(r.stdout.trim(), '{}');
 
   // Installs found through HOME, with no GSTACK_ROOT.
+  let installedHome;
   for (const rel of ['.claude/skills/gstack', '.codex/skills/gstack', '.gstack/repos/gstack']) {
     const home = mk('home-' + rel.replace(/\W/g, '_'));
     mk('home-' + rel.replace(/\W/g, '_'), rel, 'bin');
     r = run({ HOME: home });
     assert.strictEqual(r.status, 0, `${rel} under HOME allows`);
+    installedHome ||= home;
   }
+
+  // A stale GSTACK_ROOT must fall through to the HOME locations, not block.
+  r = run({ HOME: installedHome, GSTACK_ROOT: binIsFile });
+  assert.strictEqual(r.status, 0, 'stale GSTACK_ROOT falls through to HOME install');
+  assert.strictEqual(r.stdout.trim(), '{}');
 
   for (const [name, env] of [
     ['no install anywhere', {}],
