@@ -152,11 +152,11 @@ Release from the `main` branch after the changes you want are merged.
       publish the draft, so a failed upload never leaves a public
       release with missing files. If a run fails after the draft
       exists, re-run it: the same draft is reused for the tag. Do not
-      re-run the workflow or re-push the tag after the release is
+      re-run the whole workflow or re-push the tag after the release is
       published: the action then replaces the assets on the public
-      release, and the tarballs are not byte-for-byte reproducible, so
-      the published `.sha256` values change. Cut a new patch release
-      instead.
+      release, and the rebuilt tarballs are not byte-for-byte
+      reproducible, so the published `.sha256` values change. Cut a new
+      patch release instead.
       GitHub attaches the source `.zip` and `.tar.gz` itself.
 
     A failed build or test on either architecture stops the release
