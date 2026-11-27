@@ -108,7 +108,10 @@ for unit in \
     "$STAGE/usr/share/dbus-1/services/app.lane.Lane.service" \
     "$STAGE/usr/share/systemd/user/lane.service"
 do
-    grep -qE '^Exec=/usr/bin/lane( |$)' "$unit" || die "$unit does not Exec /usr/bin/lane"
+    # .desktop and D-Bus files use Exec=, the systemd unit ExecStart=.
+    execs="$(grep -E '^Exec(Start)?=' "$unit")" || die "$unit has no Exec line"
+    stray_exec="$(printf '%s\n' "$execs" | grep -vE '^Exec(Start)?=/usr/bin/lane( |$)' || true)"
+    [ -z "$stray_exec" ] || die "$unit has an Exec line outside /usr/bin/lane: $stray_exec"
 done
 (cd "$OUT_DIR" && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
 echo "built $OUT_DIR/$NAME.tar.gz"
