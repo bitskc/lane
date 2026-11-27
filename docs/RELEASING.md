@@ -143,30 +143,40 @@ Release from the `main` branch after the changes you want are merged.
       `ci.yml` and `release.yml` together. The build dependencies are listed
       in `packaging/linux/fedora-build-deps.txt`.
     - `release` waits for every `package` entry, then creates the
-      GitHub Release for the tag, fills the release notes from the
-      matching `## [x.y.z]` section of `CHANGELOG.md`, and attaches
-      `lane-<version>-linux-x86_64.tar.gz`,
+      GitHub Release for the tag as a draft, fills the release notes
+      from the matching `## [x.y.z]` section of `CHANGELOG.md`, and
+      attaches `lane-<version>-linux-x86_64.tar.gz`,
       `lane-<version>-linux-aarch64.tar.gz`, and a `.sha256` file for
-      each. GitHub attaches the source `.zip` and `.tar.gz` itself.
+      each. Only after the assets are attached and counted does it
+      publish the draft, so a failed upload never leaves a public
+      release with missing files. If a run fails after the draft
+      exists, re-run it: the same draft is reused for the tag. GitHub
+      attaches the source `.zip` and `.tar.gz` itself.
 
     A failed build or test on either architecture stops the release
     before anything is published. The build also fails if the tag's
     version differs from the one in `CMakeLists.txt`, so a tag pushed
-    before the version bump never publishes mislabeled files. The same
-    packaging also runs as the `package-linux` job in `ci.yml` on every push and pull request to
-    `main`, so a break shows up before a tag is pushed.
+    before the version bump never publishes mislabeled files (this
+    includes tags such as `v0.3.0-rc1`). The same packaging also runs
+    as the `package-linux` job in `ci.yml` on every push and pull
+    request to `main`, so a break shows up before a tag is pushed.
 
     The Linux tarballs hold an install tree built with prefix `/usr`
     (binary, `.desktop` file, D-Bus service, systemd user unit, icon,
-    metainfo). Extract one at `/` as root, for example
+    metainfo, license). Extract one at `/` as root, for example
     `sudo tar -C / -xzf lane-0.3.0-linux-aarch64.tar.gz` (the archive
-    lists files only, so existing directories keep their modes). The binary
-    links the build distro's Qt 6, KDE Frameworks and glibc, so it suits
-    current Fedora or a distro at least as new, with the matching runtime
-    packages installed (the `-devel` names in `fedora-build-deps.txt`
-    without the suffix: `qt6-qtbase`, `qt6-qtdeclarative`, `qt6-qtsvg`,
-    `layer-shell-qt`, `kf6-kwindowsystem`, `plasma-activities`). To build
-    one by hand, run `packaging/linux/build-tarball.sh` on the target
+    lists files only, so existing directories keep their modes). The
+    `.sha256` files are published next to the tarballs, so they detect
+    a corrupted download only; they do not prove who built the file.
+    The binary links the build distro's Qt 6 (including Qt private
+    API used by the compiled QML), KDE Frameworks and libstdc++, so it
+    needs a distro with the same Qt 6 minor version as the Fedora
+    release in `fedora:44` and a libstdc++ and glibc at least as new,
+    with the matching runtime packages installed (the `-devel` names
+    in `fedora-build-deps.txt` without the suffix: `qt6-qtbase`,
+    `qt6-qtdeclarative`, `qt6-qtsvg`, `layer-shell-qt`,
+    `kf6-kwindowsystem`, `plasma-activities`). To build one by hand,
+    run `packaging/linux/build-tarball.sh` on the target
     architecture; it writes to `dist/`.
 
     There is no AppImage, AUR, or Flathub artifact to build or upload.

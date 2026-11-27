@@ -118,7 +118,6 @@ jobs:
     container: fedora:44
     env:
       QT_QPA_PLATFORM: offscreen
-      LANE_ARCH: ${{ matrix.arch }}
     steps:
       - name: Install git
         run: dnf install -y git
