@@ -37,11 +37,13 @@ ctest --test-dir build --output-on-failure
 
 gstack is required for AI-assisted work in this repo. A PreToolUse hook
 (`.claude/hooks/check-gstack.cjs`, registered in `.claude/settings.json`)
-blocks every Skill call until gstack is installed globally. The hook needs
-Node.js on PATH and Claude Code 2.1.295 or later: older versions ignore
-`onFailure` and let a hook that fails to run through. Start Claude Code from
-the repo root: a session started in a subdirectory, or moved with `/cd`, does
-not load this `.claude/settings.json`, so skills are not gated there.
+blocks every Skill tool call the model makes until gstack is installed
+globally. It is a workflow gate, not a security control: a `/command` the
+user types, or a SKILL.md read directly, is not gated. The hook needs Node.js
+on PATH and Claude Code 2.1.295 or later: older versions ignore `onFailure`
+and let a hook that fails to run through. Start Claude Code from the repo
+root: a session started in a subdirectory, or moved with `/cd`, does not load
+this `.claude/settings.json`, so skills are not gated there.
 
 If a skill is blocked, stop and tell the user to install gstack:
 
