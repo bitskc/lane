@@ -59,6 +59,38 @@ target_include_directories(lane-app PUBLIC ${CMAKE_BINARY_DIR})
 target_link_libraries(lane-app PUBLIC lane-core Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets)
 if(LANE_KDE_DESKTOP)
     target_link_libraries(lane-app PRIVATE Qt6::DBus)
+    # These defines gate code in lane-app sources (platform_linux.cpp's
+    # activation-token request, Controller's Activities integration), so
+    # they MUST be set on lane-app itself. Set on the `lane` executable
+    # only, they never reached those translation units and the code was
+    # silently compiled out: no XDG activation token was ever requested
+    # and launched browsers were not raised. PUBLIC keeps every consumer of
+    # Controller.h (lane, tests) on the same class layout.
+    if(KF6WindowSystem_FOUND)
+        target_link_libraries(lane-app PUBLIC KF6::WindowSystem)
+        target_compile_definitions(lane-app PUBLIC HAVE_KWAYLANDEXTRAS)
+    endif()
+    if(PlasmaActivities_FOUND)
+        target_link_libraries(lane-app PUBLIC Plasma::Activities)
+        target_compile_definitions(lane-app PUBLIC HAVE_PLASMA_ACTIVITIES)
+    endif()
+    # Regression guard: the defines above gate code that lives in this
+    # library, so they must land on lane-app itself. A CMake-time check,
+    # not a #if in source, because a missing define otherwise just
+    # silently compiles the stub back in (that was the original bug).
+    get_target_property(_lane_app_defs lane-app COMPILE_DEFINITIONS)
+    if(KF6WindowSystem_FOUND AND NOT "HAVE_KWAYLANDEXTRAS" IN_LIST _lane_app_defs)
+        message(FATAL_ERROR
+            "lane-app is missing HAVE_KWAYLANDEXTRAS though KF6WindowSystem was "
+            "found. The define must be set on lane-app (which holds "
+            "platform_linux.cpp), not on the lane executable.")
+    endif()
+    if(PlasmaActivities_FOUND AND NOT "HAVE_PLASMA_ACTIVITIES" IN_LIST _lane_app_defs)
+        message(FATAL_ERROR
+            "lane-app is missing HAVE_PLASMA_ACTIVITIES though PlasmaActivities "
+            "was found. The define must be set on lane-app (which holds "
+            "Controller.cpp/Controller.h), not on the lane executable.")
+    endif()
 endif()
 
 if(LANE_KDE_DESKTOP OR LANE_MAC_DESKTOP)
@@ -148,16 +180,6 @@ if(LANE_KDE_DESKTOP)
             Qt6::Svg
             LayerShellQt::Interface
     )
-
-    if(KF6WindowSystem_FOUND)
-        target_link_libraries(lane PRIVATE KF6::WindowSystem)
-        target_compile_definitions(lane PRIVATE HAVE_KWAYLANDEXTRAS)
-    endif()
-
-    if(PlasmaActivities_FOUND)
-        target_link_libraries(lane PRIVATE Plasma::Activities)
-        target_compile_definitions(lane PRIVATE HAVE_PLASMA_ACTIVITIES)
-    endif()
 
     install(TARGETS lane ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 elseif(LANE_MAC_DESKTOP)

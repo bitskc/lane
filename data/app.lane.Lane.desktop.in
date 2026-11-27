@@ -13,8 +13,27 @@ Categories=Network;WebBrowser;Qt;KDE;
 MimeType=x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/lane;
 Keywords=browser;chooser;profile;pwa;opener;
 X-KDE-Shortcuts=Ctrl+Alt+O
-Actions=Clipboard;
+Actions=Clipboard;ClipboardPicker;Settings;Rescan;
 
 [Desktop Action Clipboard]
-Name=Open clipboard URL
+Name=Open Clipboard URL
 Exec=@LANE_BIN@ --clipboard
+Icon=edit-paste
+X-KDE-Shortcuts=Ctrl+Alt+V
+
+[Desktop Action ClipboardPicker]
+Name=Open Clipboard URL in Picker
+Exec=@LANE_BIN@ --clipboard -p
+Icon=view-choose
+X-KDE-Shortcuts=Ctrl+Alt+Shift+V
+
+[Desktop Action Settings]
+Name=Open Lane Settings
+Exec=@LANE_BIN@ --settings
+Icon=configure
+X-KDE-Shortcuts=Ctrl+Alt+S
+
+[Desktop Action Rescan]
+Name=Rescan Browser Targets
+Exec=@LANE_BIN@ --rediscover
+Icon=view-refresh
